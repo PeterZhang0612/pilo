@@ -77,6 +77,90 @@ async fn stdio_server_speaks_protobuf_and_preserves_binary_bytes() {
     assert!(status.success());
 }
 
+#[cfg(unix)]
+#[tokio::test]
+async fn closing_server_stdin_reaps_running_pi_process() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/shutdown-tests");
+    std::fs::create_dir_all(&dir).unwrap();
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let fake_pi = dir.join(format!("pi-{unique}.sh"));
+    std::fs::write(
+        &fake_pi,
+        "#!/bin/sh\nprintf '{\"type\":\"test_pid\",\"pid\":%s}\\n' \"$$\"\nexec cat\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&fake_pi, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let mut server = Command::new(env!("CARGO_BIN_EXE_pilo-server"))
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .kill_on_drop(true)
+        .spawn()
+        .unwrap();
+    let mut stdin = server.stdin.take().unwrap();
+    let mut stdout = server.stdout.take().unwrap();
+    write_frame(
+        &mut stdin,
+        Envelope::request(
+            1,
+            "pi.start",
+            json!({
+                "streamId": "shutdown-pi", "project": dir, "piExecutable": fake_pi,
+            }),
+        ),
+    )
+    .await
+    .unwrap();
+    let pid = tokio::time::timeout(std::time::Duration::from_secs(15), async {
+        let mut started = false;
+        let mut pid = None;
+        while !started || pid.is_none() {
+            match read_frame(&mut stdout).await.unwrap().unwrap() {
+                Envelope::Response {
+                    id: 1, error: None, ..
+                } => started = true,
+                Envelope::Response {
+                    error: Some(error), ..
+                } => panic!("pi.start failed: {error:?}"),
+                Envelope::Event { event, binary, .. } if event == "pi.rpc_json" => {
+                    let message: Value = serde_json::from_slice(&binary[0]).unwrap();
+                    pid = message.get("pid").and_then(Value::as_u64);
+                }
+                _ => {}
+            }
+        }
+        pid.unwrap()
+    })
+    .await
+    .unwrap();
+    drop(stdin);
+    // Keep draining stdout while EOF cleanup finishes, just like ServerClient.
+    let drain =
+        tokio::spawn(async move { while read_frame(&mut stdout).await.unwrap().is_some() {} });
+    let status = tokio::time::timeout(std::time::Duration::from_secs(3), server.wait())
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(status.success());
+    drain.await.unwrap();
+    let alive = Command::new("/bin/kill")
+        .args(["-0", &pid.to_string()])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .await
+        .unwrap();
+    assert!(
+        !alive.success(),
+        "Pi child should be reaped after server EOF"
+    );
+    std::fs::remove_file(fake_pi).unwrap();
+}
+
 #[tokio::test]
 async fn session_read_returns_file_fingerprint() {
     let unique = SystemTime::now()

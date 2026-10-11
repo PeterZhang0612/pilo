@@ -28,6 +28,72 @@ const LINUX_AARCH64: ServerTarget = ServerTarget {
     arch: ServerArch::Aarch64,
 };
 
+#[cfg(unix)]
+#[tokio::test]
+async fn stop_closes_stdin_and_allows_server_child_cleanup_before_exit() {
+    use super::{
+        ServerClient,
+        transport::{ServerProcess, reader_loop, writer_loop},
+    };
+    use std::{
+        process::Stdio,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+    use tokio::{io::BufReader, process::Command};
+
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../target/shutdown-tests");
+    std::fs::create_dir_all(&dir).unwrap();
+    let marker = dir.join(format!(
+        "cleanup-{}",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let mut child = Command::new("/bin/sh")
+        .args(["-c", "cat >/dev/null; printf cleaned > \"$1\"", "sh"])
+        .arg(&marker)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .unwrap();
+    let stdin = child.stdin.take().unwrap();
+    let stdout = child.stdout.take().unwrap();
+    let (writer, requests) = mpsc::channel(1);
+    let pending = Arc::new(Mutex::new(HashMap::new()));
+    let events = Arc::new(ServerEventHub::default());
+    let closed = Arc::new(AtomicBool::new(false));
+    let writer_task = tokio::spawn(writer_loop(
+        stdin,
+        requests,
+        Arc::clone(&pending),
+        Arc::clone(&events),
+        Arc::clone(&closed),
+    ));
+    let reader_task = tokio::spawn(reader_loop(
+        BufReader::new(stdout),
+        Arc::clone(&pending),
+        Arc::clone(&events),
+        Arc::clone(&closed),
+    ));
+    let client = ServerClient {
+        request_id: Default::default(),
+        writer,
+        pending,
+        events,
+        process: Mutex::new(Some(ServerProcess {
+            child,
+            writer_task,
+            reader_task,
+        })),
+        closed,
+    };
+    client.stop().await;
+    assert_eq!(std::fs::read_to_string(&marker).unwrap(), "cleaned");
+    std::fs::remove_file(marker).unwrap();
+}
+
 #[test]
 fn bundled_server_targets_have_stable_resource_names() {
     let cases = [

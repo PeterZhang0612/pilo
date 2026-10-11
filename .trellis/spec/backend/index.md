@@ -20,6 +20,7 @@ This directory contains guidelines for backend development in this project (Taur
 | [Quality Guidelines](./quality-guidelines.md)   | Code standards, forbidden patterns                | Filled |
 | [Logging Guidelines](./logging-guidelines.md)   | `eprintln!` diagnostics, log levels               | Filled |
 | [Remote WebUI & Event Hub](./remote-webui.md)   | Remote HTTP/WS adapter, auth, event replay        | Filled |
+| [Runtime Resource Lifecycle](./runtime-lifecycle.md) | Idle Pi retention, byte-bounded replay, graceful server cleanup | Filled |
 
 ---
 

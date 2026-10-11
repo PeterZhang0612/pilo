@@ -190,8 +190,10 @@ impl ServerManager {
             .drain()
             .map(|(_, cached)| cached.client)
             .collect::<Vec<_>>();
+        let mut stops = tokio::task::JoinSet::new();
         for client in clients {
-            client.stop().await;
+            stops.spawn(async move { client.stop().await });
         }
+        while stops.join_next().await.is_some() {}
     }
 }

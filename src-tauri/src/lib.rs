@@ -306,16 +306,17 @@ pub fn run() {
                         runtime.session_watchers.lock().await.stop_all().await;
                         log::info!(target: "shutdown", "terminals: closing");
                         runtime.terminals.lock().await.close_all().await;
-                        log::info!(target: "shutdown", "servers: stopping");
-                        runtime.servers.stop_all().await;
-                        log::info!(target: "shutdown", "teardown complete");
                     };
                     if tokio::time::timeout(std::time::Duration::from_secs(5), teardown)
                         .await
                         .is_err()
                     {
-                        log::warn!(target: "shutdown", "graceful shutdown timed out; forcing exit");
+                        log::warn!(target: "shutdown", "graceful shutdown timed out; stopping servers");
                     }
+                    // Always close server stdin, even when chat/terminal cleanup timed out.
+                    log::info!(target: "shutdown", "servers: stopping");
+                    runtime.servers.stop_all().await;
+                    log::info!(target: "shutdown", "teardown complete");
                     // macOS 只有在事件循环正常退出时才会通知 LaunchServices/Dock
                     // 注销应用；从工作线程直接 `std::process::exit` 会让 Dock 残留图标
                     // （表现为「退出后仍在后台运行」）。让 Tauri 走一遍 `RunEvent::Exit`

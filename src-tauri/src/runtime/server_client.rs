@@ -230,9 +230,18 @@ impl ServerClient {
         let Some(mut process) = self.process.lock().await.take() else {
             return;
         };
+        // Closing stdin lets pilo-server stop its Pi/PTY children on EOF. Killing
+        // the server first bypasses that cleanup and can orphan those processes.
         process.writer_task.abort();
+        let _ = process.writer_task.await;
+        if tokio::time::timeout(std::time::Duration::from_secs(2), process.child.wait())
+            .await
+            .is_err()
+        {
+            let _ = process.child.start_kill();
+            let _ =
+                tokio::time::timeout(std::time::Duration::from_secs(1), process.child.wait()).await;
+        }
         process.reader_task.abort();
-        let _ = process.child.kill().await;
-        let _ = process.child.wait().await;
     }
 }

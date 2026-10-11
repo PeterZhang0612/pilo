@@ -1,0 +1,109 @@
+# Runtime Resource Lifecycle
+
+## 1. Scope / Trigger
+
+Apply when changing chat-process retention, runtime-event replay, or server shutdown.
+Desktop and WebUI share `ChatSessions`; Local, WSL, and SSH use the same server lifecycle.
+Frontend controller eviction alone is not backend process cleanup.
+
+## 2. Signatures
+
+- `ChatSessions::prepare(...)` / `ensure(...)` call `process(...)`, which invokes
+  `prune_idle(retained_key)` before obtaining the requested process.
+- `ChatSessions::send(session_key, command)` updates process recency and marks
+  accepted work before waiting for Pi's first event.
+- `RuntimeEventBus::replay_after(sequence) -> Option<Vec<SequencedRuntimeEvent>>`:
+  `None` means replay is incomplete and the WebUI must resync.
+- `ServerClient::stop()` closes stdin, waits for server cleanup, then force-kills
+  only if necessary. `serve_stdio()` handles EOF and framing errors through cleanup.
+
+## 3. Contracts
+
+- The idle cache reserves one slot for the requested chat and retains up to three
+  other most recently used eligible processes. Pruning is admission-driven, not
+  a timer: simultaneous live turns may exceed the budget until another prepare/ensure.
+- Never evict an active turn, compaction, uninitialized process, `no_session`
+  session, or a session without a resolved JSONL path. A cloned `ChatProcess` Arc
+  or a locked session protects in-flight startup/RPC work from eviction.
+- Remove an evicted process under the registry lock, mark it closed, and stop it
+  asynchronously. Late events from the old process must not reach a replacement.
+  Persisted sessions are resumed by the existing prepare/ensure path. Eviction
+  emits no `ProcessState` event for the removed session; the frontend only sees it
+  disappear from `states()` and re-syncs when the next `ensure` respawns it and
+  resets the generation.
+- `prompt` and `compact` mark their respective busy flags before `send_rpc`;
+  transport failure rolls back only flags that were previously idle. Compaction
+  is tracked separately so `CompactionEnd` cannot clear an ongoing agent turn.
+- A `prompt` that flips an idle active-turn flag records its command id as the
+  flag owner; `send` injects `pilo-prompt-<n>` when the caller sends none. Pi
+  echoes the id in its prompt response. The owned flag rolls back when that
+  response is `success:false` (preflight rejection) or carries
+  `data.disposition == "handled"` (extension command or input handler consumed it
+  without a turn). `started`/`queued` keep the flag, and a response for a prompt
+  that did not own the flag never clears a running turn.
+- Replay retains at most 2048 events and 16 MiB of **serialized payload bytes**.
+  This is not an exact RSS budget for Rust `Value` objects or live transport queues.
+  Count bytes without allocating a second JSON buffer.
+- An event exceeding the byte budget is delivered live but clears replay. A client
+  behind that event receives a gap even when the replay deque is empty; a client
+  already at the latest sequence receives an empty replay. Sequence zero retains
+  the existing whole-buffer bootstrap behavior.
+- Sequence allocation, replay insertion, and Web broadcast publication share a
+  lock to preserve ordering across concurrent sessions.
+- Abort and join pending server requests before draining Pi processes: an in-flight
+  `pi.start` must not create a process after cleanup passes the registry.
+- Abort and join the client writer to drop server stdin. Keep the reader alive while
+  waiting for EOF cleanup (2 seconds); fallback kill/wait has another 1-second bound.
+  Stop connection servers concurrently and do this even if earlier app teardown
+  exceeds its 5-second grace period.
+
+## 4. Validation & Error Matrix
+
+| Condition | Behavior |
+| --- | --- |
+| Eligible idle cache exceeds budget | Stop oldest eligible processes; keep requested chat |
+| Idle session evicted | No stop event; `states()` drops it; next `ensure` respawns and resets the generation |
+| Live/temporary/unsaved/in-flight session | Keep it, even above budget |
+| Background idle stop fails | Log warning; do not block another chat launch |
+| Replay byte/count eviction | Older sequence returns `None`; WebUI resyncs |
+| Single oversized event | Deliver live; clear replay and expose the gap |
+| Server stdin EOF or invalid frame | Cancel requests, clean up children, finish writer |
+| Server ignores EOF | Bounded force-kill fallback |
+
+## 5. Good / Base / Bad Cases
+
+- Good: use many persisted sessions; idle processes are reclaimed on subsequent
+  admission and resuming an evicted session loads its Pi JSONL.
+- Base: a few idle sessions remain warm; running turns and temporary sessions survive.
+- Bad: killing the server before closing stdin skips its child cleanup and can orphan Pi.
+
+## 6. Tests Required
+
+- `chat_sessions/idle_cache.rs`: LRU order, retained key, busy/compacting/initializing/
+  temporary/unsaved/in-flight exclusions, busy-flag rollback on failed send.
+- `chat_sessions/event_sink.rs`: prompt rejection rolls back only the owning
+  prompt's active-turn flag; a success response releases ownership without
+  clearing the turn; compaction completion does not clear an active turn.
+- `events/mod.rs`: byte eviction before count limit, oversized live delivery, empty
+  replay gap, latest-sequence empty replay, concurrent replay/broadcast ordering,
+  existing sequence/count contracts.
+- `server_client/tests.rs`: a fake server completes its EOF cleanup before stop returns.
+- `pilo-server/tests/stdio_protocol.rs`: a real fake-Pi child is reaped after server EOF.
+- Windows desktop shutdown and Local/WSL/SSH resumption still require platform testing;
+  Unix process tests do not establish Windows descendant-process behavior.
+
+## 7. Wrong vs Correct
+
+```rust
+// Wrong: abruptly kill the server, bypassing its Pi/PTY cleanup.
+process.reader_task.abort();
+process.child.kill().await;
+
+// Correct: drop the stdin owner and let EOF run server cleanup first.
+process.writer_task.abort();
+let _ = process.writer_task.await;
+// Bounded wait, then kill only if the server does not exit.
+```
+
+Do not use event count alone as a memory budget: one RPC result can contain an
+entire transcript or large tool output. Combine count and payload-byte limits.

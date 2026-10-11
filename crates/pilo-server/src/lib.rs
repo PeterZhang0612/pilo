@@ -34,7 +34,7 @@ use session::{
 };
 use tokio::{
     sync::{Mutex, OnceCell, Semaphore, mpsc},
-    task::JoinHandle,
+    task::{JoinHandle, JoinSet},
 };
 
 pub const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -97,7 +97,14 @@ pub async fn serve_stdio() -> Result<(), Box<dyn std::error::Error>> {
 
     let stdin = tokio::io::stdin();
     let mut stdin = stdin;
-    while let Some(message) = read_frame(&mut stdin).await? {
+    let mut requests = JoinSet::new();
+    let read_result = loop {
+        while requests.try_join_next().is_some() {}
+        let message = match read_frame(&mut stdin).await {
+            Ok(Some(message)) => message,
+            Ok(None) => break Ok(()),
+            Err(error) => break Err(error),
+        };
         let Envelope::Request {
             id,
             method,
@@ -108,10 +115,10 @@ pub async fn serve_stdio() -> Result<(), Box<dyn std::error::Error>> {
             continue;
         };
         let Ok(permit) = Arc::clone(&state.request_slots).acquire_owned().await else {
-            break;
+            break Ok(());
         };
         let state = state.clone();
-        tokio::spawn(async move {
+        requests.spawn(async move {
             let _permit = permit;
             let response = match dispatch(&state, &method, params, binary).await {
                 Ok(reply) => Envelope::response_with_binary(id, reply.value, reply.binary),
@@ -119,8 +126,12 @@ pub async fn serve_stdio() -> Result<(), Box<dyn std::error::Error>> {
             };
             let _ = state.writer.send(response).await;
         });
-    }
+    };
 
+    // Cancel pending pi.start before draining the registry, so no request can
+    // spawn a new child after shutdown cleanup has already passed it.
+    requests.abort_all();
+    while requests.join_next().await.is_some() {}
     let mut pi = state.pi.lock().await;
     for (_, mut process) in pi.drain() {
         let _ = process.child.kill().await;
@@ -137,6 +148,7 @@ pub async fn serve_stdio() -> Result<(), Box<dyn std::error::Error>> {
     }
     drop(state.writer);
     let _ = writer_task.await;
+    read_result?;
     Ok(())
 }
 
