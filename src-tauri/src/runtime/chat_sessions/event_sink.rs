@@ -24,6 +24,8 @@ pub(super) struct ChatEventSink {
     pub(super) initialization_stderr: Arc<StdMutex<String>>,
     pub(super) session_path: Arc<StdMutex<Option<String>>>,
     pub(super) active_turn: Arc<AtomicBool>,
+    pub(super) compacting: Arc<AtomicBool>,
+    pub(super) pending_prompt_id: Arc<StdMutex<Option<String>>>,
     pub(super) closed: Arc<AtomicBool>,
 }
 
@@ -49,7 +51,9 @@ impl RuntimeEventSink for ChatEventSink {
                     }
                 }
             }
-            RuntimeEvent::UserMessageStart { .. } | RuntimeEvent::AssistantMessageStart { .. } => {
+            RuntimeEvent::UserMessageStart { .. }
+            | RuntimeEvent::AssistantMessageStart { .. }
+            | RuntimeEvent::AutoRetryStart { .. } => {
                 self.active_turn.store(true, Ordering::Release);
             }
             RuntimeEvent::AssistantMessageEnd { .. }
@@ -60,6 +64,16 @@ impl RuntimeEventSink for ChatEventSink {
             } => {
                 self.active_turn.store(false, Ordering::Release);
             }
+            _ => {}
+        }
+        match &event {
+            RuntimeEvent::CompactionStart { .. } => self.compacting.store(true, Ordering::Release),
+            RuntimeEvent::CompactionEnd { .. }
+            | RuntimeEvent::RuntimeError { .. }
+            | RuntimeEvent::ProcessState {
+                state: PiProcessState::Failed | PiProcessState::Stopped,
+                ..
+            } => self.compacting.store(false, Ordering::Release),
             _ => {}
         }
         if let RuntimeEvent::RuntimeError { message, .. } = &event {
@@ -74,7 +88,34 @@ impl RuntimeEventSink for ChatEventSink {
             );
         }
         if let RuntimeEvent::RpcMessage { message, .. } = &event {
+            if message.get("type").and_then(Value::as_str) == Some("response")
+                && message.get("command").and_then(Value::as_str) == Some("compact")
+            {
+                self.compacting.store(false, Ordering::Release);
+            }
             let response_id = message.get("id").and_then(Value::as_str);
+            if message.get("type").and_then(Value::as_str) == Some("response")
+                && message.get("command").and_then(Value::as_str) == Some("prompt")
+            {
+                let mut pending = self
+                    .pending_prompt_id
+                    .lock()
+                    .unwrap_or_else(|error| error.into_inner());
+                if pending.as_deref() == response_id {
+                    *pending = None;
+                    // A rejected prompt, or one consumed without starting a turn
+                    // (`disposition: "handled"`, e.g. an extension command or input
+                    // handler), never emits turn events, so the preemptive
+                    // active-turn flag must be rolled back here.
+                    let rejected = message.get("success").and_then(Value::as_bool) == Some(false);
+                    let handled_without_turn =
+                        message.pointer("/data/disposition").and_then(Value::as_str)
+                            == Some("handled");
+                    if rejected || handled_without_turn {
+                        self.active_turn.store(false, Ordering::Release);
+                    }
+                }
+            }
             if message.get("type").and_then(Value::as_str) == Some("response")
                 && message.get("command").and_then(Value::as_str) == Some("get_state")
                 && message.get("success").and_then(Value::as_bool) == Some(true)
@@ -157,6 +198,104 @@ mod tests {
 
     use super::*;
 
+    #[test]
+    fn compaction_completion_does_not_clear_an_active_turn() {
+        let sink = ChatEventSink {
+            events: RuntimeEventBus::default(),
+            session_key: "session".to_owned(),
+            project_id: "project".to_owned(),
+            control_reply: Arc::new(StdMutex::new(None)),
+            initialization_stderr: Arc::new(StdMutex::new(String::new())),
+            session_path: Arc::new(StdMutex::new(Some("session.jsonl".to_owned()))),
+            active_turn: Arc::new(AtomicBool::new(true)),
+            compacting: Arc::new(AtomicBool::new(false)),
+            pending_prompt_id: Arc::new(StdMutex::new(None)),
+            closed: Arc::new(AtomicBool::new(false)),
+        };
+        sink.send(RuntimeEvent::CompactionStart {
+            generation: 1,
+            reason: "manual".to_owned(),
+        });
+        assert!(sink.compacting.load(Ordering::Acquire));
+        sink.send(RuntimeEvent::CompactionEnd {
+            generation: 1,
+            reason: "manual".to_owned(),
+            result: None,
+            aborted: false,
+            will_retry: false,
+            error_message: None,
+        });
+        assert!(!sink.compacting.load(Ordering::Acquire));
+        assert!(sink.active_turn.load(Ordering::Acquire));
+        sink.compacting.store(true, Ordering::Release);
+        sink.send(RuntimeEvent::RpcMessage {
+            generation: 1,
+            message: serde_json::json!({
+                "type": "response", "command": "compact", "success": false,
+            }),
+        });
+        assert!(!sink.compacting.load(Ordering::Acquire));
+        assert!(sink.active_turn.load(Ordering::Acquire));
+    }
+
+    #[test]
+    fn rejected_prompt_rolls_back_only_the_prompt_that_set_active_turn() {
+        let sink = ChatEventSink {
+            events: RuntimeEventBus::default(),
+            session_key: "session".to_owned(),
+            project_id: "project".to_owned(),
+            control_reply: Arc::new(StdMutex::new(None)),
+            initialization_stderr: Arc::new(StdMutex::new(String::new())),
+            session_path: Arc::new(StdMutex::new(Some("session.jsonl".to_owned()))),
+            active_turn: Arc::new(AtomicBool::new(true)),
+            compacting: Arc::new(AtomicBool::new(false)),
+            pending_prompt_id: Arc::new(StdMutex::new(Some("pilo-prompt-1".to_owned()))),
+            closed: Arc::new(AtomicBool::new(false)),
+        };
+        // A rejection for another prompt must not clear a running turn.
+        sink.send(RuntimeEvent::RpcMessage {
+            generation: 1,
+            message: serde_json::json!({
+                "type": "response", "command": "prompt", "id": "other", "success": false,
+            }),
+        });
+        assert!(sink.active_turn.load(Ordering::Acquire));
+        assert!(sink.pending_prompt_id.lock().unwrap().is_some());
+        // The owning prompt's rejection rolls the preemptive flag back.
+        sink.send(RuntimeEvent::RpcMessage {
+            generation: 1,
+            message: serde_json::json!({
+                "type": "response", "command": "prompt", "id": "pilo-prompt-1", "success": false,
+            }),
+        });
+        assert!(!sink.active_turn.load(Ordering::Acquire));
+        assert!(sink.pending_prompt_id.lock().unwrap().is_none());
+        // A success response releases ownership but keeps the turn active.
+        sink.active_turn.store(true, Ordering::Release);
+        *sink.pending_prompt_id.lock().unwrap() = Some("pilo-prompt-2".to_owned());
+        sink.send(RuntimeEvent::RpcMessage {
+            generation: 1,
+            message: serde_json::json!({
+                "type": "response", "command": "prompt", "id": "pilo-prompt-2", "success": true,
+                "data": { "disposition": "started" },
+            }),
+        });
+        assert!(sink.active_turn.load(Ordering::Acquire));
+        assert!(sink.pending_prompt_id.lock().unwrap().is_none());
+        // A prompt consumed without starting a turn releases the preemptive flag.
+        sink.active_turn.store(true, Ordering::Release);
+        *sink.pending_prompt_id.lock().unwrap() = Some("pilo-prompt-3".to_owned());
+        sink.send(RuntimeEvent::RpcMessage {
+            generation: 1,
+            message: serde_json::json!({
+                "type": "response", "command": "prompt", "id": "pilo-prompt-3", "success": true,
+                "data": { "disposition": "handled" },
+            }),
+        });
+        assert!(!sink.active_turn.load(Ordering::Acquire));
+        assert!(sink.pending_prompt_id.lock().unwrap().is_none());
+    }
+
     #[tokio::test]
     async fn initialization_failure_returns_captured_stderr_without_waiting_for_timeout() {
         let (sender, response) = oneshot::channel();
@@ -168,6 +307,8 @@ mod tests {
             initialization_stderr: Arc::new(StdMutex::new(String::new())),
             session_path: Arc::new(StdMutex::new(None)),
             active_turn: Arc::new(AtomicBool::new(false)),
+            compacting: Arc::new(AtomicBool::new(false)),
+            pending_prompt_id: Arc::new(StdMutex::new(None)),
             closed: Arc::new(AtomicBool::new(false)),
         };
 

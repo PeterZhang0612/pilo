@@ -1,25 +1,44 @@
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde_json::{Value, json};
 
 use super::{super::debug_trace::runtime_trace, ChatSessions};
 
+static PROMPT_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+
 impl ChatSessions {
-    pub async fn send(&self, session_key: &str, command: Value) -> Result<(), String> {
+    pub async fn send(&self, session_key: &str, mut command: Value) -> Result<(), String> {
         let command_type = command
             .get("type")
             .and_then(Value::as_str)
             .unwrap_or("unknown")
             .to_owned();
+        // Pi echoes this id in its prompt response. The desktop prompt path does not
+        // send one, so generate it here to correlate the Pi-side prompt outcome with
+        // the preemptive active-turn flag set below.
+        if command_type == "prompt"
+            && command.is_object()
+            && command.get("id").and_then(Value::as_str).is_none()
+        {
+            command["id"] = Value::String(format!(
+                "pilo-prompt-{}",
+                PROMPT_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+            ));
+        }
         let command_id = command.get("id").and_then(Value::as_str).map(str::to_owned);
-        let process = self
-            .registry
-            .lock()
-            .await
-            .processes
-            .get(session_key)
-            .cloned()
-            .ok_or_else(|| format!("session '{session_key}' is not running"))?;
+        let process = {
+            let mut registry = self.registry.lock().await;
+            registry.usage_sequence = registry.usage_sequence.saturating_add(1);
+            let process = registry
+                .processes
+                .get(session_key)
+                .cloned()
+                .ok_or_else(|| format!("session '{session_key}' is not running"))?;
+            process
+                .last_used
+                .store(registry.usage_sequence, Ordering::Release);
+            process
+        };
         let session = process.session.lock().await;
         if process.closed.load(Ordering::Acquire) {
             return Err("project is closing".to_owned());
@@ -30,7 +49,39 @@ impl ChatSessions {
             session.stream_id(),
             json!({ "command": command_type, "id": command_id }),
         );
+        // Protect the gap between accepting a prompt and its first Pi event.
+        let work_flag = match command_type.as_str() {
+            "prompt" => Some(&process.active_turn),
+            "compact" => Some(&process.compacting),
+            _ => None,
+        };
+        let was_active = work_flag.is_some_and(|flag| flag.swap(true, Ordering::AcqRel));
+        // Only the prompt that flipped an idle flag owns it. A rejected prompt must
+        // not clear a turn that was already running when it was sent.
+        let mut owns_prompt_flag = false;
+        if command_type == "prompt"
+            && !was_active
+            && let Some(id) = command_id.clone()
+        {
+            *process
+                .pending_prompt_id
+                .lock()
+                .unwrap_or_else(|error| error.into_inner()) = Some(id);
+            owns_prompt_flag = true;
+        }
         let result = session.send_rpc(command).await;
+        if result.is_err()
+            && !was_active
+            && let Some(flag) = work_flag
+        {
+            flag.store(false, Ordering::Release);
+            if owns_prompt_flag {
+                *process
+                    .pending_prompt_id
+                    .lock()
+                    .unwrap_or_else(|error| error.into_inner()) = None;
+            }
+        }
         runtime_trace(
             "chat.send.end",
             Some(session_key),

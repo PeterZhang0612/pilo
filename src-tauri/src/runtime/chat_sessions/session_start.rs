@@ -39,6 +39,10 @@ impl ChatSessions {
             .control_reply
             .lock()
             .unwrap_or_else(|error| error.into_inner()) = None;
+        *process
+            .pending_prompt_id
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()) = None;
         process
             .initialization_stderr
             .lock()
@@ -70,6 +74,8 @@ impl ChatSessions {
                     initialization_stderr: Arc::clone(&process.initialization_stderr),
                     session_path: Arc::clone(&process.session_path),
                     active_turn: Arc::clone(&process.active_turn),
+                    compacting: Arc::clone(&process.compacting),
+                    pending_prompt_id: Arc::clone(&process.pending_prompt_id),
                     closed: Arc::clone(&process.closed),
                 },
                 project,

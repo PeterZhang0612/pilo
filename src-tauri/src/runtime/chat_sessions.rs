@@ -1,4 +1,5 @@
 mod event_sink;
+mod idle_cache;
 mod project_lifecycle;
 mod session_control;
 mod session_start;
@@ -7,7 +8,7 @@ use std::{
     collections::HashMap,
     sync::{
         Arc, Mutex as StdMutex,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
 };
 
@@ -54,7 +55,12 @@ struct ChatProcess {
     prepared: AtomicBool,
     initialized: AtomicBool,
     active_turn: Arc<AtomicBool>,
+    compacting: Arc<AtomicBool>,
+    // Owner id of the prompt whose preemptive `active_turn` flag has not been
+    // confirmed by a Pi response yet. Used to roll the flag back on a preflight rejection.
+    pending_prompt_id: Arc<StdMutex<Option<String>>>,
     closed: Arc<AtomicBool>,
+    last_used: AtomicU64,
 }
 
 impl ChatProcess {
@@ -76,6 +82,7 @@ struct ChatRegistry {
     // true while stopping, false once closed; re-adding may only reopen a closed project.
     unavailable_projects: HashMap<String, bool>,
     shutting_down: bool,
+    usage_sequence: u64,
 }
 
 #[derive(Default)]
@@ -160,12 +167,15 @@ impl ChatSessions {
         if launch.no_session && session_path.is_some() {
             return Err("temporary session cannot resume a persisted session".to_owned());
         }
+        self.prune_idle(session_key).await;
         let process = {
             let mut registry = self.registry.lock().await;
             if registry.shutting_down || registry.unavailable_projects.contains_key(&project.id) {
                 return Err("project is closing".to_owned());
             }
-            Arc::clone(
+            registry.usage_sequence = registry.usage_sequence.saturating_add(1);
+            let usage_sequence = registry.usage_sequence;
+            let process = Arc::clone(
                 registry
                     .processes
                     .entry(session_key.to_owned())
@@ -184,10 +194,15 @@ impl ChatSessions {
                             prepared: AtomicBool::new(false),
                             initialized: AtomicBool::new(false),
                             active_turn: Arc::new(AtomicBool::new(false)),
+                            compacting: Arc::new(AtomicBool::new(false)),
+                            pending_prompt_id: Arc::new(StdMutex::new(None)),
                             closed: Arc::new(AtomicBool::new(false)),
+                            last_used: AtomicU64::new(usage_sequence),
                         })
                     }),
-            )
+            );
+            process.last_used.store(usage_sequence, Ordering::Release);
+            process
         };
         if process.project_id != project.id {
             return Err("session belongs to a different project".to_owned());
