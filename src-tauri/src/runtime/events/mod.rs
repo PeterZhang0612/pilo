@@ -1,5 +1,6 @@
 use std::{
     collections::VecDeque,
+    io::{self, Write},
     sync::{
         Arc, Mutex as StdMutex,
         atomic::{AtomicU64, Ordering},
@@ -21,6 +22,27 @@ use trace::traceable_runtime_event;
 
 const WEB_EVENT_CHANNEL_CAPACITY: usize = 512;
 const WEB_EVENT_REPLAY_CAPACITY: usize = 2048;
+const WEB_EVENT_REPLAY_MAX_BYTES: usize = 16 * 1024 * 1024;
+
+#[derive(Default)]
+struct EventReplay {
+    events: VecDeque<(SequencedRuntimeEvent, usize)>,
+    bytes: usize,
+}
+
+#[derive(Default)]
+struct PayloadSize(usize);
+
+impl Write for PayloadSize {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        self.0 = self.0.saturating_add(bytes.len());
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -34,7 +56,7 @@ pub struct SequencedRuntimeEvent {
 pub struct RuntimeEventBus {
     channel: Arc<StdMutex<Option<Channel<RuntimeEventEnvelope>>>>,
     web_sender: broadcast::Sender<SequencedRuntimeEvent>,
-    replay: Arc<StdMutex<VecDeque<SequencedRuntimeEvent>>>,
+    replay: Arc<StdMutex<EventReplay>>,
     sequence: Arc<AtomicU64>,
 }
 
@@ -44,9 +66,7 @@ impl Default for RuntimeEventBus {
         Self {
             channel: Arc::new(StdMutex::new(None)),
             web_sender,
-            replay: Arc::new(StdMutex::new(VecDeque::with_capacity(
-                WEB_EVENT_REPLAY_CAPACITY,
-            ))),
+            replay: Arc::new(StdMutex::new(EventReplay::default())),
             sequence: Arc::new(AtomicU64::new(0)),
         }
     }
@@ -75,17 +95,19 @@ impl RuntimeEventBus {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if sequence > 0
-            && replay
-                .front()
-                .is_some_and(|first| first.sequence > sequence.saturating_add(1))
+            && replay.events.front().map_or_else(
+                || sequence < self.latest_sequence(),
+                |(first, _)| first.sequence > sequence.saturating_add(1),
+            )
         {
             return None;
         }
         Some(
             replay
+                .events
                 .iter()
-                .filter(|event| event.sequence > sequence)
-                .cloned()
+                .filter(|(event, _)| event.sequence > sequence)
+                .map(|(event, _)| event.clone())
                 .collect(),
         )
     }
@@ -93,22 +115,42 @@ impl RuntimeEventBus {
     pub fn send(&self, event: RuntimeEventEnvelope) {
         let trace = traceable_runtime_event(&event.event);
         let session_key = event.session_key.clone();
-        let sequence = self.sequence.fetch_add(1, Ordering::AcqRel) + 1;
-        let sequenced = SequencedRuntimeEvent {
-            sequence,
-            event: event.clone(),
-        };
         {
             let mut replay = self
                 .replay
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            replay.push_back(sequenced.clone());
-            while replay.len() > WEB_EVENT_REPLAY_CAPACITY {
-                replay.pop_front();
+            let sequence = self.sequence.fetch_add(1, Ordering::AcqRel) + 1;
+            let sequenced = SequencedRuntimeEvent {
+                sequence,
+                event: event.clone(),
+            };
+            // Count without allocating another serialized copy of large RPC results.
+            let mut size = PayloadSize::default();
+            let bytes = if serde_json::to_writer(&mut size, &sequenced).is_ok() {
+                size.0
+            } else {
+                usize::MAX
+            };
+            // An oversized event is still delivered live, but leaves a replay gap.
+            if bytes > WEB_EVENT_REPLAY_MAX_BYTES {
+                replay.events.clear();
+                replay.bytes = 0;
+            } else {
+                while replay.events.len() >= WEB_EVENT_REPLAY_CAPACITY
+                    || replay.bytes.saturating_add(bytes) > WEB_EVENT_REPLAY_MAX_BYTES
+                {
+                    let Some((_, evicted_bytes)) = replay.events.pop_front() else {
+                        break;
+                    };
+                    replay.bytes -= evicted_bytes;
+                }
+                replay.bytes += bytes;
+                replay.events.push_back((sequenced.clone(), bytes));
             }
+            // Publish under the same lock so concurrent sessions keep sequence order.
+            let _ = self.web_sender.send(sequenced);
         }
-        let _ = self.web_sender.send(sequenced);
 
         let channel = self
             .channel
@@ -313,6 +355,73 @@ mod tests {
         let replay = bus.replay_after(latest.saturating_sub(1)).unwrap();
         assert_eq!(replay.len(), 1);
         assert_eq!(replay[0].sequence, latest);
+    }
+
+    #[test]
+    fn concurrent_publishers_keep_replay_and_broadcast_sequence_order() {
+        let bus = RuntimeEventBus::default();
+        let mut subscriber = bus.subscribe_web();
+        std::thread::scope(|scope| {
+            for _ in 0..4 {
+                let bus = bus.clone();
+                scope.spawn(move || {
+                    for generation in 0..64 {
+                        bus.send(RuntimeEventEnvelope::global(
+                            RuntimeEvent::AssistantTextDelta {
+                                generation,
+                                delta: "x".to_owned(),
+                            },
+                        ));
+                    }
+                });
+            }
+        });
+        let replay = bus.replay_after(0).unwrap();
+        assert_eq!(replay.len(), 256);
+        for (index, event) in replay.iter().enumerate() {
+            assert_eq!(event.sequence, index as u64 + 1);
+            assert_eq!(subscriber.try_recv().unwrap().sequence, event.sequence);
+        }
+    }
+
+    #[test]
+    fn replay_evicts_large_payloads_by_bytes_before_reaching_event_count_limit() {
+        let bus = RuntimeEventBus::default();
+        for generation in 0..5 {
+            bus.send(RuntimeEventEnvelope::global(
+                RuntimeEvent::AssistantTextSnapshot {
+                    generation,
+                    text: "x".repeat(WEB_EVENT_REPLAY_MAX_BYTES / 4),
+                },
+            ));
+        }
+        let replay = bus.replay.lock().unwrap();
+        assert!(replay.bytes <= WEB_EVENT_REPLAY_MAX_BYTES);
+        assert!(replay.events.len() < 5);
+        drop(replay);
+        assert!(bus.replay_after(1).is_none());
+        assert_eq!(bus.replay_after(4).unwrap()[0].sequence, 5);
+    }
+
+    #[tokio::test]
+    async fn oversized_event_is_delivered_live_but_requires_replay_resync() {
+        let bus = RuntimeEventBus::default();
+        bus.send(RuntimeEventEnvelope::global(
+            RuntimeEvent::AssistantMessageStart { generation: 1 },
+        ));
+        let mut subscriber = bus.subscribe_web();
+        bus.send(RuntimeEventEnvelope::global(
+            RuntimeEvent::AssistantTextSnapshot {
+                generation: 1,
+                text: "x".repeat(WEB_EVENT_REPLAY_MAX_BYTES + 1),
+            },
+        ));
+        assert_eq!(subscriber.recv().await.unwrap().sequence, 2);
+        assert!(bus.replay_after(1).is_none());
+        assert!(bus.replay_after(2).unwrap().is_empty());
+        let replay = bus.replay.lock().unwrap();
+        assert_eq!(replay.bytes, 0);
+        assert!(replay.events.is_empty());
     }
 
     #[test]
