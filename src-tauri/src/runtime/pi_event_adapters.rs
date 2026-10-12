@@ -1,4 +1,6 @@
-use serde_json::Value;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+use serde_json::{Value, json};
 
 use super::events::{ExtensionUiRequestPayload, RuntimeEvent};
 
@@ -6,7 +8,7 @@ pub(super) fn is_pilo_correlated_response(message: &Value) -> bool {
     message
         .get("id")
         .and_then(Value::as_str)
-        .is_some_and(|id| id.starts_with("pilo-"))
+        .is_some_and(|id| id.starts_with("pilo-") || id.starts_with("remote-"))
 }
 
 pub(super) fn adapt_queue_update(generation: u64, message: &Value) -> Vec<RuntimeEvent> {
@@ -126,6 +128,36 @@ pub(super) fn adapt_extension_ui_request(generation: u64, message: &Value) -> Ve
             text: string_field(message, "text"),
         }),
     }]
+}
+
+pub(super) fn adapt_extension_error(generation: u64, message: &Value) -> Vec<RuntimeEvent> {
+    static ERROR_SEQUENCE: AtomicU64 = AtomicU64::new(1);
+
+    let Some(error) = message.get("error").and_then(Value::as_str) else {
+        return Vec::new();
+    };
+    let extension = message
+        .get("extensionPath")
+        .and_then(Value::as_str)
+        .and_then(|path| path.rsplit(['/', '\\']).next())
+        .filter(|name| !name.is_empty())
+        .unwrap_or("Pi extension");
+    let text = match message.get("event").and_then(Value::as_str) {
+        Some(event) => format!("{extension} ({event}): {error}"),
+        None => format!("{extension}: {error}"),
+    };
+    let sequence = ERROR_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+
+    // Extension failures are notifications, not fatal runtime errors.
+    adapt_extension_ui_request(
+        generation,
+        &json!({
+            "id": format!("pilo-extension-error-{sequence}"),
+            "method": "notify",
+            "notifyType": "error",
+            "message": text,
+        }),
+    )
 }
 
 fn string_field(message: &Value, field: &str) -> Option<String> {

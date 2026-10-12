@@ -3,7 +3,7 @@ use serde_json::Value;
 use super::events::{RuntimeErrorCode, RuntimeEvent};
 use super::pi_event_adapters::{
     adapt_auto_retry_end, adapt_auto_retry_start, adapt_compaction_end, adapt_compaction_start,
-    adapt_extension_ui_request, adapt_message_update, adapt_queue_update,
+    adapt_extension_error, adapt_extension_ui_request, adapt_message_update, adapt_queue_update,
     adapt_summarization_retry_attempt_start, adapt_summarization_retry_scheduled,
     adapt_tool_execution_end, adapt_tool_execution_start, adapt_tool_execution_update,
     assistant_text, is_pilo_correlated_response, message_text,
@@ -40,6 +40,7 @@ impl PiEventAdapter {
                 vec![RuntimeEvent::SummarizationRetryFinished { generation }]
             }
             Some("extension_ui_request") => adapt_extension_ui_request(generation, message),
+            Some("extension_error") => adapt_extension_error(generation, message),
             Some("agent_end") => {
                 self.remember_agent_end(message);
                 Vec::new()
