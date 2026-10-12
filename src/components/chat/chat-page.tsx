@@ -620,6 +620,9 @@ function ChatPageImpl(props: ChatPageProps) {
 														.filter(Boolean)
 														.join(" · ")
 										}
+										statusError={
+											session.externalRunning ? null : retryState?.errorMessage
+										}
 										compacting={compacting}
 										retrying={retryState?.kind === "agent"}
 										onAbortRetry={() => void abortRetry()}

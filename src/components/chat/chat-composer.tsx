@@ -15,6 +15,7 @@ import {
 } from "@/lib/chat-submission";
 import {
 	Button,
+	NoticeCard,
 	Textarea,
 	Tooltip,
 	TooltipContent,
@@ -60,6 +61,7 @@ type ChatComposerProps = {
 	onStop?: () => void;
 	pendingFollowUps?: number;
 	statusText?: string;
+	statusError?: string | null;
 	compacting?: boolean;
 	retrying?: boolean;
 	onAbortRetry?: () => void;
@@ -107,6 +109,7 @@ export function ChatComposer({
 	onStop,
 	pendingFollowUps = 0,
 	statusText = "",
+	statusError = null,
 	compacting = false,
 	retrying = false,
 	onAbortRetry,
@@ -185,6 +188,38 @@ export function ChatComposer({
 					onHighlight={setHighlightedIndex}
 					onSelect={selectSuggestion}
 				/>
+			) : null}
+
+			{statusText || statusError || (retrying && onAbortRetry) ? (
+				<NoticeCard
+					announce={statusError ? "alert" : "status"}
+					ariaLive="polite"
+					className="mb-2 px-3 py-2"
+				>
+					<div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+						{statusText ? (
+							<span className="min-w-0 flex-1 break-words tabular-nums text-muted-foreground">
+								{statusText}
+							</span>
+						) : null}
+						{retrying && onAbortRetry ? (
+							<Button
+								type="button"
+								variant="ghost"
+								size="sm"
+								className="ml-auto h-7 shrink-0 px-2 text-xs text-muted-foreground [@media(pointer:coarse)]:h-11"
+								onClick={onAbortRetry}
+							>
+								{t("chat.stopRetry")}
+							</Button>
+						) : null}
+					</div>
+					{statusError ? (
+						<div className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap text-xs leading-5 text-destructive [overflow-wrap:anywhere]">
+							{statusError}
+						</div>
+					) : null}
+				</NoticeCard>
 			) : null}
 
 			<ChatComposerSurface muted={muted}>
@@ -324,29 +359,6 @@ export function ChatComposer({
 							{t("chat.pendingFollowUp", { count: pendingFollowUps })}
 						</span>
 					) : null}
-					{/* 重试文案与「停止重试」原本是两个兄弟节点，被上下文占用占位的 shrink-0
-					    挤掉；包成一组后文案可截断、按钮保持完整。重试中即使没有文案也要能中止。 */}
-					{statusText || (retrying && onAbortRetry) ? (
-						<span className="flex min-w-0 shrink items-center gap-1 text-2xs text-muted-foreground">
-							{statusText ? (
-								<span className="truncate tabular-nums hidden @min-[48rem]:inline">
-									{statusText}
-								</span>
-							) : null}
-							{retrying && onAbortRetry ? (
-								<Button
-									type="button"
-									variant="ghost"
-									size="sm"
-									className="h-7 px-2 text-2xs text-muted-foreground"
-									onClick={onAbortRetry}
-								>
-									{t("chat.stopRetry")}
-								</Button>
-							) : null}
-						</span>
-					) : null}
-
 					<ComposerContextUsage
 						usage={contextUsage}
 						contextWindow={selectedModel?.contextWindow}

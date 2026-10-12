@@ -517,6 +517,7 @@ export function RemoteApp() {
 									onStop={chat.readOnly ? undefined : () => void chat.stop()}
 									pendingFollowUps={pendingFollowUps}
 									statusText={chat.composerStatusText}
+									statusError={chat.retryState?.errorMessage}
 									compacting={chat.compacting}
 									retrying={chat.retryState?.kind === "agent"}
 									onAbortRetry={() => void chat.abortPiRetry()}
