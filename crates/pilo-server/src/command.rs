@@ -51,7 +51,7 @@ where
             return Ok(output);
         }
         let previous = used
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |value| {
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |value| {
                 Some(value.saturating_add(read))
             })
             .unwrap_or_else(|value| value);
