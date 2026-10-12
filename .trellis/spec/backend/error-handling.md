@@ -63,3 +63,60 @@ Remote server handlers also use `Result<_, String>` (`ServerReply`), and
 - Don't leak raw OS paths/credentials into user-facing messages; keep them in the
   string only if the frontend keeps them in `AppError.detail`.
 - Prefer one descriptive message over chained error types.
+
+## Pi RPC Compatibility Projection
+
+### 1. Scope / Trigger
+
+Pi tool and extension events pass through `PiEventAdapter` before reaching both
+Desktop and WebUI. Keep this projection shared across Local/WSL/SSH.
+
+### 2. Signatures
+
+- `PiEventAdapter::adapt(generation: u64, message: &Value) -> Vec<RuntimeEvent>`
+- `adapt_extension_error(generation: u64, message: &Value) -> Vec<RuntimeEvent>`
+
+### 3. Contracts
+
+- Preserve `tool_execution_start/update/end`, including nested calls carrying
+  `parentToolCallId`, so users can inspect actual tool execution live. Nested
+  calls are not standalone transcript entries and are not replayed on reload.
+- The shared activity UI renders `codemode` arguments and results using the
+  normal tool detail path, including text and images. History projection keeps
+  `nestedCalls` and `details.calls` in the parent result payload as metadata;
+  it does not project them as standalone child activities. Unknown metadata
+  must not prevent loading the transcript.
+- Map `extension_error { extensionPath?, event?, error: string }` to the existing
+  `extension_ui_request { method: "notify", notifyType: "error", message, id }`.
+  Generate a unique notification ID; include the extension basename (both path
+  separators supported), hook name when present, and raw error text.
+- Tool display names are presentation-only: `mcp__server__tool` becomes
+  `server/tool`; the original tool name and call ID remain unchanged.
+
+### 4. Validation & Error Matrix
+
+- Present/missing/null `parentToolCallId`: preserve existing tool handling.
+- `codemode` with a result but no arguments: allow the result disclosure.
+- Missing/non-string `error`: ignore the malformed extension error.
+- Missing extension path/hook: still show the error without requiring metadata.
+- Extension error: notify only; never emit `RuntimeError` or stop the turn.
+
+### 5. Good / Base / Bad Cases
+
+- Good: codemode shows arguments and results in both live and history views.
+- Base: older Pi tool events without parent metadata work unchanged.
+- Bad: an extension failure must not mark the Pi process/session as failed.
+
+### 6. Tests Required
+
+When adding regression coverage, assert all three nested event kinds survive,
+codemode arguments and results remain visible, history loads with nested-call
+metadata without requiring child projection, notification IDs differ across
+errors, Windows/POSIX basenames render, and extension errors do not end the turn.
+
+### 7. Wrong vs Correct
+
+- Wrong: hide actual nested execution to force live/replay parity, reject
+  unknown tool-result metadata, or treat extension failures as fatal.
+- Correct: keep live tool events, use normal codemode detail rendering and
+  tolerant history projection, and reuse nonfatal extension notifications.
