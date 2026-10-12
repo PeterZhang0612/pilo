@@ -105,11 +105,9 @@ const enUS = {
 		remoteError: "Remote WebUI error",
 		remoteActionFailed: "Remote WebUI action failed",
 		remotePairing: "Pair a device",
-		remotePairingHint: "Multiple addresses · 10 min",
 		remoteOpenLink: "Scan the QR code or open the link",
 		remoteCopyLink: "Copy link",
 		remoteAccessAddress: "Access address",
-		remoteAccessAddressHint: "Authorized devices open it directly",
 		remotePublicBaseUrl: "Public access URL",
 		remotePublicBaseUrlHint:
 			"Tunnel domain; leave empty to use the LAN address",
@@ -121,28 +119,15 @@ const enUS = {
 		remotePairingExpired: "Pairing link expired or used up",
 		remotePairingExpiredDescription:
 			"This pairing link is no longer available. Scan a new QR code for unfinished addresses. Existing device authorizations remain valid.",
-		remoteAddressName: "Name (optional)",
-		remoteAddressNamePlaceholder: "Home / Public / Mesh (optional)",
 		remoteAddressUrl: "Access URL",
-		remoteAddressConfigHint:
-			"Use complete http(s) root addresses with ports where needed. Save changes to apply them. Changing an address replaces the pairing link, not existing device authorizations. Use HTTPS on untrusted networks.",
-		remoteAddressesSaved: "Access addresses saved",
-		remoteAddAddress: "Add address",
-		remoteQrEntry: "QR entry address",
-		remoteQrEntryHint:
-			"Choose an address your phone can reach, then save. One QR code opens the address selection page.",
+		remoteAddressConfigHint: "Press Enter to add an address",
 		remotePairingPageTitle: "Pilo authorization",
 		remotePairingPageHint:
-			"Open each address to authorize it, then return here for the next one. Opening this page does not use an address slot.",
-		remotePairingRemaining: "{{remaining}} of {{total}} address slots left",
-		remotePairingUntil: "Valid until {{time}}",
-		remotePairingIssued: "Authorization issued in this pairing session",
+			"Pick an address to authorize, then come back for the next one.",
+		remotePairingIssued: "Authorized in this session",
 		remotePairingComplete: "This address is authorized",
-		remotePairingContinue: "Authorize other addresses",
+		remotePairingContinue: "Authorize another address",
 		remoteOpenPilo: "Open Pilo",
-		remotePairingBookmarkHint:
-			"Open Pilo, then bookmark its plain address. New device authorizations last 30 days; this pairing link is temporary.",
-		remoteDeviceExpires: "Device authorization expires: {{time}}",
 		remotePairingAddressUsed:
 			"This address was already paired by another request. Open it if this browser is authorized; otherwise scan a new QR code.",
 		remotePairingStorageUnavailable:

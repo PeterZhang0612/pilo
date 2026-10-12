@@ -106,8 +106,10 @@ remote_devices(id, name, pair_ip, token_hash, created_at_ms, last_seen_at_ms, ex
   deduplicates origins and defaults entry to LAN. Once saved, the explicit list
   is authoritative. Invalid legacy URLs remain editable with an error but are
   excluded from pairing targets. Editing targets invalidates the old batch and
-  generates a new one without clearing devices; name/entry edits do not rotate
-  or extend TTL. The legacy command edits only the `public` entry.
+  generates a new one without clearing devices. The desktop pins the entry to the
+  `lan` address when one exists and no longer exposes entry or name editing;
+  legacy `name` values stay in storage but are neither edited nor shown. The
+  legacy command edits only the `public` entry.
 - **Port edits**: `remote_set_port` follows a saved `lan` entry only when its
   URL exactly matches the previous runtime LAN URL (or the current LAN IP with
   the old port while stopped). Custom URLs and proxy entries stay unchanged.
@@ -117,8 +119,10 @@ remote_devices(id, name, pair_ip, token_hash, created_at_ms, last_seen_at_ms, ex
 - **Pairing TTL / quota**: 10 minutes absolute with a fixed address snapshot and
   one slot per origin. `PairingSession` in `remote/pairing.rs` owns serialized
   exchange and in-memory receipts; `remote/access.rs` owns URL normalization.
-  Opening `/pair` or POSTing `/auth/pairing` validates the secret but consumes
-  nothing, reveals no secret/token and does not mount chat connection hooks.
+  POSTing `/auth/pairing` only validates the secret and consumes nothing.
+  Multi-address `/pair` waits for explicit selection; single-address `/pair`
+  automatically exchanges for that origin before opening the workspace.
+  Neither flow mounts chat connection hooks before authorization.
   No per-device automatic rotation. Exhaustion sets `consumed_at_ms` and hides
   the desktop QR; descriptions and original-proof retries remain available
   within the original TTL, but no new authorization can be issued.
@@ -145,7 +149,10 @@ remote_devices(id, name, pair_ip, token_hash, created_at_ms, last_seen_at_ms, ex
   sessionStorage and immediately replaces the URL with a clean pairing path.
   Expiry, request proof and entry ID are temporary, never stored in localStorage.
   Target pages validate origin against server metadata, reuse a valid local token
-  or explicitly exchange, then save the token origin-locally. Ordinary links
+  or explicitly exchange, then save the token origin-locally. With exactly one
+  configured address, selection is automatic and successful authorization replaces
+  the page with `/`, without selection/completion UI. Keep origin validation,
+  persisted retry proof and error/retry UI; never bypass authentication. Ordinary links
   `/` and return links `/pair` have no credentials. The same-tab selection page
   resumes from its own origin storage; closing the tab need not resume pairing.
   Foreground/retry revalidates; expiry/401 clears temporary context. `issued`
@@ -286,7 +293,7 @@ Additional multi-address assertion points, pending explicit test authorization
 (no new tests added or run during this implementation):
 
 - Config NULL migration, explicit list persistence, duplicate-origin rejection,
-  invalid legacy URL correction and entry/name edits retaining the batch TTL.
+  invalid legacy URL correction and address edits retaining the batch TTL.
 - Saved default LAN entry follows listener port edits; custom/proxy URLs stay
   unchanged; duplicate target rejection precedes stop; port/address writes roll
   back together on failure. Device clearing on port edits remains unchanged.
@@ -296,9 +303,11 @@ Additional multi-address assertion points, pending explicit test authorization
   retrieve its token; DB failures roll back; TTL checked after DB lock waits.
 - Last slot blocks new issuance but allows original-proof retries until expiry;
   revoke/regenerate/stop/restart cannot restore old receipt authorization.
-- `/pair` makes no exchange or chat connection, StrictMode retries use one proof,
+- Multi-address `/pair` makes no exchange or chat connection; single-address scans
+  automatically authorize then open `/`, including reuse of a valid local token.
+  StrictMode retries use one proof,
   blocked storage fails before issuance, URLs/return/bookmarks contain no token.
-- Windows desktop and actual mobile browsers: single QR entry switching,
+- Windows desktop and actual mobile browsers: single QR entry,
   cross-origin same-tab return, offline recovery, HTTPS→HTTP top-level navigation.
 
 ---

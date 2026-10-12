@@ -15,6 +15,7 @@ import {
 	capturePairingBoot,
 	clearPairingContext,
 	pairingReturnUrl,
+	pairingTargetAddress,
 	pairingTargetUrl,
 	preparePairingRequest,
 	refreshPairingContext,
@@ -50,7 +51,7 @@ function classifyFailure(error: unknown): Failure {
 }
 
 export function RemotePairingPage() {
-	const { t, i18n } = useTranslation();
+	const { t } = useTranslation();
 	const [boot, setBoot] = useState(capturePairingBoot);
 	const [info, setInfo] = useState<RemotePairingInfo | null>(null);
 	const [busy, setBusy] = useState(Boolean(boot.context));
@@ -58,9 +59,6 @@ export function RemotePairingPage() {
 		boot.error ? classifyFailure(new Error(boot.error)) : null,
 	);
 	const [authorized, setAuthorized] = useState(false);
-	const [deviceExpiresAtMs, setDeviceExpiresAtMs] = useState<number | null>(
-		null,
-	);
 	const [generation, setGeneration] = useState(0);
 	const { updateAvailable, applyUpdate } = useRemotePwa();
 
@@ -84,23 +82,29 @@ export function RemotePairingPage() {
 				);
 			if (!entry || nextInfo.expiresAtMs <= Date.now())
 				throw new RemotePairingError(401, "invalid or expired pairing link");
+			const target = pairingTargetAddress(
+				nextInfo.addresses,
+				context.addressId,
+				boot.target,
+				window.location.origin,
+			);
 			const nextContext = refreshPairingContext({
 				...context,
+				addressId: target?.id ?? context.addressId,
 				entryAddressId: entry.id,
 				expiresAtMs: nextInfo.expiresAtMs,
 			});
 			setInfo(nextInfo);
-			if (!boot.target) return;
-			const target = nextInfo.addresses.find(
-				(address) => address.id === context.addressId,
-			);
-			if (!target || target.baseUrl !== window.location.origin)
-				throw new Error("REMOTE_PAIRING_INVALID_LINK");
+			if (!target) return;
+			const autoOpen = nextInfo.addresses.length === 1;
 			const storedToken = window.localStorage.getItem(REMOTE_TOKEN_KEY);
 			if (storedToken) {
 				try {
 					await remoteFetch<unknown>(storedToken, "/api/v1/bootstrap");
-					if (!cancelled) setAuthorized(true);
+					if (!cancelled) {
+						setAuthorized(true);
+						if (autoOpen) window.location.replace("/");
+					}
 					return;
 				} catch (error) {
 					if (
@@ -110,7 +114,6 @@ export function RemotePairingPage() {
 						throw error;
 					if (cancelled) return;
 					setAuthorized(false);
-					setDeviceExpiresAtMs(null);
 				}
 			}
 			if (cancelled) return;
@@ -122,8 +125,8 @@ export function RemotePairingPage() {
 			);
 			if (cancelled) return;
 			window.localStorage.setItem(REMOTE_TOKEN_KEY, result.token);
-			setDeviceExpiresAtMs(result.expiresAtMs);
 			setAuthorized(true);
+			if (autoOpen) window.location.replace("/");
 		})()
 			.catch((error: unknown) => {
 				if (cancelled) return;
@@ -179,9 +182,6 @@ export function RemotePairingPage() {
 		info?.addresses.find(
 			(address) => address.baseUrl === window.location.origin,
 		);
-	const target = info?.addresses.find(
-		(address) => address.id === context?.addressId,
-	);
 	const errorMessage =
 		failure === "expired"
 			? t("settings.remotePairingExpiredDescription")
@@ -196,6 +196,21 @@ export function RemotePairingPage() {
 							: failure === "network"
 								? t("settings.remotePairingNetworkError")
 								: null;
+
+	if (
+		!failure &&
+		(busy || authorized) &&
+		(!info || info.addresses.length === 1)
+	) {
+		return (
+			<main className="flex min-h-dvh items-center justify-center bg-background px-4 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] text-foreground">
+				<output className="flex items-center gap-2 text-sm text-muted-foreground">
+					<Spinner className="size-4" />
+					{t("settings.remoteConnecting")}
+				</output>
+			</main>
+		);
+	}
 
 	return (
 		<main className="flex min-h-dvh items-center justify-center bg-background px-4 pt-[max(24px,env(safe-area-inset-top))] pb-[max(24px,env(safe-area-inset-bottom))] text-foreground">
@@ -222,21 +237,8 @@ export function RemotePairingPage() {
 							{t("settings.remotePairingComplete")}
 						</output>
 						<p className="break-all text-sm text-muted-foreground">
-							{target?.name ? `${target.name} · ` : ""}
 							{window.location.origin}
 						</p>
-						<p className="text-sm leading-6 text-muted-foreground">
-							{t("settings.remotePairingBookmarkHint")}
-						</p>
-						{deviceExpiresAtMs ? (
-							<p className="text-xs text-muted-foreground">
-								{t("settings.remoteDeviceExpires", {
-									time: new Date(deviceExpiresAtMs).toLocaleString(
-										i18n.language,
-									),
-								})}
-							</p>
-						) : null}
 					</div>
 				) : null}
 				{errorMessage ? (
@@ -251,15 +253,6 @@ export function RemotePairingPage() {
 				) : null}
 				{!boot.target && info ? (
 					<div className="space-y-3">
-						<p className="text-xs text-muted-foreground">
-							{t("settings.remotePairingRemaining", {
-								remaining: info.remainingUses,
-								total: info.addresses.length,
-							})}
-							{context
-								? ` · ${t("settings.remotePairingUntil", { time: new Date(info.expiresAtMs).toLocaleTimeString(i18n.language) })}`
-								: ""}
-						</p>
 						{info.addresses.map((address) => (
 							<a
 								key={address.id}
@@ -272,13 +265,8 @@ export function RemotePairingPage() {
 							>
 								<div className="min-w-0 space-y-1">
 									<p className="break-words text-sm font-medium">
-										{address.name || address.baseUrl}
+										{address.baseUrl}
 									</p>
-									{address.name ? (
-										<p className="break-all font-mono text-xs text-muted-foreground">
-											{address.baseUrl}
-										</p>
-									) : null}
 									{address.issued ? (
 										<p className="text-xs text-muted-foreground">
 											{t("settings.remotePairingIssued")}

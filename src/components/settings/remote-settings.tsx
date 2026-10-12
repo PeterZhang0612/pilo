@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Copy, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Copy, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
@@ -17,17 +17,8 @@ import {
 	type RemoteHostState,
 } from "@/lib/remote";
 import { randomId } from "@/lib/utils";
-import {
-	Button,
-	Input,
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-	Spinner,
-	Switch,
-} from "@/ui";
+import { remoteAddressConfig, sameAddressList } from "@/lib/remote-addresses";
+import { Button, Input, Spinner, Switch } from "@/ui";
 import {
 	SETTINGS_CONTAINER_CLASS,
 	SETTINGS_TEXT_BUTTON_CLASS,
@@ -121,7 +112,7 @@ export function RemoteSettings({
 }: {
 	initialState?: RemoteHostState | null;
 }) {
-	const { t, i18n } = useTranslation();
+	const { t } = useTranslation();
 	const [state, setState] = useState<RemoteHostState | null>(
 		initialState ?? null,
 	);
@@ -133,12 +124,35 @@ export function RemoteSettings({
 	const [addressDraft, setAddressDraft] = useState<
 		RemoteAccessAddress[] | null
 	>(null);
-	const [entryDraft, setEntryDraft] = useState<string | null>(null);
+	const savingAddresses = useRef(false);
+	const addressRevision = useRef(0);
+	const draftRevision = useRef(0);
+	const focusAddressId = useRef<string | null>(null);
 
 	const refresh = useCallback(async () => {
 		try {
+			if (savingAddresses.current) return;
+			const revision = addressRevision.current;
 			const next = await getRemoteHostState();
-			setState(next);
+			if (savingAddresses.current || revision !== addressRevision.current)
+				return;
+			const config = remoteAddressConfig(next.addresses, next.entryAddressId);
+			if (
+				config.entryAddressId !== next.entryAddressId &&
+				!next.addressConfigError
+			) {
+				savingAddresses.current = true;
+				addressRevision.current += 1;
+				try {
+					setState(
+						await setRemoteAddresses(next.addresses, config.entryAddressId),
+					);
+				} finally {
+					savingAddresses.current = false;
+				}
+			} else {
+				setState(next);
+			}
 			setError(null);
 		} catch (cause) {
 			setError(cause instanceof Error ? cause.message : String(cause));
@@ -206,27 +220,45 @@ export function RemoteSettings({
 		}
 	};
 
-	const saveAddresses = async () => {
-		if (busy || !state || (addressDraft === null && entryDraft === null))
-			return;
-		setBusy("addresses");
+	const saveAddresses = async (
+		draft = addressDraft ?? state?.addresses ?? [],
+	): Promise<RemoteAccessAddress[] | null> => {
+		if (busy || savingAddresses.current || !state) return null;
+		const config = remoteAddressConfig(draft, state.entryAddressId);
+		if (
+			sameAddressList(config.addresses, state.addresses) &&
+			config.entryAddressId === state.entryAddressId
+		)
+			return draft;
+		savingAddresses.current = true;
+		addressRevision.current += 1;
+		const draftRevisionAtStart = draftRevision.current;
 		try {
-			setState(
-				await setRemoteAddresses(
-					addressDraft ?? state.addresses,
-					entryDraft ?? state.entryAddressId,
-				),
+			const next = await setRemoteAddresses(
+				config.addresses,
+				config.entryAddressId,
 			);
-			setAddressDraft(null);
-			setEntryDraft(null);
+			const savedDraft = draft.map(
+				(address) =>
+					next.addresses.find((item) => item.id === address.id) ?? address,
+			);
+			setState(next);
+			// A save that overlapped new typing must not clobber the newer draft.
+			if (draftRevision.current === draftRevisionAtStart)
+				setAddressDraft(
+					savedDraft.some((address) => !address.baseUrl.trim())
+						? savedDraft
+						: null,
+				);
 			setError(null);
-			toast.success(t("settings.remoteAddressesSaved"));
+			return savedDraft;
 		} catch (cause) {
 			const message = cause instanceof Error ? cause.message : String(cause);
 			setError(message);
 			toast.error(t("settings.remoteActionFailed"), { description: message });
+			return null;
 		} finally {
-			setBusy(null);
+			savingAddresses.current = false;
 		}
 	};
 
@@ -355,56 +387,77 @@ export function RemoteSettings({
 			</SettingsSection>
 
 			<SettingsSection title={t("settings.remoteAccessAddress")}>
-				<p className="px-3 py-2 text-xs leading-5 text-muted-foreground">
-					{t("settings.remoteAddressConfigHint")}
-				</p>
-				<div className="space-y-3 px-3 py-2">
+				<div className="space-y-2 px-3 py-3">
 					{(addressDraft ?? state.addresses).map((address, index) => (
-						<div key={address.id} className="flex items-start gap-2">
-							<div className="grid min-w-0 flex-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-								<Input
-									className="min-h-11 sm:min-h-9"
-									maxLength={80}
-									value={address.name}
-									placeholder={t("settings.remoteAddressNamePlaceholder")}
-									disabled={Boolean(busy)}
-									aria-label={`${t("settings.remoteAddressName")} ${index + 1}`}
-									onChange={(event) =>
-										setAddressDraft((current) =>
-											(current ?? state.addresses).map((item) =>
-												item.id === address.id
-													? Object.assign({}, item, {
-															name: event.target.value,
-														})
-													: item,
-											),
-										)
+						<div key={address.id} className="flex items-center gap-2">
+							<Input
+								ref={(input) => {
+									if (input && focusAddressId.current === address.id) {
+										input.focus();
+										focusAddressId.current = null;
 									}
-								/>
-								<Input
-									className="min-h-11 font-mono text-xs sm:min-h-9"
-									inputMode="url"
-									autoCapitalize="none"
-									autoCorrect="off"
-									spellCheck={false}
-									maxLength={2048}
-									value={address.baseUrl}
-									placeholder="https://example.com"
-									disabled={Boolean(busy)}
-									aria-label={`${t("settings.remoteAddressUrl")} ${index + 1}`}
-									onChange={(event) =>
-										setAddressDraft((current) =>
-											(current ?? state.addresses).map((item) =>
-												item.id === address.id
-													? Object.assign({}, item, {
-															baseUrl: event.target.value,
-														})
-													: item,
-											),
-										)
+								}}
+								className="min-h-11 min-w-0 flex-1 font-mono text-xs sm:min-h-9"
+								inputMode="url"
+								enterKeyHint="next"
+								autoCapitalize="none"
+								autoCorrect="off"
+								spellCheck={false}
+								maxLength={2048}
+								value={address.baseUrl}
+								placeholder="https://example.com"
+								disabled={Boolean(busy)}
+								aria-label={`${t("settings.remoteAddressUrl")} ${index + 1}`}
+								onChange={(event) => {
+									draftRevision.current += 1;
+									setAddressDraft((current) =>
+										(current ?? state.addresses).map((item) =>
+											item.id === address.id
+												? Object.assign({}, item, {
+														baseUrl: event.target.value,
+													})
+												: item,
+										),
+									);
+								}}
+								onBlur={(event) => {
+									if (event.relatedTarget?.hasAttribute("data-remove-address"))
+										return;
+									void saveAddresses();
+								}}
+								onKeyDown={async (event) => {
+									if (event.key !== "Enter" || event.nativeEvent.isComposing)
+										return;
+									event.preventDefault();
+									const draftRevisionAtStart = draftRevision.current;
+									const saved = await saveAddresses();
+									if (!saved || draftRevision.current !== draftRevisionAtStart)
+										return;
+									const empty = saved.find((item) => !item.baseUrl.trim());
+									if (empty) {
+										focusAddressId.current = empty.id;
+										setAddressDraft([...saved]);
+									} else if (saved.length < 32) {
+										const id = randomId();
+										focusAddressId.current = id;
+										setAddressDraft([...saved, { id, name: "", baseUrl: "" }]);
 									}
-								/>
-							</div>
+								}}
+							/>
+							<Button
+								variant="ghost"
+								size="icon"
+								className="size-11 shrink-0 sm:size-9"
+								disabled={
+									!state.addresses.some(
+										(item) => item.baseUrl === address.baseUrl,
+									)
+								}
+								aria-label={`${t("settings.remoteCopyLink")} ${address.baseUrl}`}
+								onClick={() => void copyToClipboard(address.baseUrl)}
+							>
+								<Copy className="size-4" />
+							</Button>
 							<Button
 								variant="ghost"
 								size="icon"
@@ -412,125 +465,30 @@ export function RemoteSettings({
 								disabled={
 									Boolean(busy) || (addressDraft ?? state.addresses).length <= 1
 								}
-								aria-label={`${t("common.remove")} ${address.name || address.baseUrl}`}
+								data-remove-address=""
+								onPointerDown={(event) => event.preventDefault()}
+								aria-label={`${t("common.remove")} ${address.baseUrl || index + 1}`}
 								onClick={() => {
 									const next = (addressDraft ?? state.addresses).filter(
 										(item) => item.id !== address.id,
 									);
-									if ((entryDraft ?? state.entryAddressId) === address.id)
-										setEntryDraft(next[0]?.id ?? "");
+									draftRevision.current += 1;
 									setAddressDraft(next);
+									void saveAddresses(next);
 								}}
 							>
 								<Trash2 className="size-4" />
 							</Button>
 						</div>
 					))}
-				</div>
-				<SettingsRow
-					label={t("settings.remoteQrEntry")}
-					helper={t("settings.remoteQrEntryHint")}
-				>
-					<Select
-						value={entryDraft ?? state.entryAddressId}
-						disabled={Boolean(busy)}
-						onValueChange={setEntryDraft}
-					>
-						<SelectTrigger
-							className="min-h-11 w-full sm:min-h-9 sm:w-64"
-							aria-label={t("settings.remoteQrEntry")}
-						>
-							<SelectValue />
-						</SelectTrigger>
-						<SelectContent>
-							{(addressDraft ?? state.addresses).map((address) => (
-								<SelectItem key={address.id} value={address.id}>
-									{address.name ||
-										address.baseUrl ||
-										t("settings.remoteAddressUrl")}
-								</SelectItem>
-							))}
-						</SelectContent>
-					</Select>
-				</SettingsRow>
-				<div className="flex flex-wrap gap-2 px-3 py-3">
-					<Button
-						className="min-h-11 sm:min-h-9"
-						variant="outline"
-						disabled={
-							Boolean(busy) || (addressDraft ?? state.addresses).length >= 32
-						}
-						onClick={() =>
-							setAddressDraft((current) => [
-								...(current ?? state.addresses),
-								{ id: randomId(), name: "", baseUrl: "" },
-							])
-						}
-					>
-						<Plus className="size-4" />
-						{t("settings.remoteAddAddress")}
-					</Button>
-					<Button
-						className="min-h-11 sm:min-h-9"
-						disabled={
-							Boolean(busy) || (addressDraft === null && entryDraft === null)
-						}
-						onClick={() => void saveAddresses()}
-					>
-						{busy === "addresses" ? <Spinner className="size-4" /> : null}
-						{t("common.save")}
-					</Button>
-					{addressDraft !== null || entryDraft !== null ? (
-						<Button
-							className="min-h-11 sm:min-h-9"
-							variant="ghost"
-							disabled={Boolean(busy)}
-							onClick={() => {
-								setAddressDraft(null);
-								setEntryDraft(null);
-							}}
-						>
-							{t("common.cancel")}
-						</Button>
-					) : null}
+					<p className="text-xs leading-5 text-muted-foreground">
+						{t("settings.remoteAddressConfigHint")}
+					</p>
 				</div>
 			</SettingsSection>
 
 			{state.enabled && state.running ? (
-				<SettingsSection
-					title={t("settings.remoteAccessAddress")}
-					headerRight={t("settings.remoteAccessAddressHint")}
-				>
-					<SettingsRow
-						label={<span className="font-mono text-2xs">{state.baseUrl}</span>}
-					>
-						<Button
-							variant="outline"
-							size="sm"
-							className={SETTINGS_TEXT_BUTTON_CLASS}
-							onClick={() => void copyToClipboard(state.baseUrl)}
-						>
-							<Copy className="size-3.5" />
-							{t("settings.remoteCopyLink")}
-						</Button>
-					</SettingsRow>
-				</SettingsSection>
-			) : null}
-
-			{state.enabled && state.running ? (
-				<SettingsSection
-					title={t("settings.remotePairing")}
-					headerRight={t("settings.remotePairingHint")}
-				>
-					<p className="px-3 pt-3 text-xs text-muted-foreground">
-						{t("settings.remotePairingRemaining", {
-							remaining: state.pairingRemainingUses,
-							total: state.pairingTotalUses,
-						})}
-						{state.pairingExpiresAtMs
-							? ` · ${t("settings.remotePairingUntil", { time: new Date(state.pairingExpiresAtMs).toLocaleTimeString(i18n.language) })}`
-							: ""}
-					</p>
+				<SettingsSection title={t("settings.remotePairing")}>
 					{state.pairingUrl ? (
 						<div className="grid gap-3 px-3 py-3 sm:grid-cols-[minmax(0,1fr)_148px] sm:items-center">
 							<div className="min-w-0 space-y-2">

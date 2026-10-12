@@ -116,11 +116,9 @@ const zhCN = {
 		remoteError: "远程访问出错",
 		remoteActionFailed: "远程访问操作失败",
 		remotePairing: "连接设备",
-		remotePairingHint: "多地址配对 · 10 分钟",
 		remoteOpenLink: "扫描二维码或打开链接",
 		remoteCopyLink: "复制链接",
 		remoteAccessAddress: "访问地址",
-		remoteAccessAddressHint: "已认证设备可直接打开",
 		remotePublicBaseUrl: "外部访问地址",
 		remotePublicBaseUrlHint: "内网穿透绑定的域名，留空使用局域网地址",
 		remotePublicBaseUrlInvalid: "地址必须以 http:// 或 https:// 开头",
@@ -131,28 +129,14 @@ const zhCN = {
 		remotePairingExpired: "配对链接已过期或用满",
 		remotePairingExpiredDescription:
 			"此配对链接已失效。未完成的地址请重新扫码认证，已有设备授权不受影响。",
-		remoteAddressName: "名称（可选）",
-		remoteAddressNamePlaceholder: "家里 / 外网 / 组网（可选）",
 		remoteAddressUrl: "访问地址",
-		remoteAddressConfigHint:
-			"填写完整的 http(s) 根地址，必要时加上端口，保存后生效。更改地址会替换配对链接，不会清空已有设备授权。不可信网络请使用 HTTPS。",
-		remoteAddressesSaved: "访问地址已保存",
-		remoteAddAddress: "添加地址",
-		remoteQrEntry: "扫码入口地址",
-		remoteQrEntryHint:
-			"选择手机当前可达的地址并保存，一个二维码即可打开地址选择页。",
+		remoteAddressConfigHint: "回车添加地址",
 		remotePairingPageTitle: "Pilo 认证",
-		remotePairingPageHint:
-			"点击各地址完成认证，再返回此页继续认证其他地址。只打开此页不会消耗地址名额。",
-		remotePairingRemaining: "剩余 {{remaining}} / {{total}} 个地址名额",
-		remotePairingUntil: "有效至 {{time}}",
-		remotePairingIssued: "本次配对已签发授权",
+		remotePairingPageHint: "选择要认证的地址，可返回继续认证其他地址。",
+		remotePairingIssued: "本次已认证",
 		remotePairingComplete: "当前地址已认证",
-		remotePairingContinue: "继续认证其他地址",
+		remotePairingContinue: "认证其他地址",
 		remoteOpenPilo: "进入 Pilo",
-		remotePairingBookmarkHint:
-			"点击「进入 Pilo」后收藏普通地址。新设备授权有效期为 30 天，配对链接仅用于临时认证。",
-		remoteDeviceExpires: "设备授权到期：{{time}}",
 		remotePairingAddressUsed:
 			"此地址已被另一请求配对。如果当前浏览器已有授权，可直接打开；否则请重新扫码。",
 		remotePairingStorageUnavailable:

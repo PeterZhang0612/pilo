@@ -189,6 +189,21 @@ export function preparePairingRequest(
 	return next;
 }
 
+export function pairingTargetAddress(
+	addresses: readonly RemoteAccessAddress[],
+	addressId: string | null,
+	targetPage: boolean,
+	origin: string,
+): RemoteAccessAddress | null {
+	if (!targetPage && addresses.length !== 1) return null;
+	const target = targetPage
+		? addresses.find((address) => address.id === addressId)
+		: addresses[0];
+	if (!target || target.baseUrl !== origin)
+		throw new Error("REMOTE_PAIRING_INVALID_LINK");
+	return target;
+}
+
 export function pairingTargetUrl(
 	address: RemoteAccessAddress,
 	context: PairingContext,
