@@ -1,6 +1,6 @@
 import * as React from "react";
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
-import { Check, ChevronRight, Circle } from "lucide-react";
+import { Check, ChevronRight } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import {
@@ -164,21 +164,23 @@ const DropdownMenuCheckboxItem = React.forwardRef<
 DropdownMenuCheckboxItem.displayName =
 	DropdownMenuPrimitive.CheckboxItem.displayName;
 
+// The radio indicator sits in the trailing slot, matching every other
+// "which one is active" list in the app (font select, model picker, thinking levels).
 const DropdownMenuRadioItem = React.forwardRef<
 	React.ElementRef<typeof DropdownMenuPrimitive.RadioItem>,
 	React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.RadioItem>
 >(({ className, children, ...props }, ref) => (
 	<DropdownMenuPrimitive.RadioItem
 		ref={ref}
-		className={cn(menuSelectionItemClassName, className)}
+		className={cn(menuItemClassName, "pe-8", className)}
 		{...props}
 	>
-		<span className="absolute start-3 flex h-3.5 w-3.5 items-center justify-center">
+		{children}
+		<span className="absolute end-3 flex h-3.5 w-3.5 items-center justify-center">
 			<DropdownMenuPrimitive.ItemIndicator>
-				<Circle className="h-2 w-2 fill-current" />
+				<Check className="size-3.5" />
 			</DropdownMenuPrimitive.ItemIndicator>
 		</span>
-		{children}
 	</DropdownMenuPrimitive.RadioItem>
 ));
 DropdownMenuRadioItem.displayName = DropdownMenuPrimitive.RadioItem.displayName;
