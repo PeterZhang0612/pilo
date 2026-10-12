@@ -297,6 +297,7 @@ function ChatPageImpl(props: ChatPageProps) {
 		handleFollowUp,
 		handleEditQueued,
 		handleSendQueuedNow,
+		handleSendNow,
 		handleStop,
 	} = runtime;
 	const { renderVisual, handleVisualReady } = useChatVisualRetention({
@@ -577,6 +578,16 @@ function ChatPageImpl(props: ChatPageProps) {
 															setComposerImages([]);
 															handleSteer(submission);
 														})();
+													}
+												: undefined
+										}
+										onSendNow={
+											running
+												? async (submission) => {
+														if (await tryHandleComposerCommand(submission))
+															return;
+														setComposerImages([]);
+														await handleSendNow(submission);
 													}
 												: undefined
 										}

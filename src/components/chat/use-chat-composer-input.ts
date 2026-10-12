@@ -16,13 +16,18 @@ import {
 	readChatInputHistory,
 } from "@/lib/chat-input-history";
 import {
+	readComposerSendMode,
+	writeComposerSendMode,
+	type ComposerSendMode,
+} from "@/lib/composer-send-mode";
+import {
 	chatSubmissionHasContent,
 	createChatSubmission,
 	type ChatImageAttachment,
 	type ChatSubmission,
 } from "@/lib/chat-submission";
 import { isImeComposingKeyboardEvent } from "@/lib/ime";
-import type { PiModel } from "@/lib/pi-runtime";
+import { type PiModel, runtimeErrorMessage } from "@/lib/pi-runtime";
 import { usePreferences } from "@/lib/preferences-provider";
 import { useKeyboardShortcut } from "@/lib/use-keyboard-shortcut";
 import {
@@ -47,6 +52,7 @@ export type ChatComposerInputOptions = {
 	onSubmit?: (submission: ChatSubmission) => void;
 	onSteer?: (submission: ChatSubmission) => void;
 	onFollowUp?: (submission: ChatSubmission) => void;
+	onSendNow?: (submission: ChatSubmission) => Promise<void>;
 	suggestions?: readonly ComposerSuggestion[];
 	onSuggestionTrigger?: (trigger: "@" | "/" | null, query: string) => void;
 	historyKey?: string | null;
@@ -65,6 +71,7 @@ export function useChatComposerInput({
 	onSubmit,
 	onSteer,
 	onFollowUp,
+	onSendNow,
 	suggestions = DEFAULT_SUGGESTIONS,
 	onSuggestionTrigger,
 	historyKey,
@@ -73,6 +80,10 @@ export function useChatComposerInput({
 	const { t } = useTranslation();
 	const { sendMessageShortcut, keyboardShortcuts } = usePreferences();
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
+	const [sendMode, setSendModeState] =
+		useState<ComposerSendMode>(readComposerSendMode);
+	const [sendingNow, setSendingNow] = useState(false);
+	const sendingNowRef = useRef(false);
 	const [caret, setCaret] = useState(value.length);
 	const [highlightedIndex, setHighlightedIndex] = useState(0);
 	const [dismissedQuery, setDismissedQuery] = useState<string | null>(null);
@@ -82,6 +93,13 @@ export function useChatComposerInput({
 	const resetHistoryNavigation = () => {
 		historyEntriesRef.current = [];
 		historyCursorRef.current = null;
+	};
+
+	// The mode is sticky: it holds until the user picks another one, so a
+	// follow-up stays a follow-up across sends, sessions and reloads.
+	const setSendMode = (mode: ComposerSendMode) => {
+		setSendModeState(mode);
+		writeComposerSendMode(mode);
 	};
 
 	useEffect(() => {
@@ -188,19 +206,42 @@ export function useChatComposerInput({
 		return false;
 	};
 
+	const runningSubmit =
+		sendMode === "follow_up"
+			? onFollowUp
+			: sendMode === "send_now"
+				? onSendNow
+				: onSteer;
+
 	const submit = () => {
 		const submission = createSubmission();
 		if (
 			!chatSubmissionHasContent(submission) ||
 			disabled ||
 			compacting ||
+			sendingNowRef.current ||
 			!canSendImages()
 		)
 			return;
 		if (running) {
-			if (!onSteer) return;
+			if (!runningSubmit) return;
 			rememberSubmission(submission);
-			onSteer(submission);
+			if (sendMode === "send_now" && onSendNow) {
+				sendingNowRef.current = true;
+				setSendingNow(true);
+				void onSendNow(submission)
+					.catch((error) => {
+						toast.error(t("chat.immediateSendFailed"), {
+							description: runtimeErrorMessage(error),
+						});
+					})
+					.finally(() => {
+						sendingNowRef.current = false;
+						setSendingNow(false);
+					});
+			} else {
+				runningSubmit(submission);
+			}
 			return;
 		}
 		if (!onSubmit) return;
@@ -214,6 +255,7 @@ export function useChatComposerInput({
 			!chatSubmissionHasContent(submission) ||
 			disabled ||
 			compacting ||
+			sendingNowRef.current ||
 			!running ||
 			!onFollowUp ||
 			!canSendImages()
@@ -395,6 +437,10 @@ export function useChatComposerInput({
 	};
 
 	return {
+		sendMode,
+		setSendMode,
+		sendingNow,
+		canSubmit: Boolean(running ? runningSubmit : onSubmit),
 		textareaRef,
 		showFocusHint,
 		suggestionMenuOpen,

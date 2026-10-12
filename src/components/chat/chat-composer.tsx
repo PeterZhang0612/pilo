@@ -52,6 +52,7 @@ type ChatComposerProps = {
 	onSubmit?: (submission: ChatSubmission) => void;
 	onSteer?: (submission: ChatSubmission) => void;
 	onFollowUp?: (submission: ChatSubmission) => void;
+	onSendNow?: (submission: ChatSubmission) => Promise<void>;
 	placeholder?: string;
 	disabled?: boolean;
 	muted?: boolean;
@@ -98,6 +99,7 @@ export function ChatComposer({
 	onSubmit,
 	onSteer,
 	onFollowUp,
+	onSendNow,
 	placeholder,
 	disabled = false,
 	muted = false,
@@ -137,6 +139,10 @@ export function ChatComposer({
 	const { fileInputRef, attachments, updateImages, handleFiles, handlePaste } =
 		useChatComposerImages({ images, onImagesChange });
 	const {
+		sendMode,
+		setSendMode,
+		sendingNow,
+		canSubmit,
 		textareaRef,
 		showFocusHint,
 		suggestionMenuOpen,
@@ -161,6 +167,7 @@ export function ChatComposer({
 		onSubmit,
 		onSteer,
 		onFollowUp,
+		onSendNow,
 		suggestions,
 		onSuggestionTrigger,
 		historyKey,
@@ -196,7 +203,7 @@ export function ChatComposer({
 								/>
 								<button
 									type="button"
-									disabled={disabled}
+									disabled={disabled || sendingNow}
 									aria-label={t("chat.removeAttachment", {
 										name: attachment.name,
 									})}
@@ -204,7 +211,7 @@ export function ChatComposer({
 										"absolute -right-1.5 -top-1.5 z-10 inline-flex size-5 items-center justify-center rounded-full",
 										"border border-border/70 bg-background text-muted-foreground shadow-sm transition-colors",
 										"hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
-										disabled && "opacity-60",
+										(disabled || sendingNow) && "opacity-60",
 									)}
 									onClick={() =>
 										updateImages(
@@ -236,7 +243,7 @@ export function ChatComposer({
 					onKeyUp={syncCaret}
 					onKeyDown={handleKeyDown}
 					onPaste={handlePaste}
-					disabled={disabled}
+					disabled={disabled || sendingNow}
 					rows={2}
 					placeholder={composerPlaceholder}
 					className={cn(
@@ -270,7 +277,7 @@ export function ChatComposer({
 					<input
 						ref={fileInputRef}
 						type="file"
-						disabled={disabled}
+						disabled={disabled || sendingNow}
 						accept={CHAT_IMAGE_ACCEPT}
 						multiple
 						className="hidden"
@@ -280,7 +287,7 @@ export function ChatComposer({
 						<TooltipTrigger asChild>
 							<Button
 								type="button"
-								disabled={disabled}
+								disabled={disabled || sendingNow}
 								variant="ghost"
 								size="icon"
 								className={CHAT_COMPOSER_ATTACHMENT_BUTTON_CLASS_NAME}
@@ -348,13 +355,18 @@ export function ChatComposer({
 					<ComposerActions
 						value={value}
 						hasAttachments={attachments.length > 0}
-						disabled={disabled}
+						disabled={disabled || sendingNow}
 						running={running}
 						sendMessageShortcut={sendMessageShortcut}
 						showShortcutHint={desktopShortcuts}
 						onStop={onStop}
 						canSteer={Boolean(onSteer)}
-						submitBlocked={compacting}
+						canFollowUp={Boolean(onFollowUp)}
+						canSendNow={Boolean(onSendNow)}
+						canSubmit={canSubmit}
+						sendMode={sendMode}
+						onSendModeChange={setSendMode}
+						submitBlocked={compacting || sendingNow}
 						onPrimary={submit}
 					/>
 				</div>

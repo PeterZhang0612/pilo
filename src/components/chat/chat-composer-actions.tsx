@@ -1,8 +1,53 @@
-import { ArrowUp, Square } from "lucide-react";
+import {
+	ArrowUp,
+	ChevronDown,
+	CornerDownRight,
+	ListPlus,
+	Square,
+	Zap,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { CHAT_COMPOSER_SEND_BUTTON_CLASS_NAME } from "@/components/chat/chat-composer-frame";
-import { Button, Tooltip, TooltipContent, TooltipTrigger } from "@/ui";
+import {
+	CHAT_COMPOSER_RUN_CONFIG_TRIGGER_CLASS_NAME,
+	CHAT_COMPOSER_SEND_BUTTON_CLASS_NAME,
+} from "@/components/chat/chat-composer-frame";
+import type { ComposerSendMode } from "@/lib/composer-send-mode";
+import { cn } from "@/lib/utils";
+import { menuItemIconClassName } from "@/ui/menu-styles";
+import {
+	Button,
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuLabel,
+	DropdownMenuRadioGroup,
+	DropdownMenuRadioItem,
+	Tooltip,
+	TooltipContent,
+	TooltipTrigger,
+	DropdownMenuTrigger,
+} from "@/ui";
+
+const SEND_MODE_OPTIONS = [
+	{
+		mode: "steer",
+		icon: CornerDownRight,
+		label: "chat.sendModeSteer",
+		detail: "chat.sendModeSteerDetail",
+	},
+	{
+		mode: "follow_up",
+		icon: ListPlus,
+		label: "chat.sendModeFollowUp",
+		detail: "chat.sendModeFollowUpDetail",
+	},
+	{
+		mode: "send_now",
+		icon: Zap,
+		label: "chat.sendModeNow",
+		detail: "chat.sendModeNowDetail",
+	},
+] as const;
 
 type ComposerActionsProps = {
 	value: string;
@@ -13,6 +58,11 @@ type ComposerActionsProps = {
 	showShortcutHint?: boolean;
 	onStop?: () => void;
 	canSteer: boolean;
+	canFollowUp: boolean;
+	canSendNow: boolean;
+	canSubmit: boolean;
+	sendMode: ComposerSendMode;
+	onSendModeChange: (mode: ComposerSendMode) => void;
 	submitBlocked?: boolean;
 	onPrimary: () => void;
 };
@@ -26,67 +76,133 @@ export function ComposerActions({
 	showShortcutHint = true,
 	onStop,
 	canSteer,
+	canFollowUp,
+	canSendNow,
+	canSubmit,
+	sendMode,
+	onSendModeChange,
 	submitBlocked = false,
 	onPrimary,
 }: ComposerActionsProps) {
 	const { t } = useTranslation();
 	const hasValue = Boolean(value.trim()) || hasAttachments;
+	const showStop = running && !hasValue;
 	const shortcutHint = showShortcutHint
 		? ` · ${sendMessageShortcut === "enter" ? "Enter" : "Ctrl/⌘ Enter"}`
 		: "";
+	const selectedOption =
+		SEND_MODE_OPTIONS.find((option) => option.mode === sendMode) ??
+		SEND_MODE_OPTIONS[0];
+	const SendModeIcon = selectedOption.icon;
+	const sendModeLabel = t("chat.sendModeCurrent", {
+		mode: t(selectedOption.label),
+	});
+	const actionLabel = showStop
+		? t("chat.stop")
+		: running
+			? t(selectedOption.label)
+			: t("chat.send");
 	return (
-		<div className="ml-auto flex shrink-0 items-center gap-1.5">
-			{running ? (
-				hasValue ? (
-					<Tooltip>
-						<TooltipTrigger asChild>
-							<Button
-								type="button"
-								size="icon"
-								className={CHAT_COMPOSER_SEND_BUTTON_CLASS_NAME}
-								aria-label={t("chat.adjust")}
-								disabled={!canSteer || submitBlocked}
-								onClick={onPrimary}
-							>
-								<ArrowUp className="size-4" />
-							</Button>
-						</TooltipTrigger>
-						<TooltipContent>{t("chat.adjust") + shortcutHint}</TooltipContent>
-					</Tooltip>
-				) : (
-					<Tooltip>
-						<TooltipTrigger asChild>
+		<div className="ms-auto flex shrink-0 items-center gap-1.5">
+			<DropdownMenu>
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<DropdownMenuTrigger asChild>
 							<Button
 								type="button"
 								variant="ghost"
-								size="icon"
-								className="size-7 rounded-full bg-foreground text-background transition-[background-color,scale] duration-100 enabled:hover:bg-foreground/85 active:scale-[0.96]"
-								aria-label={t("chat.stop")}
-								onClick={onStop}
+								disabled={disabled || submitBlocked}
+								className={cn(
+									CHAT_COMPOSER_RUN_CONFIG_TRIGGER_CLASS_NAME,
+									"gap-1 px-1.5 motion-reduce:active:scale-100 [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:min-w-11",
+								)}
+								aria-label={sendModeLabel}
 							>
-								<Square className="size-3 fill-current" />
+								<SendModeIcon className="size-3.5" aria-hidden="true" />
+								<ChevronDown className="size-3" aria-hidden="true" />
 							</Button>
-						</TooltipTrigger>
-						<TooltipContent>{t("chat.stop")}</TooltipContent>
-					</Tooltip>
-				)
-			) : (
+						</DropdownMenuTrigger>
+					</TooltipTrigger>
+					<TooltipContent>{sendModeLabel}</TooltipContent>
+				</Tooltip>
+				<DropdownMenuContent
+					side="top"
+					align="end"
+					sideOffset={8}
+					collisionPadding={16}
+					className="max-w-[calc(100vw-2rem)]"
+				>
+					<DropdownMenuLabel>{t("chat.sendMode")}</DropdownMenuLabel>
+					<DropdownMenuRadioGroup
+						value={sendMode}
+						onValueChange={(mode) => {
+							if (
+								mode === "steer" ||
+								mode === "follow_up" ||
+								mode === "send_now"
+							)
+								onSendModeChange(mode);
+						}}
+					>
+						{SEND_MODE_OPTIONS.map((option) => (
+							<DropdownMenuRadioItem
+								key={option.mode}
+								value={option.mode}
+								disabled={
+									running &&
+									(option.mode === "steer"
+										? !canSteer
+										: option.mode === "follow_up"
+											? !canFollowUp
+											: !canSendNow)
+								}
+								textValue={t(option.label)}
+								className="py-1 [@media(pointer:coarse)]:min-h-11"
+							>
+								<span className={menuItemIconClassName}>
+									<option.icon aria-hidden="true" />
+								</span>
+								<span className="flex min-w-0 flex-1 flex-col">
+									<span className="font-medium">{t(option.label)}</span>
+									<span className="text-xs leading-tight text-muted-foreground">
+										{t(option.detail)}
+									</span>
+								</span>
+							</DropdownMenuRadioItem>
+						))}
+					</DropdownMenuRadioGroup>
+				</DropdownMenuContent>
+			</DropdownMenu>
+			<div className="flex shrink-0 items-center justify-center">
 				<Tooltip>
 					<TooltipTrigger asChild>
 						<Button
 							type="button"
 							size="icon"
-							className={CHAT_COMPOSER_SEND_BUTTON_CLASS_NAME}
-							aria-label={t("chat.send")}
-							disabled={!hasValue || disabled || submitBlocked}
-							onClick={onPrimary}
+							className={cn(
+								CHAT_COMPOSER_SEND_BUTTON_CLASS_NAME,
+								"motion-reduce:active:scale-100 [@media(pointer:coarse)]:size-11",
+							)}
+							aria-label={actionLabel}
+							disabled={
+								showStop
+									? disabled
+									: !hasValue || disabled || !canSubmit || submitBlocked
+							}
+							onClick={showStop ? onStop : onPrimary}
 						>
-							<ArrowUp className="size-4" />
+							{showStop ? (
+								<Square className="size-3 fill-current" aria-hidden="true" />
+							) : (
+								<ArrowUp className="size-4" aria-hidden="true" />
+							)}
 						</Button>
 					</TooltipTrigger>
-					<TooltipContent>{t("chat.send") + shortcutHint}</TooltipContent>
+					<TooltipContent>
+						{actionLabel + (showStop ? "" : shortcutHint)}
+					</TooltipContent>
 				</Tooltip>
-			)}
+			</div>
 		</div>
 	);
 }

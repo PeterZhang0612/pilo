@@ -632,6 +632,7 @@ export function useRemoteChat({
 		sendSubmission,
 		handleEditQueued,
 		handleSendQueuedNow,
+		handleSendNow,
 		stop,
 		changeModel,
 		changeThinking,
@@ -641,6 +642,9 @@ export function useRemoteChat({
 	} = useRemoteChatActions({
 		client,
 		activeSessionKey,
+		activeSessionKeyRef,
+		routeUiKey,
+		composer,
 		readOnly,
 		hasSelectedSession: Boolean(selectedSession),
 		hasIdentifiedSession,
@@ -661,6 +665,7 @@ export function useRemoteChat({
 		setDraftModel,
 		setDraftThinkingLevel,
 		rpc,
+		rpcForSession,
 	});
 
 	useEffect(() => {
@@ -807,6 +812,7 @@ export function useRemoteChat({
 		sendSubmission,
 		handleEditQueued,
 		handleSendQueuedNow,
+		handleSendNow,
 		stop,
 		changeModel,
 		changeThinking,

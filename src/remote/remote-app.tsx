@@ -499,6 +499,7 @@ export function RemoteApp() {
 													void chat.sendSubmission(submission, "steer")
 											: undefined
 									}
+									onSendNow={active ? chat.handleSendNow : undefined}
 									onFollowUp={
 										active
 											? (submission) =>

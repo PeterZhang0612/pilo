@@ -326,20 +326,16 @@ export function useChatRuntimeQueue({
 		],
 	);
 
-	const handleSendQueuedNow = useCallback(
-		async (clientMessageId: string) => {
-			const item = queuedMessagesRef.current.get(clientMessageId);
+	const sendNow = useCallback(
+		async (submission: ChatSubmission, clientMessageId?: string) => {
 			const turn = activeTurnRef.current;
 			const beginTurn = beginTurnRef.current;
-			if (
-				!item ||
-				!turn ||
-				item.turn !== turn ||
-				turn.sessionId !== session.id ||
-				!beginTurn
-			) {
+			if (!beginTurn || !chatSubmissionHasContent(submission)) return;
+			if (!turn) {
+				await beginTurn(submission);
 				return;
 			}
+			if (turn.sessionId !== session.id) return;
 
 			const queued = [...queuedMessagesRef.current.values()].filter(
 				(candidate) => candidate.turn === turn,
@@ -347,6 +343,7 @@ export function useChatRuntimeQueue({
 			const remaining = queued.filter(
 				(candidate) => candidate.clientMessageId !== clientMessageId,
 			);
+			if (!clientMessageId) clearDraft();
 			turn.preserveQueuedOnRelease = true;
 
 			try {
@@ -390,7 +387,7 @@ export function useChatRuntimeQueue({
 				});
 				releaseActiveTurn(turn, { preserveQueued: true });
 
-				const nextTurnPromise = beginTurn(item.submission);
+				const nextTurnPromise = beginTurn(submission);
 				const nextTurn = activeTurnRef.current;
 				if (!nextTurn) {
 					restoreQueuedMessages(remaining);
@@ -423,6 +420,7 @@ export function useChatRuntimeQueue({
 					removeQueuedMessagesFromConversation(turn, stranded);
 					restoreQueuedMessages(stranded);
 				}
+				if (!clientMessageId) recoverSubmission(submission);
 				toast.error(t("chat.immediateSendFailed"), {
 					description: runtimeErrorMessage(error),
 				});
@@ -431,8 +429,10 @@ export function useChatRuntimeQueue({
 		[
 			activeTurnRef,
 			beginTurnRef,
+			clearDraft,
 			client,
 			dispatchConversation,
+			recoverSubmission,
 			releaseActiveTurn,
 			removeQueuedMessagesFromConversation,
 			replayQueuedMessages,
@@ -442,6 +442,20 @@ export function useChatRuntimeQueue({
 			takeQueuedMessages,
 			t,
 		],
+	);
+
+	const handleSendQueuedNow = useCallback(
+		async (clientMessageId: string) => {
+			const item = queuedMessagesRef.current.get(clientMessageId);
+			if (!item || item.turn !== activeTurnRef.current) return;
+			await sendNow(item.submission, clientMessageId);
+		},
+		[activeTurnRef, sendNow],
+	);
+
+	const handleSendNow = useCallback(
+		(submission: ChatSubmission) => sendNow(submission),
+		[sendNow],
 	);
 
 	const handleSteer = useCallback(
@@ -550,6 +564,7 @@ export function useChatRuntimeQueue({
 		handleFollowUp,
 		handleEditQueued,
 		handleSendQueuedNow,
+		handleSendNow,
 		handleStop,
 	};
 }

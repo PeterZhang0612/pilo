@@ -3,6 +3,8 @@ import {
 	type RefObject,
 	type SetStateAction,
 	useCallback,
+	useEffect,
+	useRef,
 	useState,
 } from "react";
 
@@ -21,7 +23,11 @@ import type { PiAgentState, PiModel, PiThinkingLevel } from "@/lib/pi-runtime";
 import { runtimeErrorMessage } from "@/lib/pi-runtime";
 import { randomId } from "@/lib/utils";
 import { reducerContext } from "./remote-app-model";
-import type { QueuedSubmission, RemoteRpc } from "./use-remote-chat-transport";
+import type {
+	QueuedSubmission,
+	RemoteRpc,
+	RemoteSessionRpc,
+} from "./use-remote-chat-transport";
 import type { WebPiloClient } from "./web-pilo-client";
 
 export type PendingProjectMcpPrompt = {
@@ -33,6 +39,9 @@ export type PendingProjectMcpPrompt = {
 type UseRemoteChatActionsOptions = {
 	client: WebPiloClient | null;
 	activeSessionKey: string | null;
+	activeSessionKeyRef: RefObject<string | null>;
+	routeUiKey: string;
+	composer: string;
 	readOnly: boolean;
 	hasSelectedSession: boolean;
 	hasIdentifiedSession: boolean;
@@ -53,11 +62,15 @@ type UseRemoteChatActionsOptions = {
 	setDraftModel: Dispatch<SetStateAction<PiModel | null>>;
 	setDraftThinkingLevel: Dispatch<SetStateAction<PiThinkingLevel | null>>;
 	rpc: RemoteRpc;
+	rpcForSession: RemoteSessionRpc;
 };
 
 export function useRemoteChatActions({
 	client,
 	activeSessionKey,
+	activeSessionKeyRef,
+	routeUiKey,
+	composer,
 	readOnly,
 	hasSelectedSession,
 	hasIdentifiedSession,
@@ -78,8 +91,32 @@ export function useRemoteChatActions({
 	setDraftModel,
 	setDraftThinkingLevel,
 	rpc,
+	rpcForSession,
 }: UseRemoteChatActionsOptions) {
 	const [sending, setSending] = useState(false);
+	const recoveredSubmissionsRef = useRef(new Map<string, ChatSubmission[]>());
+	const [recoveryRevision, setRecoveryRevision] = useState(0);
+
+	/* oxlint-disable react/set-state-in-effect, react/exhaustive-effect-dependencies -- Failed send-now submissions belong to their original session, including when it returns from the background. recoveryRevision 是重新回填输入框的显式触发代，不是 effect 读取的值。 */
+	useEffect(() => {
+		void recoveryRevision;
+		const recovered = recoveredSubmissionsRef.current.get(routeUiKey);
+		if (!recovered) return;
+		recoveredSubmissionsRef.current.delete(routeUiKey);
+		handleComposerChange(
+			[composer, ...recovered.map((item) => item.text)]
+				.filter(Boolean)
+				.join("\n\n"),
+		);
+		setImages((current) => [
+			...new Map(
+				[...current, ...recovered.flatMap((item) => item.images)].map(
+					(image) => [image.id, image],
+				),
+			).values(),
+		]);
+	}, [composer, handleComposerChange, recoveryRevision, routeUiKey, setImages]);
+	/* oxlint-enable react/set-state-in-effect */
 
 	const runLocalAction = useCallback(
 		(action: ConversationAction) => {
@@ -254,66 +291,138 @@ export function useRemoteChatActions({
 		],
 	);
 
-	const handleSendQueuedNow = useCallback(
-		async (clientMessageId: string) => {
-			if (!client || !activeSessionKey) return;
-			const item = queuedSubmissionsRef.current.get(clientMessageId);
-			if (!item) return;
+	const sendNow = useCallback(
+		async (submission: ChatSubmission, queuedClientMessageId?: string) => {
+			if (
+				!client ||
+				!activeSessionKey ||
+				readOnly ||
+				activeSessionKeyRef.current !== activeSessionKey
+			)
+				return;
+			const targetSessionKey = activeSessionKey;
+			const isActiveSession = () =>
+				activeSessionKeyRef.current === targetSessionKey;
+			const runTargetAction = (action: ConversationAction) => {
+				setConversation((current) =>
+					isActiveSession()
+						? reduceConversationActions(current, [action], reducerContext)
+						: current,
+				);
+			};
+			const clientMessageId = queuedClientMessageId ?? randomId();
 			const queued = [...queuedSubmissionsRef.current.entries()];
 			const remaining = queued.filter(([id]) => id !== clientMessageId);
 			setSending(true);
+			if (!queuedClientMessageId) clearComposer();
+			let queueCleared = false;
+			let optimisticSubmitted = false;
+			let promptSent = false;
+			let replayedCount = 0;
 			try {
-				await rpc<void>({ type: "clear_queue" });
-				await rpc<void>({ type: "abort" });
-				runLocalAction({
+				await rpcForSession<void>(targetSessionKey, { type: "clear_queue" });
+				queueCleared = true;
+				await rpcForSession<void>(targetSessionKey, { type: "abort" });
+				runTargetAction({
 					type: "local_turn_abort",
 					timestampMs: Date.now(),
 				});
-				for (const [id] of queued) {
-					runLocalAction({
-						type: "local_user_queue_failed",
-						clientMessageId: id,
-					});
+				if (isActiveSession()) {
+					for (const [id] of queued) {
+						queuedSubmissionsRef.current.delete(id);
+						runTargetAction({
+							type: "local_user_queue_failed",
+							clientMessageId: id,
+						});
+					}
 				}
-				queuedSubmissionsRef.current.clear();
 
 				const now = Date.now();
-				runLocalAction({
-					type: "local_user_submit",
-					clientMessageId,
-					text: item.submission.text,
-					images: summarizeChatImages(item.submission.images),
-					timestampMs: now,
-				});
-				await client.sendChatCommand(activeSessionKey, {
-					type: "prompt",
-					message: item.submission.text,
-					images: toPiImageContents(item.submission.images),
-				});
-
-				for (const [id, pending] of remaining) {
-					queuedSubmissionsRef.current.set(id, pending);
-					runLocalAction({
-						type: "local_user_queue",
-						clientMessageId: id,
-						text: pending.submission.text,
-						images: summarizeChatImages(pending.submission.images),
-						queueKind: pending.queueKind,
+				if (isActiveSession()) {
+					runTargetAction({
+						type: "local_user_submit",
+						clientMessageId,
+						text: submission.text,
+						images: summarizeChatImages(submission.images),
 						timestampMs: now,
 					});
+					optimisticSubmitted = true;
+				}
+				await client.sendChatCommand(targetSessionKey, {
+					type: "prompt",
+					message: submission.text,
+					images: toPiImageContents(submission.images),
+				});
+				promptSent = true;
+
+				if (isActiveSession()) {
+					for (const [id, pending] of remaining) {
+						queuedSubmissionsRef.current.set(id, pending);
+						runTargetAction({
+							type: "local_user_queue",
+							clientMessageId: id,
+							text: pending.submission.text,
+							images: summarizeChatImages(pending.submission.images),
+							queueKind: pending.queueKind,
+							timestampMs: now,
+						});
+					}
 				}
 				await remaining.reduce<Promise<void>>(
 					(promise, [, pending]) =>
-						promise.then(() =>
-							rpc<void>({
+						promise.then(async () => {
+							await rpcForSession<void>(targetSessionKey, {
 								type: pending.queueKind,
 								message: pending.submission.text,
 								images: toPiImageContents(pending.submission.images),
-							}),
-						),
+							});
+							replayedCount += 1;
+						}),
 					Promise.resolve(),
 				);
 			} catch (error) {
+				if (optimisticSubmitted && !promptSent) {
+					runTargetAction({
+						type: "local_user_queue_failed",
+						clientMessageId,
+					});
+					runTargetAction({
+						type: "local_turn_abort",
+						timestampMs: Date.now(),
+					});
+				}
+				// Keep acknowledged queue entries; recover the failed entry and its unsent tail.
+				const failedQueued = promptSent
+					? remaining.slice(replayedCount)
+					: queueCleared
+						? queued
+						: [];
+				if (isActiveSession()) {
+					for (const [id] of failedQueued) {
+						queuedSubmissionsRef.current.delete(id);
+						runTargetAction({
+							type: "local_user_queue_failed",
+							clientMessageId: id,
+						});
+					}
+				}
+				const recovered = promptSent
+					? failedQueued.map(([, pending]) => pending.submission)
+					: queueCleared || !queuedClientMessageId
+						? [
+								submission,
+								...failedQueued
+									.filter(([id]) => id !== clientMessageId)
+									.map(([, pending]) => pending.submission),
+							]
+						: [];
+				if (recovered.length > 0) {
+					recoveredSubmissionsRef.current.set(routeUiKey, [
+						...(recoveredSubmissionsRef.current.get(routeUiKey) ?? []),
+						...recovered,
+					]);
+					setRecoveryRevision((value) => value + 1);
+				}
 				if (!handleExpiredAuth(error)) {
 					setFatalError(error instanceof Error ? error.message : String(error));
 				}
@@ -323,13 +432,36 @@ export function useRemoteChatActions({
 		},
 		[
 			activeSessionKey,
+			activeSessionKeyRef,
+			clearComposer,
 			client,
 			handleExpiredAuth,
 			queuedSubmissionsRef,
-			rpc,
-			runLocalAction,
+			readOnly,
+			routeUiKey,
+			rpcForSession,
+			setConversation,
 			setFatalError,
 		],
+	);
+
+	const handleSendQueuedNow = useCallback(
+		async (clientMessageId: string) => {
+			const item = queuedSubmissionsRef.current.get(clientMessageId);
+			if (!item) return;
+			await sendNow(item.submission, clientMessageId);
+		},
+		[queuedSubmissionsRef, sendNow],
+	);
+
+	const handleSendNow = useCallback(
+		async (submission: ChatSubmission) => {
+			if (!client || !activeSessionKey || readOnly) return;
+			if (!submission.text.trim() && submission.images.length === 0) return;
+			if (await tryHandleComposerCommand(submission)) return;
+			await sendNow(submission);
+		},
+		[activeSessionKey, client, readOnly, sendNow, tryHandleComposerCommand],
 	);
 
 	const resumeProjectMcpPrompt = useCallback(
@@ -503,6 +635,7 @@ export function useRemoteChatActions({
 		sendSubmission,
 		handleEditQueued,
 		handleSendQueuedNow,
+		handleSendNow,
 		stop,
 		changeModel,
 		changeThinking,

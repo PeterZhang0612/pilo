@@ -129,6 +129,7 @@ export function useChatRuntime({
 		handleFollowUp,
 		handleEditQueued,
 		handleSendQueuedNow,
+		handleSendNow,
 		handleStop,
 	} = useChatRuntimeQueue({
 		session,
@@ -478,6 +479,7 @@ export function useChatRuntime({
 		handleFollowUp,
 		handleEditQueued,
 		handleSendQueuedNow,
+		handleSendNow,
 		handleStop,
 	};
 }
