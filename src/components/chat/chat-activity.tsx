@@ -5,8 +5,10 @@ import {
 	BookOpen,
 	ChevronRight,
 	CircleAlert,
+	CodeXml,
 	FileText,
 	PencilLine,
+	Plug,
 	Search,
 	Sparkles,
 	Terminal,
@@ -96,7 +98,14 @@ function ToolIcon({
 	toolName: string;
 	className?: string;
 }) {
+	if (toolName.startsWith("mcp__")) return <Plug className={className} />;
+
 	switch (toolName.toLowerCase()) {
+		case "codemode":
+			return <CodeXml className={className} />;
+		case "list_mcp_resources":
+		case "read_mcp_resource":
+			return <Plug className={className} />;
 		case "bash":
 		case "execute":
 			return <Terminal className={className} />;
@@ -109,6 +118,7 @@ function ToolIcon({
 		case "search":
 		case "grep":
 		case "find":
+		case "tool_search":
 			return <Search className={className} />;
 		default:
 			return <Wrench className={className} />;
@@ -116,7 +126,16 @@ function ToolIcon({
 }
 
 function toolLabel(t: TFunction, toolName: string) {
+	const mcpTool = toolName.match(/^mcp__(.+?)__(.+)$/);
+	if (mcpTool) return `${mcpTool[1]}/${mcpTool[2]}`;
+
 	switch (toolName.toLowerCase()) {
+		case "tool_search":
+			return t("chat.findTools");
+		case "list_mcp_resources":
+			return t("chat.listMcpResources");
+		case "read_mcp_resource":
+			return t("chat.readMcpResource");
 		case "bash":
 		case "execute":
 			return t("chat.run");
@@ -189,7 +208,7 @@ function ThinkingActivityView({ activity }: { activity: ThinkingActivity }) {
 }
 
 function ToolDetail({ activity }: { activity: ToolCallActivity }) {
-	const { t } = useTranslation();
+	const { t, i18n } = useTranslation();
 	const hasArgs = activity.args !== undefined && activity.args !== null;
 	const hasResult = activity.result !== undefined && activity.result !== null;
 	const diff =
@@ -200,18 +219,47 @@ function ToolDetail({ activity }: { activity: ToolCallActivity }) {
 	const showArgs = hasArgs && preview === null;
 	const result = hasResult ? resultContent(activity.result) : null;
 	const flattenedResult = result ? flattenToolResult(result) : null;
+	const resultText = flattenedResult?.needsRawFallback
+		? formatUnknown(activity.result)
+		: flattenedResult?.text;
 	const detailText = [
 		showArgs ? formatUnknown(activity.args) : null,
-		flattenedResult?.text || null,
+		resultText || null,
 	]
 		.filter((value): value is string => Boolean(value))
 		.join("\n");
 	const images = flattenedResult?.images ?? [];
+	const exitCode = flattenedResult?.exitCode;
+	const wallTimeSeconds = flattenedResult?.wallTimeSeconds;
+	const hasExecutionSummary =
+		exitCode != null || wallTimeSeconds != null || flattenedResult?.truncated;
 
-	if (!diff && !detailText && images.length === 0) return null;
+	if (!diff && !detailText && images.length === 0 && !hasExecutionSummary)
+		return null;
 
 	return (
 		<div className="w-full pb-1 pt-0.5 text-xs font-normal text-muted-foreground">
+			{hasExecutionSummary ? (
+				<div className="flex flex-wrap items-center gap-x-3 gap-y-1 py-1 text-2xs tabular-nums">
+					{exitCode != null ? (
+						<span className={cn(exitCode !== 0 && "text-destructive")}>
+							{t("chat.toolExitCode", { code: exitCode })}
+						</span>
+					) : null}
+					{wallTimeSeconds != null ? (
+						<span>
+							{t("chat.toolDuration", {
+								duration: wallTimeSeconds.toLocaleString(i18n.language, {
+									maximumFractionDigits: 2,
+								}),
+							})}
+						</span>
+					) : null}
+					{flattenedResult?.truncated ? (
+						<span>{t("chat.toolOutputTruncated")}</span>
+					) : null}
+				</div>
+			) : null}
 			{diff ? (
 				<ToolDiff diff={diff} />
 			) : detailText ? (
@@ -258,7 +306,7 @@ function ToolCallActivityView({
 			<button
 				type="button"
 				className={cn(
-					"group/tool -mx-1 flex min-h-6 w-[calc(100%+0.5rem)] items-start gap-1.5 rounded-md px-1 py-0.5 text-left transition-colors",
+					"group/tool -mx-1 flex min-h-11 w-[calc(100%+0.5rem)] items-start gap-1.5 rounded-md px-1 py-0.5 text-left transition-colors sm:min-h-6",
 					PROCESS_TEXT_CLASS,
 					hasDetails
 						? "hover:bg-muted/40 hover:text-foreground"

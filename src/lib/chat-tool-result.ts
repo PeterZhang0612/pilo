@@ -36,22 +36,48 @@ export function resultContent(value: unknown): {
 	};
 }
 
+function structuredToolOutput(value: unknown) {
+	if (!isRecord(value)) return null;
+	const structured = value.structuredContent;
+	return isRecord(structured) && typeof structured.output === "string"
+		? {
+				output: structured.output,
+				exitCode: structured.exit_code,
+				wallTimeSeconds: structured.wall_time_seconds,
+				truncated: structured.truncated,
+			}
+		: null;
+}
+
+function structuredTextOutput(text: string) {
+	if (!text.trimStart().startsWith("{")) return null;
+	try {
+		return structuredToolOutput(JSON.parse(text));
+	} catch {
+		return null;
+	}
+}
+
 export function flattenToolResult(result: ReturnType<typeof resultContent>) {
 	const text: string[] = [];
+	const metadataOutput = structuredToolOutput(result.metadata);
+	const structuredOutputs = metadataOutput ? [metadataOutput] : [];
 	const images: Array<{ data: string; mimeType: string; key: string }> = [];
 	const imageOccurrences = new Map<string, number>();
 
 	for (const block of result.blocks) {
-		if (typeof block === "string") {
-			text.push(block);
-			continue;
-		}
-		if (
-			isRecord(block) &&
-			block.type === "text" &&
-			typeof block.text === "string"
-		) {
-			text.push(block.text);
+		const blockText =
+			typeof block === "string"
+				? block
+				: isRecord(block) &&
+					  block.type === "text" &&
+					  typeof block.text === "string"
+					? block.text
+					: null;
+		if (blockText !== null) {
+			const structured = structuredTextOutput(blockText);
+			if (structured) structuredOutputs.push(structured);
+			else text.push(blockText);
 			continue;
 		}
 		if (
@@ -74,10 +100,40 @@ export function flattenToolResult(result: ReturnType<typeof resultContent>) {
 		text.push(formatUnknown(block));
 	}
 
-	if (result.metadata) text.push(formatUnknown(result.metadata));
+	for (const structured of structuredOutputs) {
+		// MCP may return the same output as both text and structured content.
+		const output = structured.output.trim();
+		if (
+			!text.some((part) => part.trim() === output) &&
+			text.join("\n").trim() !== output
+		) {
+			text.push(structured.output);
+		}
+	}
 	if (result.fallback) text.push(result.fallback);
 
-	return { text: text.filter(Boolean).join("\n"), images };
+	const execution = structuredOutputs[0];
+	const exitCode = execution?.exitCode;
+	const wallTimeSeconds = execution?.wallTimeSeconds;
+	return {
+		text: text.filter(Boolean).join("\n"),
+		images,
+		needsRawFallback:
+			structuredOutputs.length === 0 &&
+			!text.some(Boolean) &&
+			images.length === 0,
+		exitCode:
+			typeof exitCode === "number" && Number.isInteger(exitCode)
+				? exitCode
+				: null,
+		wallTimeSeconds:
+			typeof wallTimeSeconds === "number" &&
+			Number.isFinite(wallTimeSeconds) &&
+			wallTimeSeconds >= 0
+				? wallTimeSeconds
+				: null,
+		truncated: execution?.truncated === true,
+	};
 }
 
 export function toolEditDiff(result: unknown) {
