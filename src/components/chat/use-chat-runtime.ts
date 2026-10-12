@@ -28,6 +28,7 @@ import { cacheLocalChatImages } from "@/lib/chat-image-media";
 import type { ConversationAction } from "@/lib/conversation-types";
 import { runtimeErrorMessage, type PiAgentState } from "@/lib/pi-runtime";
 import { requestSessionTitle } from "@/lib/sessions";
+import { chatRuntimeHasOpenTurn } from "@/lib/chat-session-runtime-model";
 
 export type { ChatRuntimeRecoveryState } from "@/components/chat/chat-runtime-types";
 
@@ -101,6 +102,7 @@ export function useChatRuntime({
 	const pendingProjectMcpTurnRef = useRef<{
 		turn: ActiveTurn;
 		submission: ChatSubmission;
+		clientMessageId: string;
 	} | null>(null);
 	const [activeTurnSessionId, setActiveTurnSessionId] = useState<string | null>(
 		null,
@@ -247,7 +249,11 @@ export function useChatRuntime({
 	);
 
 	const runTurn = useCallback(
-		async (turn: ActiveTurn, submission: ChatSubmission) => {
+		async (
+			turn: ActiveTurn,
+			submission: ChatSubmission,
+			clientMessageId: string,
+		) => {
 			const subscription = runtimeListenerRef.current;
 			if (!subscription) {
 				throw new Error(t("errors.piEventChannel"));
@@ -266,15 +272,41 @@ export function useChatRuntime({
 			await prepareRuntimeConfiguration(agentState);
 			if (activeTurnRef.current !== turn) return;
 			turn.promptSent = true;
-			const promptResult = client.sendPiPrompt(
-				submission.text,
-				submission.images,
-			);
+			const promptResult = client
+				.sendPiPrompt(submission.text, submission.images)
+				.catch((error: unknown) => {
+					if (activeTurnRef.current === turn) {
+						dispatchConversation(turn.sessionId, {
+							type: "local_user_queue_failed",
+							clientMessageId,
+						});
+						recoverSubmission(submission);
+					}
+					throw error;
+				});
 			turn.sessionTitleReady = promptResult
-				.then(() => requestAutoTitle(submission.text))
+				.then((result) =>
+					result?.disposition === "handled"
+						? undefined
+						: requestAutoTitle(submission.text),
+				)
 				.catch(() => undefined);
-			await promptResult;
+			const result = await promptResult;
 			if (activeTurnRef.current !== turn) return;
+			if (result?.disposition === "handled") {
+				const runtime = await client.state();
+				if (activeTurnRef.current !== turn) return;
+				// An input handler can consume the prompt or start its own turn.
+				if (!chatRuntimeHasOpenTurn(runtime)) {
+					dispatchConversationActions(turn.sessionId, [
+						{ type: "local_user_queue_failed", clientMessageId },
+						{ type: "local_turn_abort", timestampMs: Date.now() },
+					]);
+					releaseActiveTurn(turn);
+					clearRecoveryState();
+					return;
+				}
+			}
 			turn.queueReady = true;
 			flushBufferedQueuedMessages(turn);
 			clearRecoveryState();
@@ -282,7 +314,11 @@ export function useChatRuntime({
 		[
 			clearRecoveryState,
 			client,
+			dispatchConversation,
+			dispatchConversationActions,
 			flushBufferedQueuedMessages,
+			recoverSubmission,
+			releaseActiveTurn,
 			prepareRuntimeConfiguration,
 			requestAutoTitle,
 			runtimeListenerRef,
@@ -349,14 +385,18 @@ export function useChatRuntime({
 			requestAnimationFrame(() => scrollToBottom(false));
 
 			try {
-				await runTurn(turn, normalized);
+				await runTurn(turn, normalized, clientMessageId);
 			} catch (error) {
 				if (
 					projectMcpApprovalPendingRef.current &&
 					activeTurnRef.current === turn &&
 					!turn.promptSent
 				) {
-					pendingProjectMcpTurnRef.current = { turn, submission: normalized };
+					pendingProjectMcpTurnRef.current = {
+						turn,
+						submission: normalized,
+						clientMessageId,
+					};
 					return;
 				}
 				failActiveTurn(turn, runtimeErrorMessage(error));
@@ -383,7 +423,7 @@ export function useChatRuntime({
 		clearRecoveryState();
 		if (!pending || activeTurnRef.current !== pending.turn) return;
 		try {
-			await runTurn(pending.turn, pending.submission);
+			await runTurn(pending.turn, pending.submission, pending.clientMessageId);
 		} catch (error) {
 			failActiveTurn(pending.turn, runtimeErrorMessage(error));
 			throw error;

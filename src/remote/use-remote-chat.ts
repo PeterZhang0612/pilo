@@ -219,6 +219,7 @@ export function useRemoteChat({
 		refreshAgentConfigRef,
 		handleExtensionRequestRef,
 		activeSessionKeyRef,
+		projectMcpApprovalRequestedRef,
 		queuedSubmissionsRef,
 		setCompacting,
 		setRetryState,
@@ -527,45 +528,64 @@ export function useRemoteChat({
 	const ensureDraftRuntime = useCallback(async () => {
 		if (!client || !activeProjectId || !activeSessionKey)
 			throw new Error("Choose a project first");
-		if (runtimeReady) {
+		const targetSessionKey = activeSessionKey;
+		const isActiveSession = () =>
+			activeSessionKeyRef.current === targetSessionKey;
+		const targetRpc = <T>(command: Record<string, unknown>) =>
+			rpcForSession<T>(targetSessionKey, command);
+		const runtime = runtimeReady
+			? await client.chatState(targetSessionKey)
+			: null;
+		if (runtime?.snapshot.state === "running" && runtime.initialized) {
 			if (!selectedSession && !identifiedDraftSessionId) {
-				const state = await rpc<PiAgentState>({ type: "get_state" });
-				setAgentState(state);
-				identifyDraftSession(state);
+				const state = await targetRpc<PiAgentState>({ type: "get_state" });
+				if (isActiveSession()) {
+					setAgentState(state);
+					identifyDraftSession(state);
+				}
 			}
 			return;
 		}
 		await client.startChat({
 			projectId: activeProjectId,
-			sessionKey: activeSessionKey,
+			sessionKey: targetSessionKey,
+			sessionPath:
+				selectedSession?.sessionPath ??
+				(identifiedDraftSessionId ? agentState?.sessionFile : undefined),
 			noSession: draftTemporary,
 		});
-		setRuntimeReady(true);
+		if (isActiveSession()) setRuntimeReady(true);
 		// Carry the draft run-config onto the freshly started session, matching the
 		// Desktop `prepareRuntimeConfiguration` step for new chats. Selected sessions
 		// keep whatever model Pi already restored.
 		if (!selectedSession && draftModel) {
-			await rpc<PiModel>({
+			await targetRpc<PiModel>({
 				type: "set_model",
 				provider: draftModel.provider,
 				modelId: draftModel.id,
 			}).catch(() => undefined);
 		}
 		if (!selectedSession && draftThinkingLevel) {
-			await rpc<void>({
+			await targetRpc<void>({
 				type: "set_thinking_level",
 				level: draftThinkingLevel,
 			}).catch(() => undefined);
 		}
 		if (!selectedSession) {
-			const state = await rpc<PiAgentState>({ type: "get_state" });
-			setAgentState(state);
-			identifyDraftSession(state);
+			const state = await targetRpc<PiAgentState>({ type: "get_state" });
+			if (isActiveSession()) {
+				setAgentState(state);
+				identifyDraftSession(state);
+			}
 		}
-		window.setTimeout(() => void refreshAgentConfig(), 50);
+		window.setTimeout(() => {
+			if (isActiveSession()) void refreshAgentConfig();
+		}, 50);
 	}, [
 		activeProjectId,
 		activeSessionKey,
+		activeSessionKeyRef,
+		agentState?.sessionFile,
 		client,
 		draftModel,
 		draftThinkingLevel,
@@ -573,7 +593,7 @@ export function useRemoteChat({
 		identifiedDraftSessionId,
 		identifyDraftSession,
 		refreshAgentConfig,
-		rpc,
+		rpcForSession,
 		runtimeReady,
 		setAgentState,
 		selectedSession,

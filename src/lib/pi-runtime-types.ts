@@ -48,6 +48,10 @@ export type Connection = {
 	shownInHome?: boolean;
 };
 
+export type PiPromptResult = {
+	disposition: "started" | "queued" | "handled";
+};
+
 export type PiSessionSnapshot = {
 	generation: number;
 	state: PiProcessState;

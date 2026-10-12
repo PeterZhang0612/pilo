@@ -54,6 +54,11 @@ impl RuntimeEventSink for ChatEventSink {
             RuntimeEvent::UserMessageStart { .. }
             | RuntimeEvent::AssistantMessageStart { .. }
             | RuntimeEvent::AutoRetryStart { .. } => {
+                // A live turn now owns the flag, not the pending prompt preflight.
+                *self
+                    .pending_prompt_id
+                    .lock()
+                    .unwrap_or_else(|error| error.into_inner()) = None;
                 self.active_turn.store(true, Ordering::Release);
             }
             RuntimeEvent::AssistantMessageEnd { .. }

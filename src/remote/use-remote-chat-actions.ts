@@ -20,7 +20,12 @@ import type {
 	ConversationState,
 } from "@/lib/conversation-types";
 import type { PiAgentState, PiModel, PiThinkingLevel } from "@/lib/pi-runtime";
-import { runtimeErrorMessage } from "@/lib/pi-runtime";
+import {
+	PI_PROMPT_RPC_TIMEOUT_MS,
+	runtimeErrorMessage,
+	type PiPromptResult,
+} from "@/lib/pi-runtime";
+import { chatRuntimeHasOpenTurn } from "@/lib/chat-session-runtime-model";
 import { randomId } from "@/lib/utils";
 import { reducerContext } from "./remote-app-model";
 import type {
@@ -32,6 +37,7 @@ import type { WebPiloClient } from "./web-pilo-client";
 
 export type PendingProjectMcpPrompt = {
 	sessionKey: string;
+	clientMessageId: string;
 	submission: ChatSubmission;
 	shouldAutoTitle: boolean;
 };
@@ -93,7 +99,22 @@ export function useRemoteChatActions({
 	rpc,
 	rpcForSession,
 }: UseRemoteChatActionsOptions) {
-	const [sending, setSending] = useState(false);
+	const [sendingSessionKeys, setSendingSessionKeys] = useState(
+		new Set<string>(),
+	);
+	const sending =
+		activeSessionKey !== null && sendingSessionKeys.has(activeSessionKey);
+	const setSessionSending = useCallback(
+		(sessionKey: string, value: boolean) => {
+			setSendingSessionKeys((current) => {
+				const next = new Set(current);
+				if (value) next.add(sessionKey);
+				else next.delete(sessionKey);
+				return next;
+			});
+		},
+		[],
+	);
 	const recoveredSubmissionsRef = useRef(new Map<string, ChatSubmission[]>());
 	const [recoveryRevision, setRecoveryRevision] = useState(0);
 
@@ -127,6 +148,41 @@ export function useRemoteChatActions({
 		[setConversation],
 	);
 
+	const sendPrompt = useCallback(
+		async (
+			targetSessionKey: string,
+			submission: ChatSubmission,
+			clientMessageId: string,
+		) => {
+			const result = await rpcForSession<PiPromptResult>(
+				targetSessionKey,
+				{
+					type: "prompt",
+					message: submission.text,
+					images: toPiImageContents(submission.images),
+				},
+				PI_PROMPT_RPC_TIMEOUT_MS,
+			);
+			if (result?.disposition !== "handled") return true;
+			const runtime = await client?.chatState(targetSessionKey);
+			if (chatRuntimeHasOpenTurn(runtime)) return true;
+			setConversation((current) =>
+				activeSessionKeyRef.current === targetSessionKey
+					? reduceConversationActions(
+							current,
+							[
+								{ type: "local_user_queue_failed", clientMessageId },
+								{ type: "local_turn_abort", timestampMs: Date.now() },
+							],
+							reducerContext,
+						)
+					: current,
+			);
+			return false;
+		},
+		[activeSessionKeyRef, client, rpcForSession, setConversation],
+	);
+
 	const sendSubmission = useCallback(
 		async (
 			submission: ChatSubmission,
@@ -137,6 +193,8 @@ export function useRemoteChatActions({
 			if (mode === "prompt" && (await tryHandleComposerCommand(submission)))
 				return;
 			const submissionSessionKey = activeSessionKey;
+			const isActiveSession = () =>
+				activeSessionKeyRef.current === submissionSessionKey;
 			const shouldAutoTitle =
 				mode === "prompt" &&
 				!hasSelectedSession &&
@@ -147,7 +205,7 @@ export function useRemoteChatActions({
 			let queuedClientMessageId: string | null = null;
 			// 乐观更新：与桌面端 beginTurn 对齐，先落本地 user / assistant-pending
 			// 消息，再启动 runtime，避免 startChat 期间输入框毫无反馈。
-			setSending(true);
+			setSessionSending(submissionSessionKey, true);
 			if (mode === "prompt") {
 				runLocalAction({
 					type: "local_user_submit",
@@ -178,33 +236,66 @@ export function useRemoteChatActions({
 			clearComposer();
 			try {
 				await ensureDraftRuntime();
-				await client.sendChatCommand(activeSessionKey, {
-					type: mode,
-					message: submission.text,
-					images: toPiImageContents(submission.images),
-				});
+				const accepted =
+					mode === "prompt"
+						? await sendPrompt(
+								submissionSessionKey,
+								submission,
+								clientMessageId,
+							)
+						: (
+								await rpcForSession<PiPromptResult>(submissionSessionKey, {
+									type: mode,
+									message: submission.text,
+									images: toPiImageContents(submission.images),
+								})
+							)?.disposition !== "handled";
+				if (!isActiveSession()) return;
+				if (!accepted) {
+					queuedSubmissionsRef.current.delete(clientMessageId);
+					// `sendPrompt` already rolled back its own optimistic prompt; queued
+					// steer/follow-up messages still need the local rollback here.
+					if (mode !== "prompt") {
+						runLocalAction({
+							type: "local_user_queue_failed",
+							clientMessageId,
+						});
+					}
+					return;
+				}
 				if (shouldAutoTitle) requestAutoTitle(submission.text);
 			} catch (error) {
+				if (
+					!queuedClientMessageId &&
+					projectMcpApprovalRequestedRef.current.has(submissionSessionKey)
+				) {
+					// Keep the original prompt with its session while MCP approval restarts Pi.
+					if (!pendingProjectMcpPromptsRef.current.has(submissionSessionKey)) {
+						pendingProjectMcpPromptsRef.current.set(submissionSessionKey, {
+							sessionKey: submissionSessionKey,
+							clientMessageId,
+							submission,
+							shouldAutoTitle,
+						});
+					}
+					return;
+				}
+				if (!isActiveSession()) {
+					recoveredSubmissionsRef.current.set(routeUiKey, [
+						...(recoveredSubmissionsRef.current.get(routeUiKey) ?? []),
+						submission,
+					]);
+					setRecoveryRevision((value) => value + 1);
+					return;
+				}
 				if (queuedClientMessageId) {
 					queuedSubmissionsRef.current.delete(queuedClientMessageId);
 					runLocalAction({
 						type: "local_user_queue_failed",
 						clientMessageId: queuedClientMessageId,
 					});
-				} else if (
-					projectMcpApprovalRequestedRef.current.has(submissionSessionKey)
-				) {
-					// pi-mcp-adapter 杀掉 runtime 等待项目 MCP 信任审批。按
-					// sessionKey 挂起原 prompt，避免切换会话后把 A 的提交重放到 B。
-					if (!pendingProjectMcpPromptsRef.current.has(submissionSessionKey)) {
-						pendingProjectMcpPromptsRef.current.set(submissionSessionKey, {
-							sessionKey: submissionSessionKey,
-							submission,
-							shouldAutoTitle,
-						});
-					}
-					return;
 				} else {
+					runLocalAction({ type: "local_user_queue_failed", clientMessageId });
 					runLocalAction({
 						type: "conversation_runtime_error",
 						message: runtimeErrorMessage(error),
@@ -217,11 +308,12 @@ export function useRemoteChatActions({
 					setFatalError(error instanceof Error ? error.message : String(error));
 				}
 			} finally {
-				setSending(false);
+				setSessionSending(submissionSessionKey, false);
 			}
 		},
 		[
 			activeSessionKey,
+			activeSessionKeyRef,
 			autoTitleRequestedRef,
 			clearComposer,
 			client,
@@ -233,11 +325,15 @@ export function useRemoteChatActions({
 			queuedSubmissionsRef,
 			readOnly,
 			requestAutoTitle,
+			routeUiKey,
+			rpcForSession,
 			runLocalAction,
+			sendPrompt,
 			hasSelectedSession,
 			tryHandleComposerCommand,
 			setFatalError,
 			setImages,
+			setSessionSending,
 		],
 	);
 
@@ -249,13 +345,16 @@ export function useRemoteChatActions({
 			const remaining = [...queuedSubmissionsRef.current.entries()].filter(
 				([id]) => id !== clientMessageId,
 			);
-			setSending(true);
+			const targetSessionKey = activeSessionKey;
+			const isActiveSession = () =>
+				activeSessionKeyRef.current === targetSessionKey;
+			setSessionSending(targetSessionKey, true);
 			try {
-				await rpc<void>({ type: "clear_queue" });
+				await rpcForSession<void>(targetSessionKey, { type: "clear_queue" });
 				await remaining.reduce<Promise<void>>(
 					(promise, [, queued]) =>
 						promise.then(() =>
-							rpc<void>({
+							rpcForSession<void>(targetSessionKey, {
 								type: queued.queueKind,
 								message: queued.submission.text,
 								images: toPiImageContents(queued.submission.images),
@@ -263,6 +362,14 @@ export function useRemoteChatActions({
 						),
 					Promise.resolve(),
 				);
+				if (!isActiveSession()) {
+					recoveredSubmissionsRef.current.set(routeUiKey, [
+						...(recoveredSubmissionsRef.current.get(routeUiKey) ?? []),
+						item.submission,
+					]);
+					setRecoveryRevision((value) => value + 1);
+					return;
+				}
 				queuedSubmissionsRef.current.delete(clientMessageId);
 				runLocalAction({
 					type: "local_user_queue_failed",
@@ -271,23 +378,26 @@ export function useRemoteChatActions({
 				handleComposerChange(item.submission.text);
 				setImages(item.submission.images);
 			} catch (error) {
-				if (!handleExpiredAuth(error)) {
+				if (!handleExpiredAuth(error) && isActiveSession()) {
 					setFatalError(error instanceof Error ? error.message : String(error));
 				}
 			} finally {
-				setSending(false);
+				setSessionSending(targetSessionKey, false);
 			}
 		},
 		[
 			activeSessionKey,
+			activeSessionKeyRef,
 			client,
 			handleComposerChange,
 			handleExpiredAuth,
 			queuedSubmissionsRef,
-			rpc,
+			routeUiKey,
+			rpcForSession,
 			runLocalAction,
 			setFatalError,
 			setImages,
+			setSessionSending,
 		],
 	);
 
@@ -313,7 +423,7 @@ export function useRemoteChatActions({
 			const clientMessageId = queuedClientMessageId ?? randomId();
 			const queued = [...queuedSubmissionsRef.current.entries()];
 			const remaining = queued.filter(([id]) => id !== clientMessageId);
-			setSending(true);
+			setSessionSending(targetSessionKey, true);
 			if (!queuedClientMessageId) clearComposer();
 			let queueCleared = false;
 			let optimisticSubmitted = false;
@@ -348,12 +458,23 @@ export function useRemoteChatActions({
 					});
 					optimisticSubmitted = true;
 				}
-				await client.sendChatCommand(targetSessionKey, {
-					type: "prompt",
-					message: submission.text,
-					images: toPiImageContents(submission.images),
-				});
+				const started = await sendPrompt(
+					targetSessionKey,
+					submission,
+					clientMessageId,
+				);
 				promptSent = true;
+				if (!started) {
+					// `sendPrompt` already rolled back the optimistic prompt.
+					if (remaining.length > 0) {
+						recoveredSubmissionsRef.current.set(routeUiKey, [
+							...(recoveredSubmissionsRef.current.get(routeUiKey) ?? []),
+							...remaining.map(([, pending]) => pending.submission),
+						]);
+						setRecoveryRevision((value) => value + 1);
+					}
+					return;
+				}
 
 				if (isActiveSession()) {
 					for (const [id, pending] of remaining) {
@@ -423,11 +544,11 @@ export function useRemoteChatActions({
 					]);
 					setRecoveryRevision((value) => value + 1);
 				}
-				if (!handleExpiredAuth(error)) {
+				if (!handleExpiredAuth(error) && isActiveSession()) {
 					setFatalError(error instanceof Error ? error.message : String(error));
 				}
 			} finally {
-				setSending(false);
+				setSessionSending(targetSessionKey, false);
 			}
 		},
 		[
@@ -440,8 +561,10 @@ export function useRemoteChatActions({
 			readOnly,
 			routeUiKey,
 			rpcForSession,
+			sendPrompt,
 			setConversation,
 			setFatalError,
+			setSessionSending,
 		],
 	);
 
@@ -471,19 +594,19 @@ export function useRemoteChatActions({
 			projectMcpApprovalRequestedRef.current.delete(sessionKey);
 			if (!pending || !client) return;
 
-			const isActiveSession = activeSessionKey === sessionKey;
-			if (isActiveSession) setSending(true);
+			const isActiveSession = () => activeSessionKeyRef.current === sessionKey;
+			setSessionSending(sessionKey, true);
 			try {
-				await client.sendChatCommand(pending.sessionKey, {
-					type: "prompt",
-					message: pending.submission.text,
-					images: toPiImageContents(pending.submission.images),
-				});
-				if (isActiveSession && pending.shouldAutoTitle) {
+				const started = await sendPrompt(
+					pending.sessionKey,
+					pending.submission,
+					pending.clientMessageId,
+				);
+				if (isActiveSession() && pending.shouldAutoTitle && started) {
 					requestAutoTitle(pending.submission.text);
 				}
 			} catch (error) {
-				if (isActiveSession) {
+				if (isActiveSession()) {
 					runLocalAction({
 						type: "conversation_runtime_error",
 						message: runtimeErrorMessage(error),
@@ -503,11 +626,11 @@ export function useRemoteChatActions({
 					);
 				}
 			} finally {
-				if (isActiveSession) setSending(false);
+				setSessionSending(sessionKey, false);
 			}
 		},
 		[
-			activeSessionKey,
+			activeSessionKeyRef,
 			client,
 			handleComposerChange,
 			handleExpiredAuth,
@@ -515,8 +638,10 @@ export function useRemoteChatActions({
 			projectMcpApprovalRequestedRef,
 			requestAutoTitle,
 			runLocalAction,
+			sendPrompt,
 			setFatalError,
 			setImages,
+			setSessionSending,
 		],
 	);
 

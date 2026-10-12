@@ -5,12 +5,14 @@ import {
 } from "@/lib/chat-submission";
 import {
 	listenRuntimeEvents,
+	PI_PROMPT_RPC_TIMEOUT_MS,
 	requestPiRpc,
 	type PiAgentState,
 	type PiCommand,
 	type PiCompactionResult,
 	type PiModel,
 	type PiModelCycleResult,
+	type PiPromptResult,
 	type PiSessionEntries,
 	type PiSessionSnapshot,
 	type PiSessionStats,
@@ -201,14 +203,14 @@ function createRegisteredChatSessionClient(
 			message: string,
 			images: readonly ChatImageAttachment[] = [],
 		) =>
-			invoke<void>("chat_session_send_rpc", {
-				sessionKey,
-				command: {
+			rpc<PiPromptResult>(
+				{
 					type: "prompt",
 					message,
 					...(images.length > 0 ? { images: toPiImageContents(images) } : {}),
 				},
-			}),
+				PI_PROMPT_RPC_TIMEOUT_MS,
+			),
 		sendPiSteer: (
 			message: string,
 			images: readonly ChatImageAttachment[] = [],

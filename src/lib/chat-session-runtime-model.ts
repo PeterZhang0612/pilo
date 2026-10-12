@@ -1,9 +1,25 @@
 import type { ChatSessionRuntimeState } from "@/lib/chat-session-client";
 
+export function chatRpcChangesActivity(message: unknown) {
+	return (
+		typeof message === "object" &&
+		message !== null &&
+		"type" in message &&
+		message.type === "response" &&
+		"command" in message &&
+		(message.command === "prompt" || message.command === "compact")
+	);
+}
+
 export function chatRuntimeHasOpenTurn(
 	state: ChatSessionRuntimeState | null | undefined,
 ) {
-	return state?.activeTurn === true && state.snapshot.state === "running";
+	// A process that is still starting can already own an accepted prompt, so it
+	// must not be mistaken for a runtime without a turn.
+	return (
+		state?.activeTurn === true &&
+		(state.snapshot.state === "running" || state.snapshot.state === "starting")
+	);
 }
 
 export function findReusableChatRuntime(

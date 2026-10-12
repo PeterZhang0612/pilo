@@ -6,7 +6,9 @@ import {
 	useRef,
 } from "react";
 
+import { i18n } from "@/i18n";
 import type { ChatSubmission } from "@/lib/chat-submission";
+import { chatRpcChangesActivity } from "@/lib/chat-session-runtime-model";
 import { reduceConversationActions } from "@/lib/conversation-replay";
 import type {
 	ConversationAction,
@@ -26,6 +28,7 @@ import {
 import type { WebPiloClient } from "./web-pilo-client";
 
 type PendingRpc = {
+	sessionKey: string;
 	resolve: (value: unknown) => void;
 	reject: (reason?: unknown) => void;
 	timer: number;
@@ -61,6 +64,7 @@ type UseRemoteChatTransportOptions = {
 		((event: PiExtensionDialogRequest) => void) | null
 	>;
 	activeSessionKeyRef: MutableRefObject<string | null>;
+	projectMcpApprovalRequestedRef: MutableRefObject<Set<string>>;
 	queuedSubmissionsRef: MutableRefObject<Map<string, QueuedSubmission>>;
 	setCompacting: Dispatch<SetStateAction<boolean>>;
 	setRetryState: Dispatch<SetStateAction<RetryState | null>>;
@@ -78,6 +82,7 @@ export function useRemoteChatTransport({
 	refreshAgentConfigRef,
 	handleExtensionRequestRef,
 	activeSessionKeyRef,
+	projectMcpApprovalRequestedRef,
 	queuedSubmissionsRef,
 	setCompacting,
 	setRetryState,
@@ -124,20 +129,73 @@ export function useRemoteChatTransport({
 					case "user_message_start":
 					case "assistant_message_start":
 					case "assistant_message_end":
+					case "auto_retry_start":
+					case "compaction_start":
+					case "compaction_end":
 					case "runtime_error":
 						scheduleRuntimeActivityRefresh();
 						break;
 					case "process_state":
-						if (event.state === "stopped" || event.state === "failed") {
+						scheduleRuntimeActivityRefresh();
+						break;
+					case "rpc_message":
+						if (chatRpcChangesActivity(event.message)) {
 							scheduleRuntimeActivityRefresh();
 						}
 						break;
+				}
+				if (
+					event.type === "runtime_error" ||
+					(event.type === "process_state" &&
+						(event.state === "stopped" || event.state === "failed"))
+				) {
+					const error = new Error(
+						event.type === "runtime_error"
+							? event.message
+							: i18n.t(
+									event.state === "failed"
+										? "chat.piProcessFailed"
+										: "chat.piProcessStopped",
+								),
+					);
+					for (const [id, pending] of pendingRpcRef.current) {
+						if (pending.sessionKey !== event.sessionKey) continue;
+						window.clearTimeout(pending.timer);
+						pendingRpcRef.current.delete(id);
+						pending.reject(error);
+					}
+					if (
+						event.sessionKey &&
+						projectMcpApprovalRequestedRef.current.has(event.sessionKey)
+					) {
+						continue;
+					}
 				}
 				if (event.sessionKey !== activeSessionKeyRef.current) continue;
 				if (event.type === "extension_ui_request") {
 					handleExtensionRequestRef.current?.(event);
 				}
 				switch (event.type) {
+					case "runtime_error":
+						setCompacting(false);
+						setRetryState(null);
+						setFatalError(event.message);
+						actions.push({
+							type: "conversation_runtime_error",
+							message: event.message,
+							timestampMs: Date.now(),
+						});
+						break;
+					case "process_state":
+						if (event.state === "stopped" || event.state === "failed") {
+							setCompacting(false);
+							setRetryState(null);
+							actions.push({
+								type: "local_turn_abort",
+								timestampMs: Date.now(),
+							});
+						}
+						break;
 					case "compaction_start":
 						setCompacting(true);
 						break;
@@ -199,6 +257,7 @@ export function useRemoteChatTransport({
 		},
 		[
 			activeSessionKeyRef,
+			projectMcpApprovalRequestedRef,
 			queuedSubmissionsRef,
 			handleExtensionRequestRef,
 			handleModelScopeEvent,
@@ -207,6 +266,7 @@ export function useRemoteChatTransport({
 			scheduleRuntimeActivityRefresh,
 			setCompacting,
 			setConversation,
+			setFatalError,
 			setResyncKey,
 			setRetryState,
 		],
@@ -227,13 +287,18 @@ export function useRemoteChatTransport({
 					reject(new Error("Pi command timed out"));
 				}, timeoutMs);
 				pendingRpcRef.current.set(id, {
+					sessionKey: targetSessionKey,
 					resolve: (value) => resolve(value as T),
 					reject,
 					timer,
 				});
 			});
 			try {
-				await client.sendChatCommand(targetSessionKey, { ...command, id });
+				const [, result] = await Promise.all([
+					client.sendChatCommand(targetSessionKey, { ...command, id }),
+					response,
+				]);
+				return result;
 			} catch (error) {
 				const pending = pendingRpcRef.current.get(id);
 				if (pending) {
@@ -241,8 +306,8 @@ export function useRemoteChatTransport({
 					pendingRpcRef.current.delete(id);
 					pending.reject(error);
 				}
+				throw error;
 			}
-			return response;
 		},
 		[client],
 	);

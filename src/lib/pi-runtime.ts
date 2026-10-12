@@ -17,6 +17,9 @@ import type {
 
 export * from "./pi-runtime-types";
 
+// Prompt preflight may include compaction or extension hooks.
+export const PI_PROMPT_RPC_TIMEOUT_MS = 120_000;
+
 type RuntimeEventHandler = (event: PiloRuntimeEvent) => void;
 
 const globalRuntimeEventHandlers = new Set<RuntimeEventHandler>();
@@ -233,10 +236,31 @@ export async function requestPiRpc<T>(
 		resolveResponse = resolve;
 		rejectResponse = reject;
 	});
+	// Events can reject a request before subscription setup finishes.
+	void response.catch(() => undefined);
 
 	try {
 		unlisten = await listenRuntimeEvents(
 			(event) => {
+				if (event.type === "runtime_error") {
+					rejectResponse?.(new Error(event.message));
+					return;
+				}
+				if (
+					event.type === "process_state" &&
+					(event.state === "stopped" || event.state === "failed")
+				) {
+					rejectResponse?.(
+						new Error(
+							i18n.t(
+								event.state === "failed"
+									? "chat.piProcessFailed"
+									: "chat.piProcessStopped",
+							),
+						),
+					);
+					return;
+				}
 				if (event.type !== "rpc_message" || !isRecord(event.message)) return;
 				if (event.message.type !== "response" || event.message.id !== id)
 					return;
@@ -248,11 +272,13 @@ export async function requestPiRpc<T>(
 			() => rejectResponse?.(new Error(i18n.t("errors.piRpcTimeout"))),
 			timeoutMs,
 		);
-		await invoke(sessionKey ? "chat_session_send_rpc" : "runtime_send_rpc", {
-			sessionKey,
-			command: { ...command, id },
-		});
-		const result = await response;
+		const [, result] = await Promise.all([
+			invoke(sessionKey ? "chat_session_send_rpc" : "runtime_send_rpc", {
+				sessionKey,
+				command: { ...command, id },
+			}),
+			response,
+		]);
 		if (!result.success) {
 			throw new Error(
 				result.error ||
