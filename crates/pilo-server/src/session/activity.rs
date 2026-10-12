@@ -10,9 +10,9 @@ use serde_json::Value;
 use super::{agent_dir, session_dir_key};
 use crate::to_value;
 
-/// Unterminated tails older than this are treated as crashed turns, not live ones.
-/// Pi appends to the session JSONL throughout a turn (deltas, tool calls), so any
-/// genuinely running turn refreshes mtime well inside this window.
+/// Freshness is only a fallback heuristic when no process names the session.
+/// Pi persists completed messages, not streaming deltas: a confirmed live owner
+/// can run long model requests or tools without changing the JSONL mtime.
 const OPEN_TURN_STALE_AFTER: std::time::Duration = std::time::Duration::from_secs(60);
 
 #[derive(Deserialize)]
@@ -66,7 +66,7 @@ pub(crate) fn session_activity(
     let mut fallback_paths = Vec::new();
     if fallback_count > 0 {
         let Ok(entries) = std::fs::read_dir(&root) else {
-            return activities_for_paths(explicit_paths);
+            return activities_for_paths(explicit_paths.clone(), &explicit_paths);
         };
         let mut candidates = entries
             .flatten()
@@ -91,10 +91,20 @@ pub(crate) fn session_activity(
         );
     }
 
-    activities_for_paths(explicit_paths.into_iter().chain(fallback_paths).collect())
+    activities_for_paths(
+        explicit_paths
+            .iter()
+            .cloned()
+            .chain(fallback_paths)
+            .collect(),
+        &explicit_paths,
+    )
 }
 
-fn activities_for_paths(paths: HashSet<PathBuf>) -> Result<Value, String> {
+fn activities_for_paths(
+    paths: HashSet<PathBuf>,
+    confirmed_paths: &HashSet<PathBuf>,
+) -> Result<Value, String> {
     let mut paths = paths.into_iter().collect::<Vec<_>>();
     paths.sort();
     to_value(
@@ -102,21 +112,22 @@ fn activities_for_paths(paths: HashSet<PathBuf>) -> Result<Value, String> {
             .into_iter()
             .map(|path| SessionActivity {
                 path: path.to_string_lossy().into_owned(),
-                turn_open: session_turn_open(&path),
+                turn_open: if confirmed_paths.contains(&path) {
+                    session_tail_turn_open(&path)
+                } else {
+                    session_turn_open(&path)
+                },
             })
             .collect::<Vec<_>>(),
     )
 }
 
 fn session_turn_open(path: &Path) -> bool {
-    use std::io::{Read as _, Seek as _, SeekFrom};
     let Ok(metadata) = std::fs::metadata(path) else {
         return false;
     };
-    // A turn left open (assistant `toolUse` / missing terminal stopReason) is
-    // only evidence of a live turn if the file was written recently. A crashed
-    // or killed external Pi leaves an unterminated tail behind; without this
-    // freshness check the session would look "running" forever.
+    // A project-matched process alone cannot prove it owns this inferred file.
+    // Keep stale abandoned tails out of the fallback candidate activity.
     if metadata
         .modified()
         .ok()
@@ -125,52 +136,93 @@ fn session_turn_open(path: &Path) -> bool {
     {
         return false;
     }
-    const TAIL_BYTES: u64 = 128 * 1024;
+    session_tail_turn_open(path)
+}
+
+#[derive(Deserialize)]
+struct SessionTailMessage {
+    role: String,
+    #[serde(rename = "stopReason")]
+    stop_reason: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct SessionTailEntry {
+    #[serde(rename = "type")]
+    kind: String,
+    message: Option<SessionTailMessage>,
+}
+
+fn session_tail_turn_open(path: &Path) -> bool {
+    use std::io::{BufReader, Read as _, Seek as _, SeekFrom};
+    // The line lookup starts small so a short trailing entry costs one small read,
+    // and doubles only while a single entry is longer than the current window.
+    const MIN_CHUNK_BYTES: u64 = 4 * 1024;
+    const MAX_CHUNK_BYTES: u64 = 128 * 1024;
     let Ok(mut file) = std::fs::File::open(path) else {
         return false;
     };
     let Ok(size) = file.metadata().map(|metadata| metadata.len()) else {
         return false;
     };
-    let start = size.saturating_sub(TAIL_BYTES);
-    if file.seek(SeekFrom::Start(start)).is_err() {
+    if size == 0 {
         return false;
     }
-    let mut bytes = Vec::with_capacity((size - start) as usize);
-    if file.read_to_end(&mut bytes).is_err() {
-        return false;
-    }
-    let mut lines = bytes.split(|byte| *byte == b'\n');
-    if start > 0 {
-        let _ = lines.next();
-    }
-    let mut last_message: Option<Value> = None;
-    for line in lines {
-        if line.is_empty() {
-            continue;
+    let mut bytes = vec![0; size.min(MAX_CHUNK_BYTES) as usize];
+    let mut end = size;
+    // Locate complete lines backwards, then deserialize only role/stopReason.
+    // Large text/image messages must not turn a completed session into "unknown".
+    while end > 0 {
+        let mut start = end;
+        let mut window = MIN_CHUNK_BYTES;
+        loop {
+            let chunk_start = start.saturating_sub(window);
+            let length = (start - chunk_start) as usize;
+            if file.seek(SeekFrom::Start(chunk_start)).is_err()
+                || file.read_exact(&mut bytes[..length]).is_err()
+            {
+                return false;
+            }
+            if let Some(newline) = bytes[..length].iter().rposition(|byte| *byte == b'\n') {
+                start = chunk_start + newline as u64 + 1;
+                break;
+            }
+            start = chunk_start;
+            if start == 0 {
+                break;
+            }
+            window = (window * 2).min(MAX_CHUNK_BYTES);
         }
-        let Ok(entry) = serde_json::from_slice::<Value>(line) else {
-            continue;
-        };
-        if entry.get("type").and_then(Value::as_str) == Some("message") {
-            last_message = entry.get("message").cloned();
+        if start < end {
+            if file.seek(SeekFrom::Start(start)).is_err() {
+                return false;
+            }
+            if let Ok(entry) = serde_json::from_reader::<_, SessionTailEntry>(BufReader::new(
+                (&mut file).take(end - start),
+            )) && entry.kind == "message"
+                && let Some(message) = entry.message
+            {
+                match message.role.as_str() {
+                    "user" | "toolResult" => return true,
+                    "assistant" => {
+                        return !matches!(
+                            message.stop_reason.as_deref(),
+                            Some("stop" | "length" | "error" | "aborted")
+                        );
+                    }
+                    _ => {}
+                }
+            }
         }
+        if start == 0 {
+            break;
+        }
+        end = start - 1;
     }
-    let Some(message) = last_message else {
-        // A very large final JSONL message can begin before the bounded tail.
-        // While an external Pi process still owns the session, prefer treating
-        // an unreadable non-empty tail as live rather than falsely showing an
-        // interrupted turn. Process exit will clear observer mode.
-        return size > 0;
-    };
-    match message.get("role").and_then(Value::as_str) {
-        Some("user" | "toolResult") => true,
-        Some("assistant") => !matches!(
-            message.get("stopReason").and_then(Value::as_str),
-            Some("stop" | "length" | "error" | "aborted")
-        ),
-        _ => false,
-    }
+    // No `message` entry anywhere yet (for example a session file that so far only
+    // holds its header). A live process names this file, so prefer "active" over
+    // reporting a running external session as idle and takeable.
+    true
 }
 
 #[derive(Debug)]

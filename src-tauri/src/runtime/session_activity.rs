@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::domain::Project;
 
-use super::PiloRuntime;
+use super::{PiloRuntime, events::PiProcessState};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -21,6 +21,12 @@ pub(crate) async fn external_session_activities_for_project(
         .await
         .into_iter()
         .filter(|state| state.project_id == project.id)
+        .filter(|state| {
+            matches!(
+                state.snapshot.state,
+                PiProcessState::Running | PiProcessState::Starting
+            )
+        })
         .filter_map(|state| state.session_path)
         .collect::<Vec<_>>();
     runtime
