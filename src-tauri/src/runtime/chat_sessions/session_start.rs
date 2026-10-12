@@ -161,7 +161,9 @@ impl ChatSessions {
                 "noSession": launch.no_session,
             }),
         );
-        let process = self.process(&project, &session_key, &launch).await?;
+        let process = self
+            .process(&project, &session_key, &launch, &events)
+            .await?;
         let mut session = process.session.lock().await;
         if process.closed.load(Ordering::Acquire) {
             return Err("project is closing".to_owned());
@@ -236,7 +238,9 @@ impl ChatSessions {
                 "noSession": launch.no_session,
             }),
         );
-        let process = self.process(&project, &session_key, &launch).await?;
+        let process = self
+            .process(&project, &session_key, &launch, &events)
+            .await?;
         let mut session = process.session.lock().await;
         if process.closed.load(Ordering::Acquire) {
             return Err("project is closing".to_owned());

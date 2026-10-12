@@ -1,12 +1,52 @@
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{
+    Arc,
+    atomic::{AtomicU64, Ordering},
+};
 
 use serde_json::{Value, json};
 
-use super::{super::debug_trace::runtime_trace, ChatSessions};
+use super::{
+    super::{
+        debug_trace::runtime_trace,
+        events::{PiProcessState, RuntimeEvent, RuntimeEventEnvelope},
+    },
+    ChatProcess, ChatSessions,
+};
 
 static PROMPT_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 impl ChatSessions {
+    async fn close_process(&self, session_key: &str) -> Option<Arc<ChatProcess>> {
+        let (process, events) = {
+            let mut registry = self.registry.lock().await;
+            let process = registry.processes.remove(session_key)?;
+            process.mark_closed();
+            (process, registry.events.clone())
+        };
+        if let Some(events) = events {
+            let process = Arc::clone(&process);
+            let registry = Arc::clone(&self.registry);
+            let session_key = session_key.to_owned();
+            // Detach must not wait for a session lock held by startup or RPC work.
+            tokio::spawn(async move {
+                let snapshot = process.session.lock().await.snapshot();
+                let registry = registry.lock().await;
+                // Do not send an old stop event to a runtime already replacing this one.
+                if !registry.processes.contains_key(&session_key) {
+                    events.send(RuntimeEventEnvelope::session(
+                        session_key,
+                        process.project_id.clone(),
+                        RuntimeEvent::ProcessState {
+                            generation: snapshot.generation,
+                            state: PiProcessState::Stopped,
+                        },
+                    ));
+                }
+            });
+        }
+        Some(process)
+    }
+
     pub async fn send(&self, session_key: &str, mut command: Value) -> Result<(), String> {
         let command_type = command
             .get("type")
@@ -21,9 +61,8 @@ impl ChatSessions {
                 .entry("streamingBehavior")
                 .or_insert_with(|| Value::String("followUp".to_owned()));
         }
-        // Pi echoes this id in its prompt response. The desktop prompt path does not
-        // send one, so generate it here to correlate the Pi-side prompt outcome with
-        // the preemptive active-turn flag set below.
+        // Generate an id for callers that send none, so Pi's prompt response can
+        // release the preemptive active-turn flag after a preflight rejection.
         if command_type == "prompt"
             && command.is_object()
             && command.get("id").and_then(Value::as_str).is_none()
@@ -105,10 +144,7 @@ impl ChatSessions {
     }
 
     pub async fn stop(&self, session_key: &str, reason: Option<&str>) -> Result<(), String> {
-        let process = {
-            let mut registry = self.registry.lock().await;
-            registry.processes.remove(session_key)
-        };
+        let process = self.close_process(session_key).await;
         let Some(process) = process else {
             runtime_trace(
                 "chat.stop",
@@ -118,7 +154,6 @@ impl ChatSessions {
             );
             return Ok(());
         };
-        process.mark_closed();
         let mut session = process.session.lock().await;
         runtime_trace(
             "chat.stop.begin",
@@ -153,10 +188,7 @@ impl ChatSessions {
     }
 
     pub async fn detach(&self, session_key: &str, reason: Option<&str>) -> Result<(), String> {
-        let process = {
-            let mut registry = self.registry.lock().await;
-            registry.processes.remove(session_key)
-        };
+        let process = self.close_process(session_key).await;
         let Some(process) = process else {
             runtime_trace(
                 "chat.detach",
@@ -167,7 +199,6 @@ impl ChatSessions {
             return Ok(());
         };
 
-        process.mark_closed();
         let detached_session_key = session_key.to_owned();
         let detached_reason = reason.map(str::to_owned);
         runtime_trace(

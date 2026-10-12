@@ -406,14 +406,19 @@ export function useChatRuntimeEvents({
 					interruptedTurn?.generation !== null &&
 					interruptedTurn?.generation === event.generation;
 				if (interruptedTurn && interruptedActiveTurn) {
-					failActiveTurn(
-						interruptedTurn,
-						event.state === "failed"
-							? i18n.t("chat.piProcessFailed")
-							: i18n.t("chat.piProcessStopped"),
-					);
+					if (event.state === "failed") {
+						failActiveTurn(interruptedTurn, i18n.t("chat.piProcessFailed"));
+					} else {
+						// A graceful stop is an explicit teardown (stop/detach/delete/evict),
+						// not a crash: end the turn without an error and without restarting Pi.
+						dispatchConversation(interruptedTurn.sessionId, {
+							type: "local_turn_abort",
+							timestampMs: Date.now(),
+						});
+						releaseActiveTurn(interruptedTurn, { preserveQueued: true });
+					}
 				}
-				if (event.state === "stopped" && !interruptedActiveTurn) return;
+				if (event.state === "stopped") return;
 				if (session.temporary) {
 					setRecoveryState({
 						status: "failed",

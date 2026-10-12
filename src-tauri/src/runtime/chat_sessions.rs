@@ -17,7 +17,9 @@ use tokio::sync::{Mutex, oneshot};
 
 use crate::domain::Project;
 
-use super::{server_pi::ServerPiSession, session_snapshot::PiSessionSnapshot};
+use super::{
+    events::RuntimeEventBus, server_pi::ServerPiSession, session_snapshot::PiSessionSnapshot,
+};
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -79,6 +81,7 @@ impl ChatProcess {
 #[derive(Default)]
 struct ChatRegistry {
     processes: HashMap<String, Arc<ChatProcess>>,
+    events: Option<RuntimeEventBus>,
     // true while stopping, false once closed; re-adding may only reopen a closed project.
     unavailable_projects: HashMap<String, bool>,
     shutting_down: bool,
@@ -87,7 +90,7 @@ struct ChatRegistry {
 
 #[derive(Default)]
 pub struct ChatSessions {
-    registry: Mutex<ChatRegistry>,
+    registry: Arc<Mutex<ChatRegistry>>,
 }
 
 type InitializationReply = oneshot::Sender<Result<(), String>>;
@@ -159,6 +162,7 @@ impl ChatSessions {
         project: &Project,
         session_key: &str,
         launch: &ChatSessionLaunch,
+        events: &RuntimeEventBus,
     ) -> Result<Arc<ChatProcess>, String> {
         if session_key.trim().is_empty() {
             return Err("session key cannot be empty".to_owned());
@@ -173,6 +177,7 @@ impl ChatSessions {
             if registry.shutting_down || registry.unavailable_projects.contains_key(&project.id) {
                 return Err("project is closing".to_owned());
             }
+            registry.events = Some(events.clone());
             registry.usage_sequence = registry.usage_sequence.saturating_add(1);
             let usage_sequence = registry.usage_sequence;
             let process = Arc::clone(
