@@ -59,6 +59,17 @@ self.addEventListener("fetch", (event) => {
 	if (url.origin !== self.location.origin) return;
 	if (url.pathname.startsWith("/api/v1/")) return;
 
+	// Chrome's WebAPK updater must not read an outdated launch theme from precache.
+	if (url.pathname === "/manifest.webmanifest") {
+		event.respondWith(
+			fetch(request).catch(async () => {
+				const cache = await caches.open(CACHE_NAME);
+				return (await cache.match(request)) ?? Response.error();
+			}),
+		);
+		return;
+	}
+
 	if (request.mode === "navigate") {
 		const response = fetch(request).catch(async () => {
 			const cache = await caches.open(CACHE_NAME);

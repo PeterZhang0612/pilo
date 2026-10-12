@@ -7,16 +7,7 @@
 			content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
 		/>
 		<meta name="color-scheme" content="light dark" />
-		<meta
-			name="theme-color"
-			content="#ffffff"
-			media="(prefers-color-scheme: light)"
-		/>
-		<meta
-			name="theme-color"
-			content="#101010"
-			media="(prefers-color-scheme: dark)"
-		/>
+		<meta name="theme-color" content="#ffffff" />
 		<meta name="apple-mobile-web-app-capable" content="yes" />
 		<meta
 			name="apple-mobile-web-app-status-bar-style"
@@ -69,20 +60,15 @@
 				if (!("__TAURI_INTERNALS__" in window)) {
 					document.documentElement.classList.add("pilo-browser");
 				}
-				document.documentElement.style.colorScheme =
-					selectedTheme === "system" ? "light dark" : selectedTheme;
+				const colorScheme = dark ? "dark" : "light";
+				document.documentElement.style.colorScheme = colorScheme;
 				document
 					.querySelector('meta[name="color-scheme"]')
-					?.setAttribute(
-						"content",
-						selectedTheme === "system" ? "light dark" : selectedTheme,
-					);
-				if (selectedTheme !== "system") {
-					const themeColor = dark ? "#101010" : "#ffffff";
-					document
-						.querySelectorAll('meta[name="theme-color"]')
-						.forEach((meta) => meta.setAttribute("content", themeColor));
-				}
+					?.setAttribute("content", colorScheme);
+				const themeColor = dark ? "#101010" : "#ffffff";
+				document
+					.querySelector('meta[name="theme-color"]')
+					?.setAttribute("content", themeColor);
 			})();
 		</script>
 		<style>
