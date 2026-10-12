@@ -26,6 +26,11 @@ import type { ConversationState } from "@/lib/conversation-types";
 import type { PiAgentState, PiModel } from "@/lib/pi-runtime";
 import type { Project } from "@/lib/projects";
 import type { PiloClientBootstrap } from "@/lib/pilo-client";
+import {
+	getProjectScopeModels,
+	isPiScopeCatalogResolved,
+} from "@/lib/pi-model-selection";
+import { useProjectModelScope } from "@/lib/use-project-model-scope";
 import type { SessionIndexEntry } from "@/lib/sessions";
 import { randomId } from "@/lib/utils";
 import {
@@ -58,6 +63,7 @@ type UseRemoteChatOptions = {
 	handleExpiredAuth: (error: unknown) => boolean;
 	setFatalError: (message: string | null) => void;
 	resyncKey: number;
+	snapshotRefreshKey: number;
 	setResyncKey: Dispatch<SetStateAction<number>>;
 	projects: Project[];
 	rawSessions: SessionIndexEntry[];
@@ -78,6 +84,7 @@ export function useRemoteChat({
 	handleExpiredAuth,
 	setFatalError,
 	resyncKey,
+	snapshotRefreshKey,
 	setResyncKey,
 	projects,
 	rawSessions,
@@ -195,8 +202,14 @@ export function useRemoteChat({
 	const routeSessionId =
 		selectedSession?.piSessionId ?? identifiedDraftSessionId ?? draftId;
 
+	const scopeConfig = useProjectModelScope(
+		client,
+		activeProjectId,
+		resyncKey + snapshotRefreshKey,
+	);
 	const transport = useRemoteChatTransport({
 		client,
+		handleModelScopeEvent: scopeConfig.handleEvent,
 		handleExpiredAuth,
 		setFatalError,
 		setResyncKey,
@@ -226,6 +239,9 @@ export function useRemoteChat({
 		models,
 		setModels,
 		modelLoading,
+		modelsLoaded,
+		modelError,
+		catalog,
 		thinkingLevels,
 		setThinkingLevels,
 		draftModel,
@@ -752,6 +768,21 @@ export function useRemoteChat({
 		composerSelectedThinkingLevel,
 		models,
 		modelLoading,
+		modelError,
+		modelScope: {
+			...scopeConfig,
+			availableModels: models,
+			models: getProjectScopeModels(
+				models,
+				scopeConfig.scope,
+				catalog?.models ?? [],
+			),
+			catalogReady:
+				scopeConfig.scope?.models != null
+					? modelsLoaded
+					: catalog?.projectId === activeProjectId &&
+						isPiScopeCatalogResolved(catalog.models),
+		},
 		sending,
 		retryState,
 		compacting,

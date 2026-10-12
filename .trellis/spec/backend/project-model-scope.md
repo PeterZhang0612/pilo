@@ -1,0 +1,161 @@
+# Project Model Scope
+
+## 1. Scope / Trigger
+
+Apply this contract when changing model preferences, model pickers, scoped cycling,
+`PiloClient`, or project preference events. Scope belongs to Pilo, not Pi settings
+or session JSONL. Both transports use the Host's database.
+
+## 2. Signatures
+
+- Tauri: `project_model_scope_get(projectId) -> ProjectModelScope` and
+  `project_model_scope_set(projectId, models) -> ProjectModelScope`.
+- Authenticated HTTP: `GET /api/v1/models/scope?projectId=...` and
+  `POST /api/v1/models/scope` with `{ projectId, models }`.
+- `PiloClient.loadModelScope(projectId)` / `saveModelScope(projectId, models)`.
+- Storage: `project_model_scopes(project_id TEXT PRIMARY KEY REFERENCES
+  projects(id) ON DELETE CASCADE, models_json TEXT NULL, updated_at_ms INTEGER NOT NULL)`.
+- Response: `{ projectId, models: ProjectScopedModel[] | null, updatedAtMs }`.
+  Each member is `{ provider, modelId, thinkingLevel }`; thinkingLevel is null or
+  `off | minimal | low | medium | high | xhigh | max`.
+- Event: `{ type: "project_model_scope_changed", projectId, scope }`. No
+  sessionKey or process generation; publish only after a successful write.
+
+## 3. Contracts
+
+- No row / `models: null` inherits Pi. `models: []` is a custom empty Scope.
+  An array completely replaces the inherited list; never union the two.
+- One atomic upsert replaces all members. `updatedAtMs` is monotonically
+  increasing per project (`MAX(now, previous + 1)`), even for restoring null.
+  Consumers reject lower revisions and stale project/transport requests.
+- Model identity is provider plus model ID. Preserve stored order and explicit
+  thinking overrides. Catalog absence never deletes or rejects a stored member.
+- `project_model_cache` remains the unmodified Pi catalog, including scopeOrder,
+  scopeThinkingLevel and its existing refresh timestamp/TTL.
+- `getProjectScopeModels` in `src/lib/pi-model-selection.ts` owns the effective
+  list. Inheritance orders the Host catalog first, then intersects live available
+  identities. Intersecting first could accidentally turn an unavailable Pi Scope
+  into the all-model fallback. Custom empty lists never take that fallback.
+- Inherited Scope requires a loaded catalog with explicit scopeOrder and
+  scopeThinkingLevel on every model (null is resolved, undefined is unknown).
+  Legacy/bare catalogs are unresolved, not an all-model default. A custom Scope
+  only requires a successfully loaded available-model list; it does not depend
+  on Pi's default Scope metadata. Empty loaded catalogs differ from no catalog.
+- Desktop has two independent configuration owners: `NewChatLanding` for unsent
+  drafts (including temporary drafts) and `useChatSessionConfig` for opened
+  sessions. Both must load/subscribe to project preferences, pass ModelScopeControls
+  into ChatComposer and use the effective Scope for scoped shortcuts. Updating
+  ChatPage alone does not cover the landing composer. The lazy loading fallback
+  has no configuration controller and sets canEditScope=false.
+- Desktop keeps the original catalog in React state, updated alongside the all
+  models list on hydration, subscription and refresh. Derive Scope from that
+  same snapshot, not a separate global-cache read during render. Guard hydration
+  and refresh results against project/session changes. Web keeps Host metadata
+  separate from live availability and tracks whether availability has loaded.
+- Desktop scoped cycling selects in Pilo and uses existing set_model /
+  set_thinking_level; Pi owns thinking-level clamping. The all-model shortcut
+  keeps its original list/control flow. A singleton already selected is inert.
+- Desktop subscriptions are project-global. Web handles preference events before
+  activeSessionKey filtering; reconnect/resync and menu opening reload settings.
+- Shared `ChatModelPicker` maintains an independent draft, initialized from the
+  effective inherited list or complete custom members (including unavailable
+  ones). Events update formal preferences, never the open draft. Apply is one
+  save; cancel/close discards; unchanged drafts do not create overrides. Failed
+  saves retain the draft; duplicate submissions are blocked.
+- `ModelScopeControls.projectId` identifies the picker before formal preferences
+  arrive. Key overlays by that stable project identity and layout capability,
+  never by `scope?.projectId`: the first preference response must not remount
+  the picker and reset its view, query or focus.
+- All and Scope share loading/error presentation. Every actual catalog refresh,
+  including stale-cache refreshes, reports loading; keep valid existing rows
+  visible. A missing-metadata message is only appropriate after loading ends.
+  Before a refresh disables its button, focus the search input so Radix does
+  not dismiss the submenu through focus-outside handling. Refresh updates data
+  in place, without closing the overlay or discarding an editor draft.
+- Desktop retains the nested Model / Reasoning DropdownMenu, including the
+  original reasoning submenu. Only the model submenu hosts the shared picker
+  (`compact` single-line rows). Its input/Command owns typing and arrow keys;
+  stop bubbling before Radix menu typeahead and keep Tab inside the picker.
+  The root trigger keeps menu semantics; the input-bearing model popup has
+  dialog semantics. Do not replace desktop menus with the flat touch panel.
+- `canEditScope` controls management UI: desktop app and wide WebUI allow it;
+  narrow WebUI does not. Touch/hover detection only selects the overlay type,
+  not whether management is available. Touch sheets use viewport height and
+  `--remote-keyboard-bottom` to stay above the keyboard, plus safe-area padding.
+- Saving preferences must not start, stop, restart or reconfigure Pi. Never write
+  Pi settings.json, forward a Scope configuration RPC or spawn a WebUI probe.
+
+## 4. Validation & Error Matrix
+
+| Condition | Result |
+| --- | --- |
+| Project missing | `Project '<id>' was not found`; preference routes return 400 |
+| Blank provider/model ID | `model scope provider and model id cannot be empty` |
+| Duplicate provider + model ID | `model scope contains duplicate model identities` |
+| Invalid thinking level | Serde/Tauri or JSON extraction rejects the request |
+| Valid but unavailable member | Saved unchanged; excluded from effective selection/cycling |
+| SQLite/read/write failure | Error propagates; failed writes publish no event |
+| Scope read fails | Display error; do not reinterpret as inheritance |
+| Older event/read/save response | Does not replace newer formal preferences |
+| Save fails | Formal preferences unchanged, draft remains editable |
+| Project deleted | Foreign key cascade removes preferences |
+
+## 5. Good / Base / Bad Cases
+
+- Base: existing project has no row, uses Pi's resolved Scope, creates no override
+  merely by opening or closing the editor.
+- Good: inherited five members remain checked; multiple edits stay local until
+  Apply; Web and desktop then use the same saved complete list.
+- Good: custom unavailable members remain in the editor and can be removed;
+  searching or selecting visible results never silently drops them.
+- Bad: custom empty Scope must not cycle all models. Restore inheritance is a
+  separate explicit null save, not the Clear selection action.
+- Bad: a delayed read, project switch or another client save must not overwrite
+  a newer preference or an unsubmitted local draft.
+
+## 6. Tests Required
+
+Add/update/run tests only with explicit user authorization. Assertion points:
+
+- Storage: null/empty/nonempty round trips; duplicate/blank/invalid levels;
+  unavailable retention; project cascade; increasing same-millisecond revisions.
+- Selection: identity collisions across providers; inherited order/thinking;
+  custom replacement/empty; unavailable intersection before fallback; singleton.
+- UI: unchanged/cancelled drafts; batch actions; failed save/retry; incoming
+  events during editing; narrow management hidden; keyboard search/navigation;
+  delayed first preference response preserves Scope view/query/focus; refreshing
+  either view keeps the overlay open and retains an existing draft. Check the
+  landing page before the first message separately from opened/historical
+  sessions: each enabled picker must receive a populated Scope controller.
+- Catalog: stale-cache refresh shows loading in both views; inherited bare
+  metadata stays unresolved; custom Scope works with bare availability; empty
+  loaded catalogs remain distinct from missing catalogs; old-project hydration
+  cannot replace the current project's snapshot.
+- Existing `tests/chat-composer-run-config.test.ts` keeps asserting the genuine
+  root DropdownMenu trigger's `aria-haspopup="menu"`, Slot prop forwarding,
+  disabled state and accessible name. No assertion change is needed merely
+  because the model submenu now contains search/Scope controls.
+- Cross-transport: event before session filtering, stale responses, project
+  switching and reconnect; no Pi process/config mutation while editing.
+
+## 7. Wrong vs Correct
+
+```ts
+// Wrong: an explicit empty override falls back to the full catalog.
+const effective = custom.length ? custom : getPiQuickCycleModels(catalog);
+
+// Correct: absence and empty are different; use the shared projection.
+const effective = getProjectScopeModels(available, preference, hostCatalog);
+```
+
+```ts
+// Wrong: session filtering drops project-global preferences.
+if (event.sessionKey !== activeKey) return;
+
+// Correct: consume Scope changes first; they have no process generation.
+if (event.type === "project_model_scope_changed") {
+  scopeController.handleEvent(event);
+  return;
+}
+if (event.sessionKey !== activeKey) return;
+```

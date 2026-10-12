@@ -7,9 +7,38 @@ use tauri::AppHandle;
 
 use crate::domain::{Connection, DiscoveredProject, Project, ProjectMetadata};
 
-use super::{pi_workspace, server_client::ServerManager, storage};
+use super::{
+    events::{RuntimeEvent, RuntimeEventBus, RuntimeEventEnvelope},
+    pi_workspace,
+    server_client::ServerManager,
+    storage,
+};
 
 const MAX_DISCOVERED_PROJECTS: usize = 200;
+
+pub(crate) fn load_model_scope(
+    app: &AppHandle,
+    project_id: &str,
+) -> Result<crate::domain::ProjectModelScope, String> {
+    storage::get_project_model_scope(&storage::open(app)?, project_id)
+}
+
+pub(crate) fn save_model_scope(
+    app: &AppHandle,
+    events: &RuntimeEventBus,
+    project_id: &str,
+    models: Option<Vec<crate::domain::ProjectScopedModel>>,
+) -> Result<crate::domain::ProjectModelScope, String> {
+    let scope = storage::set_project_model_scope(&storage::open(app)?, project_id, models)?;
+    events.send(RuntimeEventEnvelope {
+        session_key: None,
+        project_id: Some(project_id.to_owned()),
+        event: RuntimeEvent::ProjectModelScopeChanged {
+            scope: scope.clone(),
+        },
+    });
+    Ok(scope)
+}
 
 pub fn list(app: &AppHandle) -> Result<Vec<Project>, String> {
     storage::list_projects(&storage::open(app)?)

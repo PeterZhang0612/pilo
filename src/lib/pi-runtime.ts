@@ -48,7 +48,8 @@ function traceRuntimeDebug(stage: string, detail: Record<string, unknown>) {
 }
 
 function traceRuntimeLifecycle(event: PiloRuntimeEvent) {
-	if (!import.meta.env.DEV) return;
+	if (!import.meta.env.DEV || event.type === "project_model_scope_changed")
+		return;
 	const detail: Record<string, unknown> = {
 		sessionKey: event.sessionKey,
 		event: event.type,

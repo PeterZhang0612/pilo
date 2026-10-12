@@ -1,6 +1,8 @@
 # Database Guidelines
 
-> SQLite conventions. The DB is a **desktop index/cache**, never the source of truth.
+> SQLite conventions. Pi session data is a **desktop index/cache**, never the
+> conversation source of truth. Pilo-owned preferences may use SQLite as their
+> authoritative store.
 
 ---
 
@@ -12,6 +14,8 @@
 - The Pi JSONL files are the single source of truth; SQLite only indexes/caches
   (`sessions`, `project_model_cache`, `session_ui_state`, …). Never copy full
   conversation data into the DB.
+- Pilo-owned project Scope lives separately in `project_model_scopes`, not in Pi
+  settings or `project_model_cache`; see [Project Model Scope](./project-model-scope.md).
 
 ## Connection Setup
 

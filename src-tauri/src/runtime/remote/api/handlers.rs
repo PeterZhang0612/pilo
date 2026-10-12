@@ -310,6 +310,38 @@ pub(super) async fn models(
     }
 }
 
+pub(super) async fn model_scope_get(
+    State(state): State<RemoteHttpState>,
+    Query(query): Query<ModelsQuery>,
+) -> Response {
+    match crate::runtime::project::load_model_scope(&state.app, &query.project_id) {
+        Ok(scope) => Json(scope).into_response(),
+        Err(error) => api_error(StatusCode::BAD_REQUEST, &error),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct ModelScopeRequest {
+    project_id: String,
+    models: Option<Vec<crate::domain::ProjectScopedModel>>,
+}
+
+pub(super) async fn model_scope_set(
+    State(state): State<RemoteHttpState>,
+    Json(request): Json<ModelScopeRequest>,
+) -> Response {
+    match crate::runtime::project::save_model_scope(
+        &state.app,
+        &state.app.state::<RuntimeEventBus>(),
+        &request.project_id,
+        request.models,
+    ) {
+        Ok(scope) => Json(scope).into_response(),
+        Err(error) => api_error(StatusCode::BAD_REQUEST, &error),
+    }
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct ChatStartRequest {

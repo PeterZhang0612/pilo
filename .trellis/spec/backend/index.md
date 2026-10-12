@@ -16,6 +16,7 @@ This directory contains guidelines for backend development in this project (Taur
 | ----------------------------------------------- | ------------------------------------------------- | ------ |
 | [Directory Structure](./directory-structure.md) | Module organization and file layout               | Filled |
 | [Database Guidelines](./database-guidelines.md) | SQLite schema, queries, migrations                | Filled |
+| [Project Model Scope](./project-model-scope.md) | Project preferences, transport/events, effective Scope | Filled |
 | [Error Handling](./error-handling.md)           | `Result<T, String>` boundary, error text contract | Filled |
 | [Quality Guidelines](./quality-guidelines.md)   | Code standards, forbidden patterns                | Filled |
 | [Logging Guidelines](./logging-guidelines.md)   | `eprintln!` diagnostics, log levels               | Filled |

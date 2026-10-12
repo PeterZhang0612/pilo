@@ -71,6 +71,7 @@ function LoadingComposer({
 			<ConversationColumn className="relative">
 				<ChatComposer
 					value={draft}
+					canEditScope={false}
 					historyKey={projectId}
 					onChange={updateDraft}
 					onSubmit={deferSubmission}

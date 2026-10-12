@@ -2,7 +2,10 @@ use std::collections::HashSet;
 
 use rusqlite::{Connection as SqliteConnection, OptionalExtension, params};
 
-use crate::domain::{Connection, PiRuntime, Project, ProjectMetadata, ProjectModelCache};
+use crate::domain::{
+    Connection, PiRuntime, Project, ProjectMetadata, ProjectModelCache, ProjectModelScope,
+    ProjectScopedModel,
+};
 
 pub fn upsert_project(db: &SqliteConnection, project: &Project) -> Result<(), String> {
     let metadata_json =
@@ -180,6 +183,69 @@ pub fn upsert_project_model_cache(
     )
     .map_err(|error| error.to_string())?;
     Ok(())
+}
+
+pub fn get_project_model_scope(
+    db: &SqliteConnection,
+    project_id: &str,
+) -> Result<ProjectModelScope, String> {
+    if get_project(db, project_id)?.is_none() {
+        return Err(format!("Project '{project_id}' was not found"));
+    }
+    let stored = db
+        .query_row(
+            "SELECT models_json,updated_at_ms FROM project_model_scopes WHERE project_id=?1",
+            params![project_id],
+            |row| Ok((row.get::<_, Option<String>>(0)?, row.get::<_, i64>(1)?)),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?;
+    let (models_json, updated_at_ms) = stored.unwrap_or((None, 0));
+    Ok(ProjectModelScope {
+        project_id: project_id.to_owned(),
+        models: models_json
+            .map(|json| serde_json::from_str(&json))
+            .transpose()
+            .map_err(|error| format!("failed to read project model scope: {error}"))?,
+        updated_at_ms: updated_at_ms as u64,
+    })
+}
+
+pub fn set_project_model_scope(
+    db: &SqliteConnection,
+    project_id: &str,
+    models: Option<Vec<ProjectScopedModel>>,
+) -> Result<ProjectModelScope, String> {
+    if get_project(db, project_id)?.is_none() {
+        return Err(format!("Project '{project_id}' was not found"));
+    }
+    let mut identities = HashSet::new();
+    for model in models.iter().flatten() {
+        if model.provider.trim().is_empty() || model.model_id.trim().is_empty() {
+            return Err("model scope provider and model id cannot be empty".to_owned());
+        }
+        if !identities.insert((&model.provider, &model.model_id)) {
+            return Err("model scope contains duplicate model identities".to_owned());
+        }
+    }
+    let models_json = models
+        .as_ref()
+        .map(serde_json::to_string)
+        .transpose()
+        .map_err(|error| error.to_string())?;
+    // Monotonic per-project revisions also disambiguate concurrent saves in one millisecond.
+    let updated_at_ms = db.query_row(
+        "INSERT INTO project_model_scopes(project_id,models_json,updated_at_ms) VALUES(?1,?2,?3)
+         ON CONFLICT(project_id) DO UPDATE SET models_json=excluded.models_json, updated_at_ms=MAX(excluded.updated_at_ms,project_model_scopes.updated_at_ms+1)
+         RETURNING updated_at_ms",
+        params![project_id, models_json, super::now_ms() as i64],
+        |row| row.get::<_, i64>(0),
+    ).map_err(|error| format!("failed to save project model scope: {error}"))?;
+    Ok(ProjectModelScope {
+        project_id: project_id.to_owned(),
+        models,
+        updated_at_ms: updated_at_ms as u64,
+    })
 }
 
 pub fn remove_project(db: &SqliteConnection, id: &str) -> Result<bool, String> {

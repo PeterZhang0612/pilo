@@ -7,6 +7,9 @@ import type {
 	PiSessionStats,
 	PiThinkingLevel,
 } from "@/lib/pi-runtime";
+import type { ProjectPiModels } from "@/lib/pi-models";
+import { reconcilePiModelCatalog } from "@/lib/pi-model-selection";
+import { runtimeErrorMessage } from "@/lib/pi-runtime";
 import type { SessionIndexEntry } from "@/lib/sessions";
 import type { RemoteRpc } from "./use-remote-chat-transport";
 import type { WebPiloClient } from "./web-pilo-client";
@@ -31,60 +34,110 @@ export function useRemoteChatAgentConfig({
 		null,
 	);
 	const [models, setModels] = useState<PiModel[]>([]);
+	const [modelsLoaded, setModelsLoaded] = useState(false);
 	// 仅用于 composer 的模型刷新按钮；与 Desktop 的 modelLoadState 对齐，
 	// 不再是「下拉菜单首行」文案。
 	const [modelLoading, setModelLoading] = useState(false);
+	const [modelError, setModelError] = useState<string | null>(null);
+	const [catalog, setCatalog] = useState<ProjectPiModels | null>(null);
 	const [thinkingLevels, setThinkingLevels] = useState<PiThinkingLevel[]>([]);
 	const [draftModel, setDraftModel] = useState<PiModel | null>(null);
 	const [draftThinkingLevel, setDraftThinkingLevel] =
 		useState<PiThinkingLevel | null>(null);
 	const draftCatalogRequestRef = useRef(0);
+	const configKey = selectedSession?.sessionPath ?? draftId;
+	const configIdentityRef = useRef({ projectId: activeProjectId, configKey });
 
-	const refreshAgentConfig = useCallback(async () => {
-		setModelLoading(true);
-		try {
-			const [state, modelResult, thinkingResult, stats] = await Promise.all([
-				rpc<PiAgentState>({ type: "get_state" }),
-				rpc<{ models: PiModel[] }>({ type: "get_available_models" }),
-				rpc<{ levels: PiThinkingLevel[] }>({
-					type: "get_available_thinking_levels",
-				}),
-				rpc<PiSessionStats>({ type: "get_session_stats" }),
-			]);
-			setAgentState(state);
-			setModels(modelResult.models);
-			setThinkingLevels(thinkingResult.levels);
-			setChatState({
-				name: state.sessionName,
-				tokens: stats.tokens,
-				cost: stats.cost,
-				contextTokens: stats.contextUsage?.tokens,
-				contextWindow: stats.contextUsage?.contextWindow,
-				contextPercent: stats.contextUsage?.percent,
-			});
-		} catch {
-			// Optional model metadata can fail while the chat stream remains usable.
-		} finally {
-			setModelLoading(false);
-		}
-	}, [rpc]);
+	const refreshAgentConfig = useCallback(
+		async (liveRuntime = true) => {
+			if (
+				configIdentityRef.current.projectId !== activeProjectId ||
+				configIdentityRef.current.configKey !== configKey
+			)
+				return;
+			const requestId = ++draftCatalogRequestRef.current;
+			setModelLoading(true);
+			setModelError(null);
+			try {
+				const [liveResult, hostResult] = await Promise.allSettled([
+					liveRuntime
+						? Promise.all([
+								rpc<PiAgentState>({ type: "get_state" }),
+								rpc<{ models: PiModel[] }>({ type: "get_available_models" }),
+								rpc<{ levels: PiThinkingLevel[] }>({
+									type: "get_available_thinking_levels",
+								}),
+								rpc<PiSessionStats>({ type: "get_session_stats" }),
+							])
+						: Promise.resolve(null),
+					client?.loadModels(activeProjectId) ?? Promise.resolve(null),
+				]);
+				if (draftCatalogRequestRef.current !== requestId) return;
+				const hostCatalog =
+					hostResult.status === "fulfilled" ? hostResult.value : null;
+				if (hostResult.status === "fulfilled") {
+					setCatalog(hostCatalog);
+					// A live refresh must not replace availability with Host cache data.
+					if (!liveRuntime) {
+						setModelsLoaded(hostCatalog !== null);
+						setModels(hostCatalog?.models ?? []);
+					}
+				}
+				if (liveResult.status === "rejected") throw liveResult.reason;
+				if (hostResult.status === "rejected")
+					setModelError(runtimeErrorMessage(hostResult.reason));
+				if (!liveResult.value) return;
+				const [state, modelResult, thinkingResult, stats] = liveResult.value;
+				setModelsLoaded(true);
+				setAgentState(state);
+				setModels(
+					reconcilePiModelCatalog(
+						modelResult.models,
+						hostCatalog?.models ?? [],
+					),
+				);
+				setThinkingLevels(thinkingResult.levels);
+				setChatState({
+					name: state.sessionName,
+					tokens: stats.tokens,
+					cost: stats.cost,
+					contextTokens: stats.contextUsage?.tokens,
+					contextWindow: stats.contextUsage?.contextWindow,
+					contextPercent: stats.contextUsage?.percent,
+				});
+			} catch (error) {
+				if (draftCatalogRequestRef.current === requestId)
+					setModelError(runtimeErrorMessage(error));
+			} finally {
+				if (draftCatalogRequestRef.current === requestId)
+					setModelLoading(false);
+			}
+		},
+		[activeProjectId, client, configKey, rpc],
+	);
 
 	const loadDraftCatalog = useCallback(
 		(projectId: string) => {
+			if (configIdentityRef.current.projectId !== projectId)
+				return Promise.resolve();
 			const requestId = ++draftCatalogRequestRef.current;
 			setModelLoading(true);
+			setModelError(null);
 			return (client?.loadModels(projectId) ?? Promise.resolve(null))
-				.then((catalog) => {
-					if (draftCatalogRequestRef.current !== requestId || !catalog) return;
-					setModels(catalog.models);
-					setDraftModel((current) => current ?? catalog.defaultModel);
+				.then((loaded) => {
+					if (draftCatalogRequestRef.current !== requestId) return;
+					setCatalog(loaded);
+					setModelsLoaded(loaded !== null);
+					setModels(loaded?.models ?? []);
+					if (!loaded) return;
+					setDraftModel((current) => current ?? loaded.defaultModel);
 					setDraftThinkingLevel(
-						(current) => current ?? catalog.defaultThinkingLevel,
+						(current) => current ?? loaded.defaultThinkingLevel,
 					);
 				})
 				.catch((error) => {
 					if (draftCatalogRequestRef.current !== requestId) return;
-					console.warn("Failed to load remote model catalog", error);
+					setModelError(runtimeErrorMessage(error));
 				})
 				.finally(() => {
 					if (draftCatalogRequestRef.current === requestId)
@@ -93,6 +146,21 @@ export function useRemoteChatAgentConfig({
 		},
 		[client],
 	);
+
+	/* oxlint-disable react/set-state-in-effect -- Reset catalog identity before resolving another project/session. */
+	useEffect(() => {
+		configIdentityRef.current = { projectId: activeProjectId, configKey };
+		setCatalog(null);
+		setModels([]);
+		setModelsLoaded(false);
+		setModelLoading(false);
+		setModelError(null);
+		draftCatalogRequestRef.current += 1;
+		return () => {
+			draftCatalogRequestRef.current += 1;
+		};
+	}, [activeProjectId, configKey]);
+	/* oxlint-enable react/set-state-in-effect */
 
 	/* oxlint-disable react/set-state-in-effect, react/exhaustive-effect-dependencies -- The draft landing page preloads the Host-cached Pi model catalog, and draftId intentionally retriggers it for every new draft. */
 	useEffect(() => {
@@ -113,6 +181,9 @@ export function useRemoteChatAgentConfig({
 		models,
 		setModels,
 		modelLoading,
+		modelsLoaded,
+		modelError,
+		catalog,
 		thinkingLevels,
 		setThinkingLevels,
 		draftModel,

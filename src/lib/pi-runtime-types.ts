@@ -1,3 +1,5 @@
+import type { ProjectModelScope } from "./project-model-scope";
+
 export type PiProcessState =
 	| "stopped"
 	| "starting"
@@ -151,6 +153,7 @@ export type PiloRuntimeEvent = {
 	sessionKey?: string;
 	projectId?: string;
 } & (
+	| { type: "project_model_scope_changed"; scope: ProjectModelScope }
 	| {
 			type: "process_state";
 			generation: number;

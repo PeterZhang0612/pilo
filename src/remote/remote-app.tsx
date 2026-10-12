@@ -87,6 +87,7 @@ export function RemoteApp() {
 		handleExpiredAuth: connection.handleExpiredAuth,
 		setFatalError: connection.setFatalError,
 		resyncKey: connection.resyncKey,
+		snapshotRefreshKey: connection.snapshotRefreshKey,
 		setResyncKey: connection.setResyncKey,
 		projects: sessions.projects,
 		rawSessions: sessions.rawSessions,
@@ -519,17 +520,30 @@ export function RemoteApp() {
 									onAbortRetry={() => void chat.abortPiRetry()}
 									contextUsage={chat.chatState}
 									models={chat.models}
+									modelScope={chat.modelScope}
+									canEditScope={!isNarrow}
 									selectedModel={chat.selectedModel}
 									modelLoading={chat.modelLoading}
-									modelError={fatalError}
+									modelError={chat.modelError ?? fatalError}
 									modelDisabled={
-										chat.hasIdentifiedSession
+										chat.readOnly ||
+										(chat.hasIdentifiedSession
 											? !chat.runtimeReady
-											: !chat.activeProjectId
+											: !chat.activeProjectId)
 									}
+									onModelMenuOpen={() => {
+										if (chat.hasIdentifiedSession)
+											void chat.refreshAgentConfig(
+												chat.runtimeReady && !chat.readOnly,
+											);
+										else if (chat.activeProjectId)
+											void chat.loadDraftCatalog(chat.activeProjectId);
+									}}
 									onModelRefresh={() => {
 										if (chat.hasIdentifiedSession)
-											void chat.refreshAgentConfig();
+											void chat.refreshAgentConfig(
+												chat.runtimeReady && !chat.readOnly,
+											);
 										else if (chat.activeProjectId)
 											void chat.loadDraftCatalog(chat.activeProjectId);
 									}}

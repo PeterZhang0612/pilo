@@ -162,6 +162,7 @@ function ChatPageImpl(props: ChatPageProps) {
 	});
 	const {
 		sessionState,
+		modelScope,
 		modelOptions,
 		selectedModel,
 		modelLoadState,
@@ -615,6 +616,7 @@ function ChatPageImpl(props: ChatPageProps) {
 										suggestions={composerSuggestions}
 										onSuggestionTrigger={handleSuggestionTrigger}
 										models={modelOptions}
+										modelScope={modelScope}
 										selectedModel={selectedModel}
 										modelLoading={modelLoadState === "loading"}
 										modelError={modelError}

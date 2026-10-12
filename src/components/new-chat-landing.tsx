@@ -11,6 +11,7 @@ import { ChatEmptyHero } from "@/components/chat/chat-empty-hero";
 import { ConversationColumn } from "@/components/chat/chat-conversation-column";
 import { SessionHeader } from "@/components/chat/chat-session-header";
 import {
+	listenRuntimeEvents,
 	runtimeErrorMessage,
 	type PiModel,
 	type PiThinkingLevel,
@@ -19,7 +20,9 @@ import { createChatSessionClient } from "@/lib/chat-session-client";
 import { createPiCommandSuggestions } from "@/lib/pi-command-suggestions";
 import { searchProjectFiles } from "@/lib/files";
 import {
-	getNextPiQuickCycleModel,
+	getNextPiScopeModel,
+	getProjectScopeModels,
+	isPiScopeCatalogResolved,
 	getPiModelThinkingLevels,
 	getPiQuickCycleThinkingLevel,
 } from "@/lib/pi-model-selection";
@@ -34,6 +37,8 @@ import { usePreferences } from "@/lib/preferences-provider";
 import type { Project } from "@/lib/projects";
 import type { ChatSubmission } from "@/lib/chat-submission";
 import { useKeyboardShortcut } from "@/lib/use-keyboard-shortcut";
+import { tauriPiloClient } from "@/lib/tauri-pilo-client";
+import { useProjectModelScope } from "@/lib/use-project-model-scope";
 import { DraftProjectPicker } from "@/components/chat/draft-project-picker";
 
 function modelKey(model: PiModel | null): string | null {
@@ -91,6 +96,25 @@ export function NewChatLanding({
 	const { keyboardShortcuts } = usePreferences();
 	const projectId = project?.id ?? null;
 	const cachedModels = projectId ? getCachedProjectPiModels(projectId) : null;
+	const scopeConfig = useProjectModelScope(tauriPiloClient, projectId ?? "");
+	useEffect(() => {
+		if (!projectId) return;
+		let disposed = false;
+		let unlisten: (() => void) | undefined;
+		void listenRuntimeEvents(scopeConfig.handleEvent)
+			.then((stop) => {
+				if (disposed) stop();
+				else unlisten = stop;
+			})
+			.catch((error) =>
+				console.warn("Failed to subscribe to project model scope", error),
+			);
+		return () => {
+			disposed = true;
+			unlisten?.();
+		};
+	}, [projectId, scopeConfig.handleEvent]);
+	const [modelCatalog, setModelCatalog] = useState(cachedModels);
 	const [draft, setDraft] = useState(
 		() => (projectId ? readProjectDraft?.(projectId) : "") ?? "",
 	);
@@ -201,6 +225,7 @@ export function NewChatLanding({
 
 	const applyModelSnapshot = useCallback(
 		(snapshot: NonNullable<ReturnType<typeof getCachedProjectPiModels>>) => {
+			setModelCatalog(snapshot);
 			setModels(snapshot.models);
 			if (!modelSelectionDirtyRef.current) {
 				selectedModelKeyRef.current = modelKey(snapshot.defaultModel);
@@ -244,7 +269,7 @@ export function NewChatLanding({
 			}
 			const requestId = ++modelRequestRef.current;
 			modelLoadingRef.current = true;
-			if (force || !cached) setModelLoadState("loading");
+			setModelLoadState("loading");
 			setModelError(null);
 			try {
 				const result = await refreshProjectPiModels(projectId);
@@ -277,6 +302,7 @@ export function NewChatLanding({
 		setCommandSuggestions([]);
 		setFileSuggestions([]);
 		const cached = projectId ? getCachedProjectPiModels(projectId) : null;
+		setModelCatalog(cached);
 		setModels(cached?.models ?? []);
 		selectedModelKeyRef.current = modelKey(cached?.defaultModel ?? null);
 		setSelectedModel(cached?.defaultModel ?? null);
@@ -289,9 +315,11 @@ export function NewChatLanding({
 
 	useEffect(() => {
 		if (!projectId) return;
+		let disposed = false;
 		const unsubscribe = subscribeProjectPiModels(projectId, applyModelSnapshot);
 		void hydrateProjectPiModels()
 			.then(() => {
+				if (disposed) return;
 				const cached = getCachedProjectPiModels(projectId);
 				if (cached) applyModelSnapshot(cached);
 				if (!cached) {
@@ -299,16 +327,16 @@ export function NewChatLanding({
 					return;
 				}
 				// 每次进入新会话都后台重探模型目录，改完 Pi 配置无需等 TTL。
-				// 结果由 subscribeProjectPiModels 回推；失败静默沿用缓存。
-				void refreshProjectPiModels(projectId).catch((error) => {
-					console.warn("Failed to refresh Pi models for new chat", error);
-				});
+				// 结果由 subscribeProjectPiModels 回推；沿用同一加载/错误状态。
+				void loadModels(true);
 			})
 			.catch((error) => {
+				if (disposed) return;
 				console.warn("Failed to hydrate Pi models", error);
 				void loadModels();
 			});
 		return () => {
+			disposed = true;
 			unsubscribe();
 			modelRequestRef.current += 1;
 			modelLoadingRef.current = false;
@@ -347,14 +375,29 @@ export function NewChatLanding({
 		},
 	);
 
+	const availableModels =
+		modelCatalog?.projectId === projectId ? modelCatalog.models : [];
+	const catalogReady =
+		modelCatalog?.projectId === projectId &&
+		(scopeConfig.scope?.models != null ||
+			isPiScopeCatalogResolved(availableModels));
+	const scopeModels = useMemo(
+		() =>
+			catalogReady && modelCatalog
+				? getProjectScopeModels(modelCatalog.models, scopeConfig.scope)
+				: [],
+		[catalogReady, modelCatalog, scopeConfig.scope],
+	);
+
 	useKeyboardShortcut(
 		keyboardShortcuts["cycle-scoped-model"],
 		() => {
-			if (models.length === 0) {
+			if (!scopeConfig.scope || scopeConfig.error) return;
+			if (!catalogReady) {
 				void loadModels();
 				return;
 			}
-			const nextModel = getNextPiQuickCycleModel(models, selectedModel);
+			const nextModel = getNextPiScopeModel(scopeModels, selectedModel);
 			if (!nextModel) return;
 			selectDraftModel(nextModel, getPiQuickCycleThinkingLevel(nextModel));
 		},
@@ -427,6 +470,13 @@ export function NewChatLanding({
 							onSubmit={handleSubmit}
 							disabled={false}
 							models={models}
+							modelScope={{
+								...scopeConfig,
+								models: scopeModels,
+								availableModels,
+								catalogReady,
+							}}
+							canEditScope={projectAvailable && Boolean(project)}
 							selectedModel={selectedModel}
 							modelLoading={modelLoadState === "loading"}
 							modelError={modelError}

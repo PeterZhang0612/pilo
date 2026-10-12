@@ -5,6 +5,7 @@ import { ChatImageThumbnail } from "@/components/chat/chat-image-viewer";
 
 import { formatKeyboardShortcut } from "@/lib/keyboard-shortcuts";
 import type { PiModel, PiThinkingLevel } from "@/lib/pi-runtime";
+import type { ModelScopeControls } from "@/lib/project-model-scope";
 import { cn } from "@/lib/utils";
 import { usePreferences } from "@/lib/preferences-provider";
 import {
@@ -63,6 +64,8 @@ type ChatComposerProps = {
 	onAbortRetry?: () => void;
 	contextUsage?: ChatSessionRuntimeState | null;
 	models?: readonly PiModel[];
+	modelScope?: ModelScopeControls;
+	canEditScope?: boolean;
 	selectedModel?: PiModel | null;
 	modelLoading?: boolean;
 	modelError?: string | null;
@@ -107,6 +110,8 @@ export function ChatComposer({
 	onAbortRetry,
 	contextUsage = null,
 	models = EMPTY_MODELS,
+	modelScope,
+	canEditScope = true,
 	selectedModel = null,
 	modelLoading = false,
 	modelError = null,
@@ -290,6 +295,8 @@ export function ChatComposer({
 
 					<ComposerRunConfig
 						models={models}
+						modelScope={modelScope}
+						canEditScope={canEditScope}
 						selectedModel={selectedModel}
 						modelLoading={modelLoading}
 						modelError={modelError}

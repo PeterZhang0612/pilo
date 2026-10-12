@@ -1,4 +1,8 @@
 import type { PiModel, PiThinkingLevel } from "@/lib/pi-runtime";
+import type {
+	ProjectModelScope,
+	ProjectScopedModel,
+} from "@/lib/project-model-scope";
 
 export function piModelsMatch(
 	a: Pick<PiModel, "provider" | "id"> | null | undefined,
@@ -27,6 +31,80 @@ export function getPiQuickCycleModels(models: readonly PiModel[]): PiModel[] {
 		else scoped.splice(insertAt, 0, model);
 	}
 	return scoped.length > 0 ? scoped : [...models];
+}
+
+export function isPiScopeCatalogResolved(models: readonly PiModel[]): boolean {
+	return models.every(
+		(model) =>
+			model.scopeOrder !== undefined && model.scopeThinkingLevel !== undefined,
+	);
+}
+
+export function getProjectScopeModels(
+	models: readonly PiModel[],
+	scope: ProjectModelScope | null,
+	catalog: readonly PiModel[] = models,
+): PiModel[] {
+	if (!scope) return [];
+	if (scope.models === null)
+		return getPiQuickCycleModels(catalog).flatMap((entry) => {
+			const model = findMatchingPiModel(models, entry);
+			return model
+				? [
+						{
+							...entry,
+							...model,
+							scopeOrder: entry.scopeOrder,
+							scopeThinkingLevel: entry.scopeThinkingLevel,
+						},
+					]
+				: [];
+		});
+	return scope.models.flatMap((entry, scopeOrder) => {
+		const model = findMatchingPiModel(models, {
+			provider: entry.provider,
+			id: entry.modelId,
+		});
+		return model
+			? [{ ...model, scopeOrder, scopeThinkingLevel: entry.thinkingLevel }]
+			: [];
+	});
+}
+
+export function getProjectScopeDraft(
+	models: readonly PiModel[],
+	scope: ProjectModelScope,
+): ProjectScopedModel[] {
+	return (
+		scope.models?.map((entry) => ({ ...entry })) ??
+		getPiQuickCycleModels(models).map((model) => ({
+			provider: model.provider,
+			modelId: model.id,
+			thinkingLevel: model.scopeThinkingLevel ?? null,
+		}))
+	);
+}
+
+/** The input is already the effective Scope; never fall back to all models. */
+export function getNextPiScopeModel(
+	models: readonly PiModel[],
+	currentModel: PiModel | null,
+): PiModel | null {
+	if (models.length === 0) return null;
+	const index = models.findIndex((model) => piModelsMatch(model, currentModel));
+	const next = models[(index + 1) % models.length] ?? null;
+	return piModelsMatch(next, currentModel) ? null : next;
+}
+
+/** Keep Host-resolved Scope/thinking metadata when live RPC returns bare models. */
+export function reconcilePiModelCatalog(
+	models: readonly PiModel[],
+	catalog: readonly PiModel[],
+): PiModel[] {
+	return models.map((model) => ({
+		...findMatchingPiModel(catalog, model),
+		...model,
+	}));
 }
 
 export function getNextPiQuickCycleModel(

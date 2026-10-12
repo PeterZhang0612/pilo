@@ -27,9 +27,14 @@ export function useRemoteKeyboardInset() {
 					"--remote-viewport-height",
 					`${viewport.height}px`,
 				);
+				root.style.setProperty(
+					"--remote-keyboard-bottom",
+					`${Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)}px`,
+				);
 				return;
 			}
 			root.style.removeProperty("--remote-viewport-height");
+			root.style.removeProperty("--remote-keyboard-bottom");
 		};
 		update();
 		viewport.addEventListener("resize", update);
@@ -38,6 +43,7 @@ export function useRemoteKeyboardInset() {
 			viewport.removeEventListener("resize", update);
 			viewport.removeEventListener("scroll", update);
 			root.style.removeProperty("--remote-viewport-height");
+			root.style.removeProperty("--remote-keyboard-bottom");
 		};
 	}, []);
 }

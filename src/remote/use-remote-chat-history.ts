@@ -37,7 +37,7 @@ type UseRemoteChatHistoryOptions = {
 	resyncKey: number;
 	isExternalOpenTurn: (projectId: string, sessionPath: string) => boolean;
 	runtimeTurnOpen: boolean;
-	refreshAgentConfig: () => Promise<void>;
+	refreshAgentConfig: (liveRuntime?: boolean) => Promise<void>;
 	handleExpiredAuth: (error: unknown) => boolean;
 	setFatalError: (message: string | null) => void;
 	setConversation: Dispatch<SetStateAction<ConversationState>>;
@@ -185,6 +185,7 @@ export function useRemoteChatHistory({
 				if (message.includes("read-only observer mode")) {
 					setReadOnly(true);
 					setConversationLoad({ key: selectedLoadKey, status: "ready" });
+					void refreshAgentConfig(false);
 					return;
 				}
 				setConversationLoad({ key: selectedLoadKey, status: "error" });

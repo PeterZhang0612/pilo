@@ -21,6 +21,24 @@ pub fn project_list(app: AppHandle) -> Result<Vec<Project>, String> {
 }
 
 #[tauri::command]
+pub fn project_model_scope_get(
+    app: AppHandle,
+    project_id: String,
+) -> Result<crate::domain::ProjectModelScope, String> {
+    project::load_model_scope(&app, &project_id)
+}
+
+#[tauri::command]
+pub fn project_model_scope_set(
+    app: AppHandle,
+    events: State<'_, super::super::RuntimeEventBus>,
+    project_id: String,
+    models: Option<Vec<crate::domain::ProjectScopedModel>>,
+) -> Result<crate::domain::ProjectModelScope, String> {
+    project::save_model_scope(&app, &events, &project_id, models)
+}
+
+#[tauri::command]
 pub fn project_model_cache_list(app: AppHandle) -> Result<Vec<ProjectModelCache>, String> {
     storage::list_project_model_cache(&storage::open(&app)?)
 }

@@ -21,9 +21,10 @@ pub use projects::{
     project_add, project_discover, project_fs_mkdir, project_fs_read_dir, project_fs_read_file,
     project_fs_remove, project_fs_rename, project_fs_search, project_fs_stat,
     project_fs_write_file, project_git_diff, project_git_status, project_list,
-    project_model_cache_list, project_model_cache_set, project_preview_close, project_preview_open,
-    project_preview_ports, project_refresh, project_remove, project_reorder, project_terminal_open,
-    project_touch, terminal_close, terminal_resize, terminal_write,
+    project_model_cache_list, project_model_cache_set, project_model_scope_get,
+    project_model_scope_set, project_preview_close, project_preview_open, project_preview_ports,
+    project_refresh, project_remove, project_reorder, project_terminal_open, project_touch,
+    terminal_close, terminal_resize, terminal_write,
 };
 pub use remote::{
     remote_device_rename, remote_device_revoke, remote_host_state, remote_pairing_regenerate,

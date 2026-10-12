@@ -45,6 +45,7 @@ export function toConversationAction(
 				stopReason: event.stopReason,
 				errorMessage: event.errorMessage,
 			};
+		case "project_model_scope_changed":
 		case "process_state":
 		case "rpc_message":
 		case "queue_update":

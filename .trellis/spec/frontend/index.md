@@ -17,6 +17,7 @@ This directory contains guidelines for frontend development in this project (Rea
 | [Directory Structure](./directory-structure.md)   | Module organization and file layout     | Filled |
 | [Component Guidelines](./component-guidelines.md) | Component patterns, props, composition  | Filled |
 | [Hook Guidelines](./hook-guidelines.md)           | Custom hooks, data fetching patterns    | Filled |
+| [Project Model Scope](../backend/project-model-scope.md) | Shared picker, draft editor, preference synchronization | Filled |
 | [State Management](./state-management.md)         | Local state, global state, server state | Filled |
 | [Quality Guidelines](./quality-guidelines.md)     | Linting, testing, forbidden patterns    | Filled |
 | [Type Safety](./type-safety.md)                   | Type patterns, validation               | Filled |

@@ -87,6 +87,11 @@ pub(super) fn initialize_schema(db: &SqliteConnection) -> Result<(), String> {
            default_thinking_level TEXT,
            refreshed_at_ms INTEGER NOT NULL
          );
+         CREATE TABLE IF NOT EXISTS project_model_scopes (
+           project_id TEXT PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+           models_json TEXT,
+           updated_at_ms INTEGER NOT NULL
+         );
          CREATE TABLE IF NOT EXISTS sessions (
            session_path TEXT PRIMARY KEY,
            connection_id TEXT NOT NULL REFERENCES connections(id) ON DELETE CASCADE,

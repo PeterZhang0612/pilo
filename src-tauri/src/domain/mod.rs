@@ -7,6 +7,9 @@ pub use connection::{
     Connection, ConnectionKind, ConnectionNamingModel, PiRuntime, SshAuthMethod, SshTarget,
     WslDistribution,
 };
-pub use project::{DiscoveredProject, Project, ProjectMetadata, ProjectModelCache};
+pub use project::{
+    DiscoveredProject, Project, ProjectMetadata, ProjectModelCache, ProjectModelScope,
+    ProjectScopedModel,
+};
 pub use remote::{RemoteDevice, RemoteHostConfig, random_remote_port};
 pub use session::{SessionIndexEntry, SessionReconcileResult, SessionUiStateUpdate};

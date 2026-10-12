@@ -49,6 +49,7 @@ export type RemoteSessionRpc = <T>(
 
 type UseRemoteChatTransportOptions = {
 	client: WebPiloClient | null;
+	handleModelScopeEvent: (event: PiloRuntimeEvent) => void;
 	handleExpiredAuth: (error: unknown) => boolean;
 	setFatalError: (message: string | null) => void;
 	setResyncKey: Dispatch<SetStateAction<number>>;
@@ -67,6 +68,7 @@ type UseRemoteChatTransportOptions = {
 
 export function useRemoteChatTransport({
 	client,
+	handleModelScopeEvent,
 	handleExpiredAuth,
 	setFatalError,
 	setResyncKey,
@@ -98,6 +100,10 @@ export function useRemoteChatTransport({
 			const actions: ConversationAction[] = [];
 			for (const event of message.events) {
 				lastSequence = Math.max(lastSequence, event.sequence);
+				if (event.type === "project_model_scope_changed") {
+					handleModelScopeEvent(event);
+					continue;
+				}
 				if (event.type === "rpc_message" && isRpcResponse(event.message)) {
 					const id = event.message.id;
 					if (id) {
@@ -195,6 +201,7 @@ export function useRemoteChatTransport({
 			activeSessionKeyRef,
 			queuedSubmissionsRef,
 			handleExtensionRequestRef,
+			handleModelScopeEvent,
 			refreshAgentConfigRef,
 			refreshAllSessions,
 			scheduleRuntimeActivityRefresh,

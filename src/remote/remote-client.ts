@@ -9,6 +9,10 @@ import type {
 import type { ProjectPiModels } from "@/lib/pi-models";
 import type { PiSessionSnapshot } from "@/lib/pi-runtime";
 import type {
+	ProjectModelScope,
+	ProjectScopedModel,
+} from "@/lib/project-model-scope";
+import type {
 	SessionDeleteResult,
 	SessionExternalActivity,
 	SessionHistoryFingerprint,
@@ -123,6 +127,25 @@ export function loadRemoteModels(token: string, projectId: string) {
 		token,
 		`/api/v1/models?${query.toString()}`,
 	);
+}
+
+export function loadRemoteModelScope(token: string, projectId: string) {
+	const query = new URLSearchParams({ projectId });
+	return remoteFetch<ProjectModelScope>(
+		token,
+		`/api/v1/models/scope?${query.toString()}`,
+	);
+}
+
+export function saveRemoteModelScope(
+	token: string,
+	projectId: string,
+	models: ProjectScopedModel[] | null,
+) {
+	return remoteFetch<ProjectModelScope>(token, "/api/v1/models/scope", {
+		method: "POST",
+		body: JSON.stringify({ projectId, models }),
+	});
 }
 
 export function loadRemoteHistory(

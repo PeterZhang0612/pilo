@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
@@ -12,11 +12,14 @@ import {
 } from "@/lib/pi-models";
 import {
 	findMatchingPiModel,
-	getNextPiQuickCycleModel,
+	getNextPiScopeModel,
+	getProjectScopeModels,
+	isPiScopeCatalogResolved,
 	getPiModelThinkingLevels,
 	getPiQuickCycleThinkingLevel,
 } from "@/lib/pi-model-selection";
 import {
+	listenRuntimeEvents,
 	runtimeErrorMessage,
 	type PiModel,
 	type PiThinkingLevel,
@@ -25,6 +28,9 @@ import type { ChatSession } from "@/components/chat/chat-page-utils";
 import { useChatRuntimeConfiguration } from "@/components/chat/use-chat-runtime-configuration";
 import { useChatSessionState } from "@/components/chat/use-chat-session-state";
 import { useChatThinkingControls } from "@/components/chat/use-chat-thinking-controls";
+
+import { tauriPiloClient } from "@/lib/tauri-pilo-client";
+import { useProjectModelScope } from "@/lib/use-project-model-scope";
 
 type ChatSessionClient = ReturnType<typeof createChatSessionClient>;
 
@@ -38,9 +44,30 @@ export function useChatSessionConfig({
 	client,
 }: UseChatSessionConfigOptions) {
 	const { t } = useTranslation();
+	const scopeConfig = useProjectModelScope(
+		tauriPiloClient,
+		session.projectRecord.id,
+	);
+	useEffect(() => {
+		let disposed = false;
+		let unlisten: (() => void) | undefined;
+		void listenRuntimeEvents(scopeConfig.handleEvent)
+			.then((stop) => {
+				if (disposed) stop();
+				else unlisten = stop;
+			})
+			.catch((error) =>
+				console.warn("Failed to subscribe to project model scope", error),
+			);
+		return () => {
+			disposed = true;
+			unlisten?.();
+		};
+	}, [scopeConfig.handleEvent]);
 	const initialCachedModels = getCachedProjectPiModels(
 		session.projectRecord.id,
 	);
+	const [modelCatalog, setModelCatalog] = useState(initialCachedModels);
 	const [modelOptions, setModelOptions] = useState<PiModel[]>(
 		initialCachedModels?.models ?? [],
 	);
@@ -80,6 +107,7 @@ export function useChatSessionConfig({
 		const initialModel =
 			session.initialModel ??
 			(session.sessionPath ? null : (cached?.defaultModel ?? null));
+		setModelCatalog(cached);
 		setModelOptions(cached?.models ?? []);
 		setSelectedModel(initialModel);
 		setModelLoadState("idle");
@@ -101,7 +129,9 @@ export function useChatSessionConfig({
 
 	useEffect(() => {
 		const projectId = session.projectRecord.id;
+		let disposed = false;
 		const unsubscribe = subscribeProjectPiModels(projectId, (snapshot) => {
+			setModelCatalog(snapshot);
 			setModelOptions(snapshot.models);
 			if (
 				!session.sessionPath &&
@@ -124,8 +154,10 @@ export function useChatSessionConfig({
 		});
 		void hydrateProjectPiModels()
 			.then(() => {
+				if (disposed) return;
 				const cached = getCachedProjectPiModels(projectId);
 				if (!cached) return;
+				setModelCatalog(cached);
 				setModelOptions(cached.models);
 				if (
 					!session.sessionPath &&
@@ -146,7 +178,10 @@ export function useChatSessionConfig({
 				setModelLoadState("ready");
 			})
 			.catch((error) => console.warn("Failed to hydrate Pi models", error));
-		return unsubscribe;
+		return () => {
+			disposed = true;
+			unsubscribe();
+		};
 	}, [
 		session.initialModel,
 		session.initialThinkingLevel,
@@ -207,8 +242,11 @@ export function useChatSessionConfig({
 		async (force = false) => {
 			if (modelLoadState === "loading" || modelChanging) return;
 			const projectId = session.projectRecord.id;
-			const cached = getCachedProjectPiModels(projectId);
+			const cached =
+				getCachedProjectPiModels(projectId) ??
+				(modelCatalog?.projectId === projectId ? modelCatalog : null);
 			if (session.sessionPath) {
+				setModelCatalog(cached);
 				const profiledSelectedModel =
 					findMatchingPiModel(cached?.models ?? [], selectedModel) ??
 					selectedModel;
@@ -227,16 +265,27 @@ export function useChatSessionConfig({
 				setModelLoadState("ready");
 				if (force || !cached || isProjectPiModelsStale(cached)) {
 					setModelError(null);
-					if (force || !cached) setModelLoadState("loading");
+					setModelLoadState("loading");
+					const requestId = ++modelRequestRef.current;
 					void refreshProjectPiModels(projectId)
-						.catch((error) => {
-							setModelError(runtimeErrorMessage(error));
+						.then((result) => {
+							if (modelRequestRef.current !== requestId) return;
+							setModelCatalog(result);
+							setModelOptions(result.models);
 						})
-						.finally(() => setModelLoadState("ready"));
+						.catch((error) => {
+							if (modelRequestRef.current === requestId)
+								setModelError(runtimeErrorMessage(error));
+						})
+						.finally(() => {
+							if (modelRequestRef.current === requestId)
+								setModelLoadState("ready");
+						});
 				}
 				return;
 			}
 			if (!force && cached && !isProjectPiModelsStale(cached)) {
+				setModelCatalog(cached);
 				setModelOptions(cached.models);
 				if (!session.initialModel && !modelSelectionDirtyRef.current) {
 					setSelectedModel(cached.defaultModel);
@@ -254,11 +303,12 @@ export function useChatSessionConfig({
 				return;
 			}
 			const requestId = ++modelRequestRef.current;
-			if (force || !cached) setModelLoadState("loading");
+			setModelLoadState("loading");
 			setModelError(null);
 			try {
 				const result = await refreshProjectPiModels(projectId);
 				if (modelRequestRef.current !== requestId) return;
+				setModelCatalog(result);
 				setModelOptions(result.models);
 				if (!session.initialModel && !modelSelectionDirtyRef.current) {
 					setSelectedModel(result.defaultModel);
@@ -279,6 +329,7 @@ export function useChatSessionConfig({
 			}
 		},
 		[
+			modelCatalog,
 			modelChanging,
 			modelLoadState,
 			selectedModel,
@@ -343,16 +394,29 @@ export function useChatSessionConfig({
 		],
 	);
 
+	const catalogCurrent = modelCatalog?.projectId === session.projectRecord.id;
+	const availableModels = catalogCurrent ? modelCatalog.models : [];
+	const catalogReady =
+		catalogCurrent &&
+		(scopeConfig.scope?.models != null ||
+			isPiScopeCatalogResolved(availableModels));
+	const scopeModels = useMemo(
+		() =>
+			catalogReady && modelCatalog
+				? getProjectScopeModels(modelCatalog.models, scopeConfig.scope)
+				: [],
+		[catalogReady, modelCatalog, scopeConfig.scope],
+	);
 	const handleQuickCycleModel = useCallback(() => {
-		if (modelChanging) return;
+		if (modelChanging || !scopeConfig.scope || scopeConfig.error) return;
+		if (!catalogReady) {
+			void loadModelOptions();
+			return;
+		}
 
+		const nextModel = getNextPiScopeModel(scopeModels, selectedModel);
+		if (!nextModel) return;
 		if (session.sessionPath) {
-			if (modelOptions.length === 0) {
-				void loadModelOptions();
-				return;
-			}
-			const nextModel = getNextPiQuickCycleModel(modelOptions, selectedModel);
-			if (!nextModel) return;
 			modelSelectionDirtyRef.current = true;
 			thinkingSelectionDirtyRef.current = false;
 			setSelectedModel(nextModel);
@@ -371,13 +435,8 @@ export function useChatSessionConfig({
 		void (async () => {
 			try {
 				await client.ensure();
-				const result = await client.cyclePiModel();
-				if (!result) return;
-				const cachedModels =
-					getCachedProjectPiModels(session.projectRecord.id)?.models ?? [];
-				const profiledModel =
-					findMatchingPiModel(cachedModels, result.model) ?? result.model;
-				let supportedLevels = [...getPiModelThinkingLevels(profiledModel)];
+				await client.setPiModel(nextModel);
+				let supportedLevels = [...getPiModelThinkingLevels(nextModel)];
 				try {
 					supportedLevels = (await client.getAvailablePiThinkingLevels())
 						.levels;
@@ -387,11 +446,14 @@ export function useChatSessionConfig({
 						error,
 					);
 				}
+				const level = nextModel.scopeThinkingLevel;
+				if (level != null) await client.setPiThinkingLevel(level);
+				const state = await client.getPiAgentState();
 				if (modelRequestRef.current !== requestId) return;
 				modelSelectionDirtyRef.current = true;
 				thinkingSelectionDirtyRef.current = false;
-				setSelectedModel({ ...profiledModel, thinkingLevels: supportedLevels });
-				setSelectedThinkingLevel(result.thinkingLevel);
+				setSelectedModel({ ...nextModel, thinkingLevels: supportedLevels });
+				setSelectedThinkingLevel(state.thinkingLevel);
 				setThinkingLevels(supportedLevels);
 				setModelLoadState("ready");
 			} catch (error) {
@@ -407,17 +469,25 @@ export function useChatSessionConfig({
 		})();
 	}, [
 		client,
+		catalogReady,
 		loadModelOptions,
 		modelChanging,
-		modelOptions,
+		scopeConfig.scope,
+		scopeConfig.error,
+		scopeModels,
 		selectedModel,
 		selectedThinkingLevel,
-		session.projectRecord.id,
 		session.sessionPath,
 		t,
 	]);
 
 	return {
+		modelScope: {
+			...scopeConfig,
+			models: scopeModels,
+			availableModels,
+			catalogReady,
+		},
 		sessionState,
 		modelOptions,
 		selectedModel,

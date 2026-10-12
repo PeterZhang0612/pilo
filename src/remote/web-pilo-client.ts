@@ -8,6 +8,10 @@ import type {
 import type { PiSessionSnapshot } from "@/lib/pi-runtime";
 import type { ProjectPiModels } from "@/lib/pi-models";
 import type {
+	ProjectModelScope,
+	ProjectScopedModel,
+} from "@/lib/project-model-scope";
+import type {
 	SessionDeleteResult,
 	SessionExternalActivity,
 	SessionHistoryFingerprint,
@@ -27,6 +31,8 @@ import {
 	loadRemoteHistoryImage,
 	loadRemoteExternalActivity,
 	loadRemoteModels,
+	loadRemoteModelScope,
+	saveRemoteModelScope,
 	loadRemoteSessions,
 	searchRemoteFiles,
 	searchRemoteSessions,
@@ -113,6 +119,17 @@ export class WebPiloClient implements PiloClient {
 
 	loadModels(projectId: string): Promise<ProjectPiModels | null> {
 		return loadRemoteModels(this.token, projectId);
+	}
+
+	loadModelScope(projectId: string): Promise<ProjectModelScope> {
+		return loadRemoteModelScope(this.token, projectId);
+	}
+
+	saveModelScope(
+		projectId: string,
+		models: ProjectScopedModel[] | null,
+	): Promise<ProjectModelScope> {
+		return saveRemoteModelScope(this.token, projectId, models);
 	}
 
 	sendChatCommand(

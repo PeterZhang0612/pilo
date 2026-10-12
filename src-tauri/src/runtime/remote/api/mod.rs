@@ -123,6 +123,10 @@ pub(crate) fn router(
         .route("/api/v1/sessions/title", post(handlers::session_title))
         .route("/api/v1/sessions/delete", post(handlers::session_delete))
         .route("/api/v1/models", get(handlers::models))
+        .route(
+            "/api/v1/models/scope",
+            get(handlers::model_scope_get).post(handlers::model_scope_set),
+        )
         .route("/api/v1/chat/start", post(handlers::chat_start))
         .route("/api/v1/chat/stop", post(handlers::chat_stop))
         .route("/api/v1/chat/state", get(handlers::chat_state))

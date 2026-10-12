@@ -53,6 +53,9 @@ pub struct ExtensionUiRequestPayload {
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum RuntimeEvent {
+    ProjectModelScopeChanged {
+        scope: crate::domain::ProjectModelScope,
+    },
     ProcessState {
         generation: u64,
         state: PiProcessState,

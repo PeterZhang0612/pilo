@@ -13,6 +13,10 @@ import {
 	type PiloClientStartChatInput,
 } from "@/lib/pilo-client";
 import { listProjects } from "@/lib/projects";
+import type {
+	ProjectModelScope,
+	ProjectScopedModel,
+} from "@/lib/project-model-scope";
 import {
 	getCachedProjectPiModels,
 	hydrateProjectPiModels,
@@ -104,6 +108,20 @@ export class TauriPiloClient implements PiloClient {
 	async loadModels(projectId: string): Promise<ProjectPiModels | null> {
 		await hydrateProjectPiModels();
 		return getCachedProjectPiModels(projectId);
+	}
+
+	loadModelScope(projectId: string): Promise<ProjectModelScope> {
+		return invoke<ProjectModelScope>("project_model_scope_get", { projectId });
+	}
+
+	saveModelScope(
+		projectId: string,
+		models: ProjectScopedModel[] | null,
+	): Promise<ProjectModelScope> {
+		return invoke<ProjectModelScope>("project_model_scope_set", {
+			projectId,
+			models,
+		});
 	}
 
 	startChat(input: PiloClientStartChatInput): Promise<PiSessionSnapshot> {
