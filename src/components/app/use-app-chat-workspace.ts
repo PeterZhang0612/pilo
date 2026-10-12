@@ -177,6 +177,7 @@ export function useAppChatWorkspace({
 	const unreadSessionIds = useSessionUnread(
 		sidebarSessionsBase,
 		selectedSessionId,
+		runtimeStates,
 	);
 
 	const sidebarSessions = useMemo(

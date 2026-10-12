@@ -15,6 +15,7 @@ import {
 	type ChatSessionRuntimeState,
 } from "@/lib/chat-session-client";
 import { listenRuntimeEvents } from "@/lib/pi-runtime";
+import { chatRpcChangesActivity } from "@/lib/chat-session-runtime-model";
 import {
 	deleteSession,
 	getExternalSessionActivity,
@@ -132,14 +133,7 @@ export function useAppSessionIndex(projectIds: readonly string[]) {
 					});
 				})
 				.catch((error) => {
-					if (isCurrentProjectGeneration(projectId, generation)) {
-						setExternalActivity((current) => {
-							if (!current.has(projectId)) return current;
-							const nextMap = new Map(current);
-							nextMap.delete(projectId);
-							return nextMap;
-						});
-					}
+					// A failed probe means activity is unknown, not that turns completed.
 					console.debug("Failed to inspect external Pi activity", error);
 				})
 				.finally(() => {
@@ -383,10 +377,14 @@ export function useAppSessionIndex(projectIds: readonly string[]) {
 				case "assistant_message_start":
 				case "assistant_message_end":
 				case "runtime_error":
+				case "auto_retry_start":
+				case "compaction_start":
+				case "compaction_end":
+				case "process_state":
 					queueRuntimeActivityRefresh();
 					break;
-				case "process_state":
-					if (event.state === "stopped" || event.state === "failed") {
+				case "rpc_message":
+					if (chatRpcChangesActivity(event.message)) {
 						queueRuntimeActivityRefresh();
 					}
 					break;
