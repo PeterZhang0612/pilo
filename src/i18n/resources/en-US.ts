@@ -84,7 +84,7 @@ const enUS = {
 		remote: "Remote",
 		remoteWebUi: "Remote WebUI",
 		remoteDescription:
-			"Access Pilo chat and sessions from another device on the same local network.",
+			"Access Pilo through LAN, public or mesh-network addresses.",
 		remoteLoading: "Loading Remote WebUI…",
 		remoteRunning: "Running",
 		remoteStopped: "Stopped",
@@ -105,7 +105,7 @@ const enUS = {
 		remoteError: "Remote WebUI error",
 		remoteActionFailed: "Remote WebUI action failed",
 		remotePairing: "Pair a device",
-		remotePairingHint: "One-time link · 5 min",
+		remotePairingHint: "Multiple addresses · 10 min",
 		remoteOpenLink: "Scan the QR code or open the link",
 		remoteCopyLink: "Copy link",
 		remoteAccessAddress: "Access address",
@@ -118,9 +118,41 @@ const enUS = {
 		remoteNewLink: "New pairing link",
 		remoteLinkCopied: "Link copied",
 		remoteCopyFailed: "Could not copy pairing link",
-		remotePairingExpired: "Pairing link expired",
+		remotePairingExpired: "Pairing link expired or used up",
 		remotePairingExpiredDescription:
-			"Generate a new one-time link to authorize another device.",
+			"This pairing link is no longer available. Scan a new QR code for unfinished addresses. Existing device authorizations remain valid.",
+		remoteAddressName: "Name (optional)",
+		remoteAddressNamePlaceholder: "Home / Public / Mesh (optional)",
+		remoteAddressUrl: "Access URL",
+		remoteAddressConfigHint:
+			"Use complete http(s) root addresses with ports where needed. Save changes to apply them. Changing an address replaces the pairing link, not existing device authorizations. Use HTTPS on untrusted networks.",
+		remoteAddressesSaved: "Access addresses saved",
+		remoteAddAddress: "Add address",
+		remoteQrEntry: "QR entry address",
+		remoteQrEntryHint:
+			"Choose an address your phone can reach, then save. One QR code opens the address selection page.",
+		remotePairingPageTitle: "Pilo authorization",
+		remotePairingPageHint:
+			"Open each address to authorize it, then return here for the next one. Opening this page does not use an address slot.",
+		remotePairingRemaining: "{{remaining}} of {{total}} address slots left",
+		remotePairingUntil: "Valid until {{time}}",
+		remotePairingIssued: "Authorization issued in this pairing session",
+		remotePairingComplete: "This address is authorized",
+		remotePairingContinue: "Authorize other addresses",
+		remoteOpenPilo: "Open Pilo",
+		remotePairingBookmarkHint:
+			"Open Pilo, then bookmark its plain address. New device authorizations last 30 days; this pairing link is temporary.",
+		remoteDeviceExpires: "Device authorization expires: {{time}}",
+		remotePairingAddressUsed:
+			"This address was already paired by another request. Open it if this browser is authorized; otherwise scan a new QR code.",
+		remotePairingStorageUnavailable:
+			"Browser storage is blocked or full. Allow storage before continuing; do not close this tab during pairing.",
+		remotePairingRandomUnavailable:
+			"This browser cannot generate a secure pairing proof. Use a browser that supports secure random values.",
+		remotePairingInvalidLink:
+			"This pairing link or response is invalid. Update Pilo and open a new QR code.",
+		remotePairingNetworkError:
+			"Could not complete this request. Check that Pilo and this address are reachable, then retry before the link expires.",
 		remotePort: "Port",
 		remotePortInvalid: "Port must be an integer between 1024 and 65535",
 		remotePortSaved: "Port updated",

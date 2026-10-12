@@ -7,17 +7,12 @@ import {
 	resolveRemoteConnectionState,
 	type RemoteConnectionState,
 } from "./remote-connection-state";
-import {
-	REMOTE_SEQUENCE_KEY,
-	REMOTE_TOKEN_KEY,
-	pairRemote,
-} from "./remote-client";
+import { REMOTE_SEQUENCE_KEY, REMOTE_TOKEN_KEY } from "./remote-client";
 import { WebPiloClient } from "./web-pilo-client";
 
 const OFFLINE_RETRY_DELAY_MS = 30_000;
 
 type UseRemoteConnectionOptions = {
-	pairingSecret: string | null;
 	browserOnline: boolean;
 	recoveryGeneration: number;
 	onSocketMessageRef: { current: (message: PiloClientEventMessage) => void };
@@ -25,7 +20,6 @@ type UseRemoteConnectionOptions = {
 };
 
 export function useRemoteConnection({
-	pairingSecret,
 	browserOnline,
 	recoveryGeneration,
 	onSocketMessageRef,
@@ -39,7 +33,6 @@ export function useRemoteConnection({
 		() => (token ? new WebPiloClient(token) : null),
 		[token],
 	);
-	const [pairing, setPairing] = useState(Boolean(pairingSecret));
 	const [fatalError, setFatalError] = useState<string | null>(null);
 	const [connected, setConnected] = useState(false);
 	const [validatedRecoveryGeneration, setValidatedRecoveryGeneration] =
@@ -69,9 +62,11 @@ export function useRemoteConnection({
 	const handleExpiredAuth = useCallback(
 		(error: unknown) => {
 			if (error instanceof Error && error.message === "REMOTE_AUTH_EXPIRED") {
-				window.localStorage.removeItem(REMOTE_TOKEN_KEY);
-				setToken(null);
-				setFatalError(t("settings.remoteAuthorizationExpired"));
+				const currentToken = window.localStorage.getItem(REMOTE_TOKEN_KEY);
+				setToken(currentToken);
+				setFatalError(
+					currentToken ? null : t("settings.remoteAuthorizationExpired"),
+				);
 				return true;
 			}
 			return false;
@@ -104,29 +99,6 @@ export function useRemoteConnection({
 		reconnectAttemptsRef.current = 0;
 		setReconnectKey((value) => value + 1);
 	}, []);
-
-	useEffect(() => {
-		if (!pairingSecret) return;
-		let cancelled = false;
-		void pairRemote(pairingSecret)
-			.then((result) => {
-				if (cancelled) return;
-				window.localStorage.setItem(REMOTE_TOKEN_KEY, result.token);
-				window.history.replaceState({}, "", window.location.pathname);
-				setToken(result.token);
-				setFatalError(null);
-			})
-			.catch((error) => {
-				if (!cancelled)
-					setFatalError(String(error instanceof Error ? error.message : error));
-			})
-			.finally(() => {
-				if (!cancelled) setPairing(false);
-			});
-		return () => {
-			cancelled = true;
-		};
-	}, [pairingSecret]);
 
 	/* oxlint-disable react/exhaustive-effect-dependencies -- reconnectKey and recoveryGeneration are explicit generations used only to recreate the external WebSocket. */
 	useEffect(() => {
@@ -228,7 +200,6 @@ export function useRemoteConnection({
 	return {
 		token,
 		client,
-		pairing,
 		fatalError,
 		setFatalError,
 		networkState,

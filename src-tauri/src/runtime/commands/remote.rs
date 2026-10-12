@@ -1,5 +1,7 @@
 use tauri::{AppHandle, State};
 
+use crate::domain::{RemoteAccessAddress, RemoteAccessConfig};
+
 use super::super::remote::{RemoteHostState, RemoteServerManager};
 
 #[tauri::command]
@@ -35,6 +37,24 @@ pub async fn remote_set_public_base_url(
     public_base_url: String,
 ) -> Result<RemoteHostState, String> {
     remote.set_public_base_url(app, &public_base_url).await
+}
+
+#[tauri::command]
+pub async fn remote_set_addresses(
+    app: AppHandle,
+    remote: State<'_, RemoteServerManager>,
+    addresses: Vec<RemoteAccessAddress>,
+    entry_address_id: String,
+) -> Result<RemoteHostState, String> {
+    remote
+        .set_addresses(
+            app,
+            RemoteAccessConfig {
+                addresses,
+                entry_address_id,
+            },
+        )
+        .await
 }
 
 #[tauri::command]

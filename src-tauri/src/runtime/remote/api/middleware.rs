@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 
 use axum::{
     Json,
@@ -8,11 +8,10 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use serde::{Deserialize, Serialize};
-use tauri::Manager;
 
 use crate::{
     domain::RemoteDevice,
-    runtime::remote::{auth, manager::RemoteServerManager},
+    runtime::remote::{auth, pairing::PairingError},
 };
 
 use super::{AuthSession, RemoteHttpState, api_error};
@@ -21,7 +20,16 @@ use super::{AuthSession, RemoteHttpState, api_error};
 #[serde(rename_all = "camelCase")]
 pub(super) struct PairRequest {
     secret: String,
+    #[serde(default)]
+    address_id: String,
+    #[serde(default)]
+    request_id: String,
     device_name: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub(super) struct PairingInfoRequest {
+    secret: String,
 }
 
 #[derive(Serialize)]
@@ -29,6 +37,24 @@ pub(super) struct PairRequest {
 pub(super) struct PairResponse {
     token: String,
     device: RemoteDevice,
+}
+
+pub(super) async fn pairing_info(
+    State(state): State<RemoteHttpState>,
+    ConnectInfo(address): ConnectInfo<SocketAddr>,
+    Json(request): Json<PairingInfoRequest>,
+) -> Response {
+    if state.rate_limiter.is_blocked(address.ip()) {
+        return api_error(
+            StatusCode::TOO_MANY_REQUESTS,
+            "too many authentication attempts",
+        );
+    }
+    let pairing = state.pairing.clone();
+    let result = tokio::task::spawn_blocking(move || pairing.describe(&request.secret))
+        .await
+        .unwrap_or_else(|_| Err(PairingError::Internal("pairing task failed".to_owned())));
+    pairing_response(&state, address.ip(), result)
 }
 
 pub(super) async fn pair(
@@ -43,44 +69,58 @@ pub(super) async fn pair(
         );
     }
     let paths = state.paths.clone();
+    let pairing = state.pairing.clone();
     let pair_ip = address.ip().to_string();
     let result = tokio::task::spawn_blocking(move || {
-        auth::exchange_pairing(
-            &paths,
-            &request.secret,
-            request.device_name.as_deref(),
-            &pair_ip,
-        )
-    })
-    .await;
-    match result {
-        Ok(Ok(Some(paired))) => {
-            state.rate_limiter.clear(address.ip());
-            let remote = state.app.state::<RemoteServerManager>();
-            if let Err(error) = remote.regenerate_pairing(&state.app).await {
-                log::warn!(
-                    target: "remote-webui",
-                    "paired a device but failed to rotate the one-time pairing link: {error}"
-                );
-            }
-            (
-                StatusCode::OK,
-                Json(PairResponse {
-                    token: paired.token,
-                    device: paired.device,
-                }),
+        pairing
+            .exchange(
+                &paths,
+                &request.secret,
+                &request.address_id,
+                &request.request_id,
+                request.device_name.as_deref(),
+                &pair_ip,
             )
-                .into_response()
+            .map(|paired| PairResponse {
+                token: paired.token,
+                device: paired.device,
+            })
+    })
+    .await
+    .unwrap_or_else(|_| Err(PairingError::Internal("pairing task failed".to_owned())));
+    pairing_response(&state, address.ip(), result)
+}
+
+pub(super) async fn pairing_no_store(request: Request, next: Next) -> Response {
+    let mut response = next.run(request).await;
+    response.headers_mut().insert(
+        header::CACHE_CONTROL,
+        axum::http::HeaderValue::from_static("no-store"),
+    );
+    response
+}
+
+fn pairing_response<T: Serialize>(
+    state: &RemoteHttpState,
+    ip: IpAddr,
+    result: Result<T, PairingError>,
+) -> Response {
+    match result {
+        Ok(value) => {
+            state.rate_limiter.clear(ip);
+            Json(value).into_response()
         }
-        Ok(Ok(None)) => {
-            state.rate_limiter.record_failure(address.ip());
+        Err(PairingError::Unauthorized) => {
+            state.rate_limiter.record_failure(ip);
             api_error(StatusCode::UNAUTHORIZED, "invalid or expired pairing link")
         }
-        Ok(Err(error)) => api_error(StatusCode::INTERNAL_SERVER_ERROR, &error),
-        Err(error) => api_error(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            &format!("pairing task failed: {error}"),
-        ),
+        Err(PairingError::InvalidRequest(message)) => api_error(StatusCode::BAD_REQUEST, message),
+        Err(PairingError::AlreadyUsed) => {
+            api_error(StatusCode::CONFLICT, "pairing address already used")
+        }
+        Err(PairingError::Internal(message)) => {
+            api_error(StatusCode::INTERNAL_SERVER_ERROR, &message)
+        }
     }
 }
 

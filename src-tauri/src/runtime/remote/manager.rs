@@ -12,37 +12,35 @@ use tokio::{
 };
 
 use crate::{
-    domain::RemoteDevice,
+    domain::{RemoteAccessAddress, RemoteAccessConfig, RemoteDevice},
     runtime::{host_paths::HostPaths, storage},
 };
 
-use super::{api, auth};
+use super::{access, api, pairing::PairingSession};
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RemoteHostState {
     pub enabled: bool,
     pub running: bool,
     pub port: u16,
     pub base_url: Option<String>,
-    /// 用户配置的外部访问地址;为空表示未配置(二维码用局域网地址)。
     pub public_base_url: String,
+    pub addresses: Vec<RemoteAccessAddress>,
+    pub entry_address_id: String,
+    pub address_config_error: Option<String>,
     pub pairing_url: Option<String>,
     pub pairing_expires_at_ms: Option<u64>,
+    pub pairing_remaining_uses: usize,
+    pub pairing_total_uses: usize,
     pub last_error: Option<String>,
     pub devices: Vec<RemoteDevice>,
-}
-
-#[derive(Clone, Debug)]
-struct ActivePairing {
-    secret: String,
-    expires_at_ms: u64,
 }
 
 struct RunningRemoteServer {
     port: u16,
     lan_base_url: String,
-    pairing: Option<ActivePairing>,
+    pairing: Arc<PairingSession>,
     shutdown: watch::Sender<bool>,
     auth_generation: watch::Sender<u64>,
     task: JoinHandle<()>,
@@ -54,7 +52,6 @@ struct RemoteServerInner {
     last_error: Option<String>,
 }
 
-/// 远程 WebUI 只允许非特权端口(与前端校验保持一致)。
 const MIN_REMOTE_PORT: u16 = 1024;
 
 #[derive(Default)]
@@ -86,13 +83,12 @@ impl RemoteServerManager {
         if enabled {
             self.start(app.clone(), config.port).await?;
             config.enabled = true;
-            storage::set_remote_host_config(&storage::open_with_paths(&paths)?, &config)?;
         } else {
             self.stop().await;
             config.enabled = false;
-            storage::set_remote_host_config(&storage::open_with_paths(&paths)?, &config)?;
-            let _ = storage::clear_remote_pairing(&storage::open_with_paths(&paths)?);
+            storage::clear_remote_pairing(&storage::open_with_paths(&paths)?)?;
         }
+        storage::set_remote_host_config(&storage::open_with_paths(&paths)?, &config)?;
         self.snapshot(&app).await
     }
 
@@ -111,14 +107,60 @@ impl RemoteServerManager {
         if config.port == port {
             return self.snapshot(&app).await;
         }
-        let was_running = inner_running_port(&*self.inner.lock().await).is_some();
+        let (was_running, lan_base_url) = {
+            let inner = self.inner.lock().await;
+            (
+                inner.running.is_some(),
+                inner.running.as_ref().map_or_else(
+                    || format!("http://{}:{}", lan_ip(), config.port),
+                    |running| running.lan_base_url.clone(),
+                ),
+            )
+        };
+        let paths_for_config = paths.clone();
+        let access_config = tokio::task::spawn_blocking(move || {
+            let db = storage::open_with_paths(&paths_for_config)?;
+            let Some(mut config) = storage::get_remote_access_config(&db)? else {
+                return Ok(None);
+            };
+            // Only follow the default direct LAN address, never custom or proxy URLs.
+            let Some(address) = config
+                .addresses
+                .iter_mut()
+                .find(|address| address.id == "lan" && address.base_url == lan_base_url)
+            else {
+                return Ok(None);
+            };
+            let mut url = tauri::Url::parse(&address.base_url)
+                .map_err(|error| format!("failed to parse Remote WebUI LAN address: {error}"))?;
+            url.set_port(Some(port))
+                .map_err(|_| "failed to update Remote WebUI LAN port".to_owned())?;
+            address.base_url = url.origin().ascii_serialization();
+            access::normalize_config(config).map(Some)
+        })
+        .await
+        .map_err(|_| "Remote WebUI address task failed".to_owned())??;
         if was_running {
             self.stop().await;
         }
-        // 端口变更后设备 localStorage token 会因 origin 改变而失效,清空旧设备记录。
-        storage::clear_remote_devices(&storage::open_with_paths(&paths)?)?;
         config.port = port;
-        storage::set_remote_host_config(&storage::open_with_paths(&paths)?, &config)?;
+        tokio::task::spawn_blocking(move || {
+            let mut db = storage::open_with_paths(&paths)?;
+            let transaction = db
+                .transaction()
+                .map_err(|error| format!("failed to begin Remote WebUI port update: {error}"))?;
+            // Preserve the existing port-change policy; address edits do not take this path.
+            storage::clear_remote_devices(&transaction)?;
+            storage::set_remote_host_config(&transaction, &config)?;
+            if let Some(access_config) = access_config {
+                storage::set_remote_access_config(&transaction, &access_config)?;
+            }
+            transaction
+                .commit()
+                .map_err(|error| format!("failed to commit Remote WebUI port update: {error}"))
+        })
+        .await
+        .map_err(|_| "Remote WebUI port task failed".to_owned())??;
         if was_running && let Err(error) = self.start(app.clone(), port).await {
             self.inner.lock().await.last_error = Some(error.clone());
             return Err(error);
@@ -131,17 +173,102 @@ impl RemoteServerManager {
         app: &AppHandle,
     ) -> Result<RemoteHostState, String> {
         let paths = HostPaths::from_app(app)?;
-        let pairing = auth::issue_pairing(&paths)?;
-        let mut inner = self.inner.lock().await;
-        let Some(running) = inner.running.as_mut() else {
-            return Err("Remote WebUI is not running".to_owned());
-        };
-        running.pairing = Some(ActivePairing {
-            secret: pairing.secret,
-            expires_at_ms: pairing.expires_at_ms,
-        });
+        let inner = self.inner.lock().await;
+        let running = inner
+            .running
+            .as_ref()
+            .ok_or("Remote WebUI is not running")?;
+        let pairing = running.pairing.clone();
+        let lan_base_url = running.lan_base_url.clone();
+        tokio::task::spawn_blocking(move || {
+            let config = load_access_config(&paths, &lan_base_url)?;
+            pairing.regenerate(&paths, access::pairing_addresses(&config))
+        })
+        .await
+        .map_err(|_| "Remote WebUI pairing task failed".to_owned())??;
         drop(inner);
         self.snapshot(app).await
+    }
+
+    pub(crate) async fn set_addresses(
+        &self,
+        app: AppHandle,
+        config: RemoteAccessConfig,
+    ) -> Result<RemoteHostState, String> {
+        let config = access::normalize_config(config)?;
+        let paths = HostPaths::from_app(&app)?;
+        let inner = self.inner.lock().await;
+        let lan_base_url = inner
+            .running
+            .as_ref()
+            .map(|running| running.lan_base_url.clone());
+        let pairing = inner
+            .running
+            .as_ref()
+            .map(|running| running.pairing.clone());
+        tokio::task::spawn_blocking(move || {
+            let host = storage::get_remote_host_config(&storage::open_with_paths(&paths)?)?;
+            let lan_base_url =
+                lan_base_url.unwrap_or_else(|| format!("http://{}:{}", lan_ip(), host.port));
+            let before = load_access_config(&paths, &lan_base_url)?;
+            let changed = access::targets_changed(&before, &config);
+            if changed && let Some(pairing) = &pairing {
+                pairing.invalidate();
+            }
+            storage::set_remote_access_config(&storage::open_with_paths(&paths)?, &config)?;
+            if changed && let Some(pairing) = &pairing {
+                pairing.regenerate(&paths, config.addresses)?;
+            }
+            Ok::<_, String>(())
+        })
+        .await
+        .map_err(|_| "Remote WebUI address task failed".to_owned())??;
+        drop(inner);
+        self.snapshot(&app).await
+    }
+
+    pub(crate) async fn set_public_base_url(
+        &self,
+        app: AppHandle,
+        public_base_url: &str,
+    ) -> Result<RemoteHostState, String> {
+        let public_base_url = normalize_public_base_url(public_base_url)?;
+        let state = self.snapshot(&app).await?;
+        let mut addresses = state.addresses;
+        addresses.retain(|address| address.id != "public");
+        if !public_base_url.is_empty()
+            && !addresses
+                .iter()
+                .any(|address| address.base_url == public_base_url)
+        {
+            addresses.push(RemoteAccessAddress {
+                id: "public".to_owned(),
+                name: String::new(),
+                base_url: public_base_url,
+            });
+        }
+        if addresses.is_empty() {
+            addresses.push(RemoteAccessAddress {
+                id: "lan".to_owned(),
+                name: String::new(),
+                base_url: format!("http://{}:{}", lan_ip(), state.port),
+            });
+        }
+        let entry_address_id = addresses
+            .iter()
+            .find(|address| address.id == state.entry_address_id)
+            .or_else(|| addresses.first())
+            .ok_or("Remote WebUI needs an access address")?
+            .id
+            .clone();
+        self.set_addresses(
+            app,
+            RemoteAccessConfig {
+                addresses,
+                entry_address_id,
+            },
+        )
+        .await
     }
 
     pub(crate) async fn revoke_device(
@@ -171,7 +298,7 @@ impl RemoteServerManager {
     ) -> Result<RemoteHostState, String> {
         let paths = HostPaths::from_app(app)?;
         let db = storage::open_with_paths(&paths)?;
-        let name = auth::normalize_device_name(Some(name));
+        let name = super::auth::normalize_device_name(Some(name));
         if !storage::rename_remote_device(&db, device_id, &name)? {
             return Err(format!(
                 "Remote device '{device_id}' was not found or already revoked"
@@ -180,66 +307,82 @@ impl RemoteServerManager {
         self.snapshot(app).await
     }
 
-    pub(crate) async fn set_public_base_url(
-        &self,
-        app: AppHandle,
-        public_base_url: &str,
-    ) -> Result<RemoteHostState, String> {
-        let paths = HostPaths::from_app(&app)?;
-        let mut config = storage::get_remote_host_config(&storage::open_with_paths(&paths)?)?;
-        config.public_base_url = normalize_public_base_url(public_base_url)?;
-        storage::set_remote_host_config(&storage::open_with_paths(&paths)?, &config)?;
-        self.snapshot(&app).await
-    }
-
     pub(crate) async fn snapshot(&self, app: &AppHandle) -> Result<RemoteHostState, String> {
         let paths = HostPaths::from_app(app)?;
-        let db = storage::open_with_paths(&paths)?;
-        let config = storage::get_remote_host_config(&db)?;
-        let _ = storage::delete_expired_remote_devices(&db, storage::now_ms());
-        let devices = storage::list_remote_devices(&db)?;
-        let mut inner = self.inner.lock().await;
-
-        if let Some(running) = inner.running.as_mut()
-            && running
-                .pairing
+        let inner = self.inner.lock().await;
+        let running = inner.running.as_ref().map(|server| {
+            (
+                server.port,
+                server.lan_base_url.clone(),
+                server.pairing.clone(),
+            )
+        });
+        let last_error = inner.last_error.clone();
+        drop(inner);
+        tokio::task::spawn_blocking(move || {
+            let db = storage::open_with_paths(&paths)?;
+            let host = storage::get_remote_host_config(&db)?;
+            let _ = storage::delete_expired_remote_devices(&db, storage::now_ms());
+            let devices = storage::list_remote_devices(&db)?;
+            let lan_base_url = running.as_ref().map_or_else(
+                || format!("http://{}:{}", lan_ip(), host.port),
+                |(_, lan, _)| lan.clone(),
+            );
+            let config = load_access_config(&paths, &lan_base_url)?;
+            let address_config_error = access::normalize_config(config.clone()).err();
+            let pairing = running
                 .as_ref()
-                .is_some_and(|pairing| pairing.expires_at_ms < storage::now_ms())
-        {
-            running.pairing = None;
-        }
-
-        let (running, port, base_url, pairing_url, pairing_expires_at_ms) =
-            match inner.running.as_ref() {
-                Some(server) => {
-                    let base_url =
-                        effective_base_url(&config.public_base_url, &server.lan_base_url);
-                    let pairing_url = server
-                        .pairing
+                .and_then(|(_, _, pairing)| pairing.snapshot());
+            // Resolve a secret's URL against its own snapshot, never against a concurrently edited URL.
+            let entry = pairing
+                .as_ref()
+                .and_then(|(_, info)| {
+                    info.addresses
+                        .iter()
+                        .find(|address| address.address.id == config.entry_address_id)
+                        .or_else(|| info.addresses.first())
+                        .map(|address| address.address.base_url.clone())
+                })
+                .or_else(|| {
+                    config
+                        .addresses
+                        .iter()
+                        .find(|address| address.id == config.entry_address_id)
+                        .and_then(|address| access::normalize_base_url(&address.base_url).ok())
+                });
+            let base_url = running
+                .as_ref()
+                .map(|_| effective_base_url(entry.as_deref().unwrap_or_default(), &lan_base_url));
+            let pairing_url = pairing
+                .as_ref()
+                .filter(|(_, info)| info.remaining_uses > 0)
+                .and_then(|(secret, _)| {
+                    base_url
                         .as_ref()
-                        .map(|pairing| format!("{}/?pair={}", base_url, pairing.secret));
-                    (
-                        true,
-                        server.port,
-                        Some(base_url),
-                        pairing_url,
-                        server.pairing.as_ref().map(|pairing| pairing.expires_at_ms),
-                    )
-                }
-                None => (false, config.port, None, None, None),
-            };
-
-        Ok(RemoteHostState {
-            enabled: config.enabled,
-            running,
-            port,
-            base_url,
-            public_base_url: config.public_base_url.clone(),
-            pairing_url,
-            pairing_expires_at_ms,
-            last_error: inner.last_error.clone(),
-            devices,
+                        .map(|base| format!("{base}/pair#pair={secret}"))
+                });
+            Ok(RemoteHostState {
+                enabled: host.enabled,
+                running: running.is_some(),
+                port: running.as_ref().map_or(host.port, |(port, _, _)| *port),
+                base_url,
+                public_base_url: host.public_base_url,
+                pairing_expires_at_ms: pairing.as_ref().map(|(_, info)| info.expires_at_ms),
+                pairing_remaining_uses: pairing.as_ref().map_or(0, |(_, info)| info.remaining_uses),
+                pairing_total_uses: pairing.as_ref().map_or_else(
+                    || access::pairing_addresses(&config).len(),
+                    |(_, info)| info.addresses.len(),
+                ),
+                pairing_url,
+                addresses: config.addresses,
+                entry_address_id: config.entry_address_id,
+                address_config_error,
+                last_error,
+                devices,
+            })
         })
+        .await
+        .map_err(|_| "Remote WebUI snapshot task failed".to_owned())?
     }
 
     pub(crate) async fn stop(&self) {
@@ -248,6 +391,8 @@ impl RemoteServerManager {
             return;
         };
         let _ = running.shutdown.send(true);
+        let pairing = running.pairing;
+        let _ = tokio::task::spawn_blocking(move || pairing.invalidate()).await;
         let mut task = running.task;
         if tokio::time::timeout(Duration::from_secs(3), &mut task)
             .await
@@ -260,15 +405,11 @@ impl RemoteServerManager {
     }
 
     async fn start(&self, app: AppHandle, port: u16) -> Result<(), String> {
-        {
-            let inner = self.inner.lock().await;
-            if inner.running.is_some() {
-                return Ok(());
-            }
+        let mut inner = self.inner.lock().await;
+        if inner.running.is_some() {
+            return Ok(());
         }
-
-        let bind_addr = SocketAddr::from(([0, 0, 0, 0], port));
-        let listener = tokio::net::TcpListener::bind(bind_addr)
+        let listener = tokio::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], port)))
             .await
             .map_err(|error| format!("failed to bind Remote WebUI on port {port}: {error}"))?;
         let actual_port = listener
@@ -277,38 +418,58 @@ impl RemoteServerManager {
             .port();
         let lan_base_url = format!("http://{}:{actual_port}", lan_ip());
         let paths = HostPaths::from_app(&app)?;
-        let pairing = auth::issue_pairing(&paths)?;
-        let active_pairing = ActivePairing {
-            secret: pairing.secret,
-            expires_at_ms: pairing.expires_at_ms,
-        };
+        let pairing = Arc::new(PairingSession::default());
+        let pairing_for_init = pairing.clone();
+        let paths_for_init = paths.clone();
+        let lan_for_init = lan_base_url.clone();
+        tokio::task::spawn_blocking(move || {
+            let config = load_access_config(&paths_for_init, &lan_for_init)?;
+            pairing_for_init.regenerate(&paths_for_init, access::pairing_addresses(&config))
+        })
+        .await
+        .map_err(|_| "Remote WebUI pairing task failed".to_owned())??;
         let (shutdown, shutdown_rx) = watch::channel(false);
         let (auth_generation, auth_generation_rx) = watch::channel(0_u64);
         let shutdown_for_task = shutdown.clone();
-        let router = api::router(app, paths, shutdown_rx, auth_generation_rx);
+        let router = api::router(app, paths, pairing.clone(), shutdown_rx, auth_generation_rx);
+        let pairing_for_expiry = pairing.clone();
         let task = tokio::spawn(async move {
-            let result = axum::serve(
-                listener,
-                router.into_make_service_with_connect_info::<SocketAddr>(),
-            )
-            .with_graceful_shutdown(async move {
-                let mut shutdown_rx = shutdown_for_task.subscribe();
-                if !*shutdown_rx.borrow() {
-                    let _ = shutdown_rx.changed().await;
+            let serve = async move {
+                axum::serve(
+                    listener,
+                    router.into_make_service_with_connect_info::<SocketAddr>(),
+                )
+                .with_graceful_shutdown(async move {
+                    let mut shutdown_rx = shutdown_for_task.subscribe();
+                    if !*shutdown_rx.borrow() {
+                        let _ = shutdown_rx.changed().await;
+                    }
+                })
+                .await
+            };
+            let expire = async move {
+                let mut expiry_tick = tokio::time::interval(Duration::from_secs(15));
+                loop {
+                    expiry_tick.tick().await;
+                    let pairing = pairing_for_expiry.clone();
+                    let _ = tokio::task::spawn_blocking(move || pairing.expire()).await;
                 }
-            })
-            .await;
-            if let Err(error) = result {
-                log::error!(target: "remote-webui", "Remote WebUI server stopped: {error}");
+            };
+            // Keep serving while cleanup waits for the batch lock; neither future outlives this task.
+            tokio::select! {
+                result = serve => {
+                    if let Err(error) = result {
+                        log::error!(target: "remote-webui", "Remote WebUI server stopped: {error}");
+                    }
+                }
+                _ = expire => {}
             }
         });
-
-        let mut inner = self.inner.lock().await;
         inner.last_error = None;
         inner.running = Some(RunningRemoteServer {
             port: actual_port,
             lan_base_url,
-            pairing: Some(active_pairing),
+            pairing,
             shutdown,
             auth_generation,
             task,
@@ -318,16 +479,17 @@ impl RemoteServerManager {
     }
 }
 
-fn inner_running_port(inner: &RemoteServerInner) -> Option<u16> {
-    inner.running.as_ref().map(|server| server.port)
+fn load_access_config(paths: &HostPaths, lan_base_url: &str) -> Result<RemoteAccessConfig, String> {
+    let db = storage::open_with_paths(paths)?;
+    let host = storage::get_remote_host_config(&db)?;
+    Ok(storage::get_remote_access_config(&db)?
+        .unwrap_or_else(|| access::default_config(lan_base_url, &host.public_base_url)))
 }
 
-/// 去掉首尾空白与结尾斜杠;空串表示未配置。
 fn trim_base_url(input: &str) -> &str {
     input.trim().trim_end_matches('/')
 }
 
-/// 优先用用户配置的外部访问地址(内网穿透域名),否则回退到局域网地址。
 fn effective_base_url(public_base_url: &str, lan_base_url: &str) -> String {
     let configured = trim_base_url(public_base_url);
     if configured.is_empty() {
@@ -337,16 +499,13 @@ fn effective_base_url(public_base_url: &str, lan_base_url: &str) -> String {
     }
 }
 
-/// 空字符串表示清除配置;否则必须是 http(s) URL。
 fn normalize_public_base_url(input: &str) -> Result<String, String> {
     let trimmed = trim_base_url(input);
     if trimmed.is_empty() {
-        return Ok(String::new());
+        Ok(String::new())
+    } else {
+        access::normalize_base_url(trimmed)
     }
-    if !trimmed.starts_with("http://") && !trimmed.starts_with("https://") {
-        return Err("Public access URL must start with http:// or https://".to_owned());
-    }
-    Ok(trimmed.to_owned())
 }
 
 fn lan_ip() -> IpAddr {

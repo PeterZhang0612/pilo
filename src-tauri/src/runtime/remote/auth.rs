@@ -6,16 +6,16 @@ use crate::{
     runtime::{host_paths::HostPaths, storage},
 };
 
-const PAIRING_TTL_MS: u64 = 5 * 60 * 1_000;
+const PAIRING_TTL_MS: u64 = 10 * 60 * 1_000;
 const DEVICE_TOKEN_TTL_MS: u64 = 30 * 24 * 60 * 60 * 1_000;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub(crate) struct PairingSecret {
     pub secret: String,
     pub expires_at_ms: u64,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub(crate) struct PairedDevice {
     pub device: RemoteDevice,
     pub token: String,
@@ -57,21 +57,11 @@ pub(crate) fn issue_pairing(paths: &HostPaths) -> Result<PairingSecret, String> 
     })
 }
 
-pub(crate) fn exchange_pairing(
-    paths: &HostPaths,
-    secret: &str,
+pub(crate) fn create_device(
     device_name: Option<&str>,
     pair_ip: &str,
-) -> Result<Option<PairedDevice>, String> {
-    if secret.len() < 32 || secret.len() > 128 {
-        return Ok(None);
-    }
+) -> Result<PairedDevice, String> {
     let now_ms = storage::now_ms();
-    let mut db = storage::open_with_paths(paths)?;
-    if !storage::consume_remote_pairing(&mut db, &hash_credential(secret), now_ms)? {
-        return Ok(None);
-    }
-
     let token = random_secret(32)?;
     let device = RemoteDevice {
         id: random_secret(16)?,
@@ -82,8 +72,7 @@ pub(crate) fn exchange_pairing(
         expires_at_ms: now_ms.saturating_add(DEVICE_TOKEN_TTL_MS),
         revoked_at_ms: None,
     };
-    storage::insert_remote_device(&db, &device, &hash_credential(&token))?;
-    Ok(Some(PairedDevice { device, token }))
+    Ok(PairedDevice { device, token })
 }
 
 pub(crate) fn authenticate(paths: &HostPaths, token: &str) -> Result<Option<RemoteDevice>, String> {

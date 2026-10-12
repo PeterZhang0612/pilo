@@ -10,12 +10,23 @@ export type RemoteDevice = {
 	revokedAtMs: number | null;
 };
 
+export type RemoteAccessAddress = {
+	id: string;
+	name: string;
+	baseUrl: string;
+};
+
 export type RemoteHostState = {
 	enabled: boolean;
 	running: boolean;
 	port: number;
 	baseUrl: string | null;
 	publicBaseUrl: string;
+	addresses: RemoteAccessAddress[];
+	entryAddressId: string;
+	addressConfigError: string | null;
+	pairingRemainingUses: number;
+	pairingTotalUses: number;
 	pairingUrl: string | null;
 	pairingExpiresAtMs: number | null;
 	lastError: string | null;
@@ -39,6 +50,16 @@ export function setRemotePublicBaseUrl(
 ): Promise<RemoteHostState> {
 	return invoke<RemoteHostState>("remote_set_public_base_url", {
 		publicBaseUrl,
+	});
+}
+
+export function setRemoteAddresses(
+	addresses: RemoteAccessAddress[],
+	entryAddressId: string,
+): Promise<RemoteHostState> {
+	return invoke<RemoteHostState>("remote_set_addresses", {
+		addresses,
+		entryAddressId,
 	});
 }
 

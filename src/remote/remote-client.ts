@@ -1,4 +1,5 @@
 import { describeDevice } from "@/lib/device-name";
+import type { RemoteAccessAddress } from "@/lib/remote";
 import type { ChatSessionRuntimeState } from "@/lib/chat-session-client";
 import type {
 	PiloClientBootstrap,
@@ -33,20 +34,113 @@ async function decodeError(response: Response) {
 	}
 }
 
-export async function pairRemote(secret: string) {
-	const response = await fetch("/api/v1/auth/pair", {
+export type RemotePairingAddress = RemoteAccessAddress & { issued: boolean };
+
+export type RemotePairingInfo = {
+	addresses: RemotePairingAddress[];
+	expiresAtMs: number;
+	remainingUses: number;
+};
+
+export class RemotePairingError extends Error {
+	constructor(
+		public readonly status: number,
+		message: string,
+	) {
+		super(message);
+		this.name = "RemotePairingError";
+	}
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+async function pairingRequest(path: string, body: object): Promise<unknown> {
+	const response = await fetch(path, {
 		method: "POST",
+		cache: "no-store",
 		headers: { "content-type": "application/json" },
-		body: JSON.stringify({
-			secret,
-			deviceName: describeDevice(navigator.userAgent),
-		}),
+		body: JSON.stringify(body),
 	});
-	if (!response.ok) throw new Error(await decodeError(response));
-	return (await response.json()) as {
-		token: string;
-		device: { id: string; name: string; expiresAtMs: number };
+	if (!response.ok)
+		throw new RemotePairingError(response.status, await decodeError(response));
+	return response.json();
+}
+
+export async function getRemotePairingInfo(
+	secret: string,
+): Promise<RemotePairingInfo> {
+	const value = await pairingRequest("/api/v1/auth/pairing", { secret });
+	if (
+		!isRecord(value) ||
+		!Array.isArray(value.addresses) ||
+		typeof value.expiresAtMs !== "number" ||
+		!Number.isSafeInteger(value.expiresAtMs) ||
+		typeof value.remainingUses !== "number" ||
+		!Number.isSafeInteger(value.remainingUses)
+	)
+		throw new Error("REMOTE_PAIRING_INVALID_RESPONSE");
+	const addresses = value.addresses.map(
+		(address: unknown): RemotePairingAddress => {
+			if (
+				!isRecord(address) ||
+				typeof address.id !== "string" ||
+				!/^[a-zA-Z0-9-]{1,80}$/.test(address.id) ||
+				typeof address.name !== "string" ||
+				typeof address.baseUrl !== "string" ||
+				typeof address.issued !== "boolean"
+			)
+				throw new Error("REMOTE_PAIRING_INVALID_RESPONSE");
+			const url = new URL(address.baseUrl);
+			if (!/^https?:$/.test(url.protocol) || url.origin !== address.baseUrl)
+				throw new Error("REMOTE_PAIRING_INVALID_RESPONSE");
+			return {
+				id: address.id,
+				name: address.name,
+				baseUrl: address.baseUrl,
+				issued: address.issued,
+			};
+		},
+	);
+	if (
+		!addresses.length ||
+		addresses.length > 32 ||
+		value.remainingUses < 0 ||
+		value.remainingUses > addresses.length ||
+		new Set(addresses.map((address) => address.id)).size !== addresses.length
+	)
+		throw new Error("REMOTE_PAIRING_INVALID_RESPONSE");
+	return {
+		addresses,
+		expiresAtMs: value.expiresAtMs,
+		remainingUses: value.remainingUses,
 	};
+}
+
+export async function pairRemote(
+	secret: string,
+	addressId: string,
+	requestId: string,
+) {
+	const value = await pairingRequest("/api/v1/auth/pair", {
+		secret,
+		addressId,
+		requestId,
+		deviceName: describeDevice(navigator.userAgent),
+	});
+	if (
+		!isRecord(value) ||
+		typeof value.token !== "string" ||
+		!/^[a-zA-Z0-9_-]{43}$/.test(value.token) ||
+		!isRecord(value.device) ||
+		typeof value.device.id !== "string" ||
+		typeof value.device.expiresAtMs !== "number" ||
+		!Number.isSafeInteger(value.device.expiresAtMs) ||
+		value.device.expiresAtMs <= Date.now()
+	)
+		throw new Error("REMOTE_PAIRING_INVALID_RESPONSE");
+	return { token: value.token, expiresAtMs: value.device.expiresAtMs };
 }
 
 export async function remoteFetch<T>(
@@ -61,7 +155,9 @@ export async function remoteFetch<T>(
 	}
 	const response = await fetch(path, { ...init, headers });
 	if (response.status === 401) {
-		window.localStorage.removeItem(REMOTE_TOKEN_KEY);
+		if (window.localStorage.getItem(REMOTE_TOKEN_KEY) === token) {
+			window.localStorage.removeItem(REMOTE_TOKEN_KEY);
+		}
 		throw new Error("REMOTE_AUTH_EXPIRED");
 	}
 	if (!response.ok) throw new Error(await decodeError(response));
@@ -77,7 +173,9 @@ async function remoteFetchBytes(
 		headers: { authorization: `Bearer ${token}` },
 	});
 	if (response.status === 401) {
-		window.localStorage.removeItem(REMOTE_TOKEN_KEY);
+		if (window.localStorage.getItem(REMOTE_TOKEN_KEY) === token) {
+			window.localStorage.removeItem(REMOTE_TOKEN_KEY);
+		}
 		throw new Error("REMOTE_AUTH_EXPIRED");
 	}
 	if (!response.ok) throw new Error(await decodeError(response));

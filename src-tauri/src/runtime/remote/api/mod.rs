@@ -10,7 +10,7 @@ use axum::{
     body::Body,
     extract::{DefaultBodyLimit, State},
     http::{StatusCode, Uri, header},
-    middleware::from_fn_with_state,
+    middleware::{from_fn, from_fn_with_state},
     response::{IntoResponse, Response},
     routing::{get, post},
 };
@@ -23,6 +23,8 @@ use crate::{
     domain::{Project, RemoteDevice},
     runtime::{host_paths::HostPaths, storage},
 };
+
+use super::pairing::PairingSession;
 
 mod handlers;
 mod middleware;
@@ -37,6 +39,7 @@ const AUTH_FAILURE_LIMIT: usize = 5;
 pub(crate) struct RemoteHttpState {
     app: AppHandle,
     paths: HostPaths,
+    pairing: Arc<PairingSession>,
     rate_limiter: Arc<AuthRateLimiter>,
     shutdown: watch::Receiver<bool>,
     auth_generation: watch::Receiver<u64>,
@@ -99,12 +102,14 @@ struct AuthSession {
 pub(crate) fn router(
     app: AppHandle,
     paths: HostPaths,
+    pairing: Arc<PairingSession>,
     shutdown: watch::Receiver<bool>,
     auth_generation: watch::Receiver<u64>,
 ) -> Router {
     let state = RemoteHttpState {
         app,
         paths,
+        pairing,
         rate_limiter: Arc::new(AuthRateLimiter::default()),
         shutdown,
         auth_generation,
@@ -136,9 +141,14 @@ pub(crate) fn router(
         .route("/api/v1/events", get(ws::events))
         .route_layer(from_fn_with_state(state.clone(), middleware::require_auth));
 
+    let pairing = Router::new()
+        .route("/api/v1/auth/pairing", post(middleware::pairing_info))
+        .route("/api/v1/auth/pair", post(middleware::pair))
+        .route_layer(from_fn(middleware::pairing_no_store));
+
     Router::new()
         .route("/api/v1/health", get(health))
-        .route("/api/v1/auth/pair", post(middleware::pair))
+        .merge(pairing)
         .merge(protected)
         .fallback(asset)
         .layer(DefaultBodyLimit::max(MAX_REQUEST_BYTES))

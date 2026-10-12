@@ -11,5 +11,7 @@ pub use project::{
     DiscoveredProject, Project, ProjectMetadata, ProjectModelCache, ProjectModelScope,
     ProjectScopedModel,
 };
-pub use remote::{RemoteDevice, RemoteHostConfig, random_remote_port};
+pub use remote::{
+    RemoteAccessAddress, RemoteAccessConfig, RemoteDevice, RemoteHostConfig, random_remote_port,
+};
 pub use session::{SessionIndexEntry, SessionReconcileResult, SessionUiStateUpdate};

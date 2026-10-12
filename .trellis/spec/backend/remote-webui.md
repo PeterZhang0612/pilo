@@ -28,21 +28,32 @@ Parsed in `runtime/commands/remote.rs`; registered in `lib.rs`:
 ```rust
 remote_host_state()                       -> RemoteHostState
 remote_set_enabled(enabled: bool)         -> RemoteHostState
+remote_set_port(port: u16)                -> RemoteHostState
+remote_set_public_base_url(publicBaseUrl: String) -> RemoteHostState // compatibility
+remote_set_addresses(addresses: Vec<RemoteAccessAddress>, entryAddressId: String) -> RemoteHostState
 remote_pairing_regenerate()               -> RemoteHostState
 remote_device_revoke(deviceId: String)    -> RemoteHostState
 remote_device_rename(deviceId: String, name: String) -> RemoteHostState
 ```
 
-`RemoteHostState` (`camelCase`): `enabled`, `running`, `port`, `baseUrl?`,
-`pairingUrl?`, `pairingExpiresAtMs?`, `lastError?`, `devices[]`.
+`RemoteAccessAddress` (`camelCase`): `{ id: string, name: string, baseUrl: string }`.
+`name` may be empty. `RemoteAccessConfig`: `{ addresses, entryAddressId }`.
 
-### HTTP routes (`runtime/remote/api.rs`)
+`RemoteHostState` (`camelCase`): `enabled`, `running`, `port`, `baseUrl?`,
+`publicBaseUrl`, `addresses[]`, `entryAddressId`, `addressConfigError?`,
+`pairingUrl?`, `pairingExpiresAtMs?`, `pairingRemainingUses`, `pairingTotalUses`,
+`lastError?`, `devices[]`. Desktop alone receives the active pairing URL.
+
+### HTTP routes (`runtime/remote/api/mod.rs`)
 
 Public:
 
 ```text
 GET  /api/v1/health          -> { ok, service }
-POST /api/v1/auth/pair       -> { token, device }        body: { secret, deviceName? }
+POST /api/v1/auth/pairing    -> { addresses: [{ id, name, baseUrl, issued }], expiresAtMs, remainingUses }
+                              body: { secret }
+POST /api/v1/auth/pair       -> { token, device }
+                              body: { secret, addressId, requestId, deviceName? }
 ```
 
 Authenticated (`require_auth` middleware):
@@ -75,7 +86,7 @@ GET  /api/v1/events          -> WebSocket upgrade
 ### Storage (`runtime/storage/remote.rs`)
 
 ```text
-remote_host_config(id=1, enabled, port)
+remote_host_config(id=1, enabled, port, public_base_url, addresses_json NULL, entry_address_id)
 remote_pairing(id=1, secret_hash, expires_at_ms, consumed_at_ms)
 remote_devices(id, name, pair_ip, token_hash, created_at_ms, last_seen_at_ms, expires_at_ms, revoked_at_ms)
 ```
@@ -86,14 +97,74 @@ remote_devices(id, name, pair_ip, token_hash, created_at_ms, last_seen_at_ms, ex
 
 - **Secrets**: pairing secret and device token are 32 random bytes, URL-safe
   base64. Only SHA-256 hashes are persisted. Plaintext never reaches the DB or logs.
-- **Pairing TTL**: 5 minutes, single-use (`consumed_at_ms` set on success).
-  A successful pair rotates the link (`regenerate_pairing`).
+- **Address configuration**: 1–32 distinct normalized HTTP(S) origins, root
+  URLs only; reject credentials, query, fragment and subpath mounts. IDs are
+  unique ASCII alphanumeric/hyphen strings (1–80 bytes); optional names are
+  trimmed and bounded to 80 characters. Entry ID must exist in the list.
+  Guarded additive columns keep `RemoteHostConfig` / `RemoteDevice` unchanged.
+  `addresses_json IS NULL` projects runtime LAN plus the legacy public address,
+  deduplicates origins and defaults entry to LAN. Once saved, the explicit list
+  is authoritative. Invalid legacy URLs remain editable with an error but are
+  excluded from pairing targets. Editing targets invalidates the old batch and
+  generates a new one without clearing devices; name/entry edits do not rotate
+  or extend TTL. The legacy command edits only the `public` entry.
+- **Port edits**: `remote_set_port` follows a saved `lan` entry only when its
+  URL exactly matches the previous runtime LAN URL (or the current LAN IP with
+  the old port while stopped). Custom URLs and proxy entries stay unchanged.
+  Validate the resulting list before stopping; a duplicate origin rejects the
+  change. Persist the port, updated LAN URL and the existing device-clearing
+  policy in one transaction, then restart so links use the new target.
+- **Pairing TTL / quota**: 10 minutes absolute with a fixed address snapshot and
+  one slot per origin. `PairingSession` in `remote/pairing.rs` owns serialized
+  exchange and in-memory receipts; `remote/access.rs` owns URL normalization.
+  Opening `/pair` or POSTing `/auth/pairing` validates the secret but consumes
+  nothing, reveals no secret/token and does not mount chat connection hooks.
+  No per-device automatic rotation. Exhaustion sets `consumed_at_ms` and hides
+  the desktop QR; descriptions and original-proof retries remain available
+  within the original TTL, but no new authorization can be issued.
+- **Atomic / idempotent exchange**: `requestId` is a 32-byte CSPRNG proof encoded
+  as 64 hex characters, stored in target-origin `sessionStorage` before POST.
+  Never use `utils.randomId` / its `Math.random` fallback for this proof.
+  The batch mutex covers an immediate SQLite transaction, device insertion,
+  exhaustion update and receipt recording, all inside `spawn_blocking` with no
+  await between commit and receipt. TTL is checked after acquiring the SQLite
+  transaction lock, not against an earlier device creation timestamp. Failures
+  roll back without losing slots. Matching secret/address/proof returns the
+  same original token only while the device is valid; another proof gets 409.
+  Retries do not create records or extend device expiry.
+- **Pairing invalidation / ownership**: restart, stop and manual regeneration
+  discard receipts and plaintext secrets, never valid device tokens. Receipts
+  are bounded by address count, process-local and never Debug/logged/persisted.
+  Every operation enforces TTL; a listener-owned 15 s tick also clears expired
+  idle receipts. Manager serializes configuration/regeneration using its Tokio
+  mutex while awaiting blocking work; HTTP only takes the batch mutex, never
+  the manager mutex. Snapshot clones running references before blocking work.
+- **Browser pairing lifecycle**: new links use `/pair#pair=<secret>`; selection
+  links use `/pair/complete#pair=<secret>&address=<id>&entry=<entryId>`. A single
+  parser accepts fragment and legacy query links, saves temporary context to
+  sessionStorage and immediately replaces the URL with a clean pairing path.
+  Expiry, request proof and entry ID are temporary, never stored in localStorage.
+  Target pages validate origin against server metadata, reuse a valid local token
+  or explicitly exchange, then save the token origin-locally. Ordinary links
+  `/` and return links `/pair` have no credentials. The same-tab selection page
+  resumes from its own origin storage; closing the tab need not resume pairing.
+  Foreground/retry revalidates; expiry/401 clears temporary context. `issued`
+  means server issuance, not proof another origin persisted the token.
+  Do not introduce popup batches, cross-origin fetch/iframes or arbitrary
+  fragment return URLs. Fragment is not a substitute for HTTPS.
+- **Pairing cache boundary**: both auth POST routes apply `Cache-Control:
+  no-store`, including rate-limit and JSON rejection responses. No pairing
+  response, full pairing URL or token may enter the PWA cache.
 - **Device token TTL**: 30 days absolute. Revoked or expired tokens fail auth
   immediately; live WebSockets re-check every 15 s and on `auth_generation` change.
+  Each newly paired origin gets an independent device record/token, individually
+  revocable but not strictly origin-bound. Existing valid tokens survive address
+  migration and restart; the pre-existing port-change clearing policy is separate.
 - **Device identity**: `deviceName` is an optional, client-supplied label. The
   Remote WebUI sends `describeDevice(navigator.userAgent)`
   (`src/lib/device-name.ts`) — `机型/系统 · 浏览器` — because a raw UA is
-  unreadable in the device list. `pair_ip` is the pairing request's peer IP from
+  unreadable in the device list. New labels append the pairing address name/URL,
+  using bounded portions (40 device-name + 36 address characters). `pair_ip` is the pairing request's peer IP from
   `ConnectInfo<SocketAddr>`, not client-supplied.
 - **Device rename**: `remote_device_rename` reuses `auth::normalize_device_name`,
   so the same 80-char bound applies. Renaming requires the device to exist and
@@ -103,6 +174,11 @@ remote_devices(id, name, pair_ip, token_hash, created_at_ms, last_seen_at_ms, ex
   60 s). Device tokens are 32 random bytes looked up by SHA-256 hash, so they are
   **not** rate-limited — blocking them turned the `401` a client needs to drop a
   stale token into an unrecoverable `429` lockout (and also gated `/auth/pair`).
+- **Stale auth responses**: HTTP JSON/image helpers clear localStorage on 401
+  only if its token still equals the token sent by that request. Pairing pages
+  do not clear it again; the workspace error handler adopts the current stored
+  token instead of discarding a newer authorization. Effect cancellation alone
+  cannot prevent a late response from deleting credentials.
 - **RPC allowlist**: only chat-mutating/querying commands are forwarded (see
   `ALLOWED` in `api.rs`). No generic command proxy; Terminal/Files/Git are not exposed.
 - **`@` mentions**: `GET /api/v1/files/search` is the only Files surface. It
@@ -152,6 +228,11 @@ remote_devices(id, name, pair_ip, token_hash, created_at_ms, last_seen_at_ms, ex
 | Missing/invalid Bearer or `pilo-token`      | `401 authentication required`                   |
 | Unknown/expired/revoked token               | `401 invalid or expired device token`           |
 | Invalid or expired pairing secret           | `401 invalid or expired pairing link`           |
+| Unknown pairing address / malformed proof   | `400` (missing old-client fields fail explicitly) |
+| Slot claimed with a different request proof | `409 pairing address already used`              |
+| Original receipt's device revoked/expired   | `401`; receipt cannot restore authorization     |
+| SQLite insert/commit fails                  | `500`; no receipt or quota consumed             |
+| Invalid access config / duplicate origin    | desktop command error; keep draft for correction |
 | Too many pairing failures from one IP       | `429 too many authentication attempts`          |
 | Device token revoked while WS open          | socket closed; client must re-probe for `401`   |
 | RPC `type` not in allowlist                 | `400 chat command '<type>' is not available…`   |
@@ -168,7 +249,14 @@ remote_devices(id, name, pair_ip, token_hash, created_at_ms, last_seen_at_ms, ex
 
 - **Good**: Desktop + two Web clients observe the same session; each subscriber
   gets ordered identical sequences; a brief disconnect replays from `after`.
+- **Good pairing**: scan once → selection (zero consumption) → manually open
+  three origins → three independent tokens; plain bookmarks subsequently work.
+  Lost response + the original proof returns exactly the original authorization.
 - **Base**: Remote disabled → no listener, no port, Desktop path unchanged.
+- **Bad pairing**: an unreachable target is not authenticated. Retry before TTL
+  or obtain a fresh scan after expiry. Another proof cannot retrieve an issued
+  token; regeneration/restart rejects all previous-batch requests, while valid
+  device tokens remain usable.
 - **Bad**: A Web client that stops reading must **not** stall Pi streaming; it is
   dropped to `resyncRequired` after the broadcast buffer fills.
 
@@ -178,9 +266,11 @@ remote_devices(id, name, pair_ip, token_hash, created_at_ms, last_seen_at_ms, ex
 
 Assertion points (inline `#[cfg(test)] mod tests`):
 
-- `storage/remote.rs`: config round-trip; pairing is one-time + expires;
-  authenticate rejects revoked and expired devices; `pair_ip` round-trips and
-  `rename_remote_device` updates only existing, non-revoked devices.
+Existing assertions (not changed for multi-address pairing):
+
+- `storage/remote.rs`: legacy config round-trip; test-only one-time consume helper
+  expires; authenticate rejects revoked and expired devices; `pair_ip` round-trips
+  and `rename_remote_device` updates only existing, non-revoked devices.
 - `remote/auth.rs`: hashes are 64-char hex and never equal the plaintext;
   device names are bounded to 81 chars with `…`.
 - `remote/api.rs`: `validate_remote_rpc` rejects `terminal_write`/`fs_read_file`
@@ -189,6 +279,27 @@ Assertion points (inline `#[cfg(test)] mod tests`):
 - `runtime/events.rs`: web subscribers share one ordered stream with matching
   sequences; `replay_after` reports a gap only after the buffer has evicted
   `seq + 1`; replay slice after eviction returns exactly the latest event.
+
+---
+
+Additional multi-address assertion points, pending explicit test authorization
+(no new tests added or run during this implementation):
+
+- Config NULL migration, explicit list persistence, duplicate-origin rejection,
+  invalid legacy URL correction and entry/name edits retaining the batch TTL.
+- Saved default LAN entry follows listener port edits; custom/proxy URLs stay
+  unchanged; duplicate target rejection precedes stop; port/address writes roll
+  back together on failure. Device clearing on port edits remains unchanged.
+- Late 401 from an old token after successful pairing preserves the new token
+  for JSON and image requests and through workspace error handling.
+- Concurrent same-proof exchange returns one device; different proofs cannot
+  retrieve its token; DB failures roll back; TTL checked after DB lock waits.
+- Last slot blocks new issuance but allows original-proof retries until expiry;
+  revoke/regenerate/stop/restart cannot restore old receipt authorization.
+- `/pair` makes no exchange or chat connection, StrictMode retries use one proof,
+  blocked storage fails before issuance, URLs/return/bookmarks contain no token.
+- Windows desktop and actual mobile browsers: single QR entry switching,
+  cross-origin same-tab return, offline recovery, HTTPS→HTTP top-level navigation.
 
 ---
 
@@ -223,6 +334,26 @@ if sequence > 0
 #[allow(clippy::too_many_arguments)] // flat IPC argument surface
 pub async fn chat_session_start(/* … 8 params … */) { … }
 ```
+
+---
+
+#### Wrong: consuming before persisting a device
+
+```rust
+consume_remote_pairing(&mut db, hash, now)?;
+insert_remote_device(&db, &device, token_hash)?; // failure loses authorization
+```
+
+#### Correct: atomic issuance and proof-gated receipts
+
+```text
+batch mutex → immediate transaction → validate hash/TTL/unconsumed
+→ insert device + mark exhausted if last slot → commit
+→ record original token + request proof hash before any await
+retry → verify original proof AND unrevoked/unexpired device → same response
+```
+
+Do not return a receipt based on only the reusable secret + address ID.
 
 ---
 

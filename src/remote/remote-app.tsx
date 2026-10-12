@@ -23,7 +23,9 @@ import {
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
 import { connectionLabel } from "@/lib/projects";
 import type { PiloClientEventMessage } from "@/lib/pilo-client";
-import { Spinner, TooltipProvider } from "@/ui";
+import { TooltipProvider } from "@/ui";
+import { RemotePairingPage } from "./remote-pairing-page";
+import { isRemotePairingLocation } from "./remote-pairing-model";
 import { useMediaQuery } from "./remote-app-model";
 import { remoteConnectionLabelKey } from "./remote-connection-state";
 import { RemoteConnectionNotice } from "./remote-connection-notice";
@@ -36,11 +38,15 @@ import { useRemotePwa } from "./use-remote-pwa";
 import { useRemoteSessions } from "./use-remote-sessions";
 
 export function RemoteApp() {
-	const { t } = useTranslation();
-	const pairingSecret = useMemo(
-		() => new URLSearchParams(window.location.search).get("pair"),
-		[],
+	return isRemotePairingLocation() ? (
+		<RemotePairingPage />
+	) : (
+		<RemoteWorkspace />
 	);
+}
+
+function RemoteWorkspace() {
+	const { t } = useTranslation();
 	const socketHandlerRef = useRef<(message: PiloClientEventMessage) => void>(
 		() => {},
 	);
@@ -49,7 +55,6 @@ export function RemoteApp() {
 	const { updateAvailable, applyUpdate } = useRemotePwa();
 
 	const connection = useRemoteConnection({
-		pairingSecret,
 		browserOnline,
 		recoveryGeneration,
 		onSocketMessageRef: socketHandlerRef,
@@ -134,14 +139,13 @@ export function RemoteApp() {
 		fatalError,
 		setFatalError,
 		token,
-		pairing,
 	} = connection;
 	const active = chat.conversation.active !== null;
 	const updateBlocked =
 		active || chat.sending || chat.compacting || chat.retryState !== null;
 
 	useEffect(() => {
-		if (!token || pairing || updateBlocked || !updateAvailable) return;
+		if (!token || updateBlocked || !updateAvailable) return;
 		const toastId = toast.info(t("settings.remoteUpdateAvailable"), {
 			description: t("settings.remoteUpdateDescription"),
 			duration: Infinity,
@@ -154,15 +158,7 @@ export function RemoteApp() {
 		return () => {
 			toast.dismiss(toastId);
 		};
-	}, [
-		applyUpdate,
-		isNarrow,
-		pairing,
-		t,
-		token,
-		updateAvailable,
-		updateBlocked,
-	]);
+	}, [applyUpdate, isNarrow, t, token, updateAvailable, updateBlocked]);
 
 	const envs = useMemo(() => {
 		const byId = new Map<string, { id: string; name: string }>();
@@ -270,16 +266,6 @@ export function RemoteApp() {
 			startDraft,
 		],
 	);
-
-	if (pairing) {
-		return (
-			<div className="flex min-h-[var(--remote-viewport-height,100dvh)] items-center justify-center bg-background p-6">
-				<div className="flex items-center gap-2 text-sm text-muted-foreground">
-					<Spinner className="size-4" /> {t("settings.remoteConnecting")}
-				</div>
-			</div>
-		);
-	}
 
 	if (!token) {
 		return (

@@ -1,6 +1,6 @@
 use rusqlite::{Connection as SqliteConnection, OptionalExtension, TransactionBehavior, params};
 
-use crate::domain::{RemoteDevice, RemoteHostConfig, random_remote_port};
+use crate::domain::{RemoteAccessConfig, RemoteDevice, RemoteHostConfig, random_remote_port};
 
 fn as_i64(value: u64, field: &str) -> Result<i64, String> {
     i64::try_from(value).map_err(|_| format!("{field} is out of SQLite integer range"))
@@ -46,6 +46,47 @@ pub(crate) fn set_remote_host_config(
     Ok(())
 }
 
+pub(crate) fn get_remote_access_config(
+    db: &SqliteConnection,
+) -> Result<Option<RemoteAccessConfig>, String> {
+    let row = db
+        .query_row(
+            "SELECT addresses_json,entry_address_id FROM remote_host_config WHERE id=1",
+            [],
+            |row| Ok((row.get::<_, Option<String>>(0)?, row.get::<_, String>(1)?)),
+        )
+        .optional()
+        .map_err(|error| format!("failed to read Remote WebUI addresses: {error}"))?;
+    let Some((Some(json), entry_address_id)) = row else {
+        return Ok(None);
+    };
+    let addresses = serde_json::from_str(&json)
+        .map_err(|error| format!("failed to decode Remote WebUI addresses: {error}"))?;
+    Ok(Some(RemoteAccessConfig {
+        addresses,
+        entry_address_id,
+    }))
+}
+
+pub(crate) fn set_remote_access_config(
+    db: &SqliteConnection,
+    config: &RemoteAccessConfig,
+) -> Result<(), String> {
+    let json = serde_json::to_string(&config.addresses)
+        .map_err(|error| format!("failed to encode Remote WebUI addresses: {error}"))?;
+    let public_base_url = config
+        .addresses
+        .iter()
+        .find(|address| address.id == "public")
+        .map_or("", |address| address.base_url.as_str());
+    db.execute(
+        "UPDATE remote_host_config SET addresses_json=?1,entry_address_id=?2,public_base_url=?3 WHERE id=1",
+        params![json, config.entry_address_id, public_base_url],
+    )
+    .map_err(|error| format!("failed to save Remote WebUI addresses: {error}"))?;
+    Ok(())
+}
+
 pub(crate) fn replace_remote_pairing(
     db: &SqliteConnection,
     secret_hash: &str,
@@ -70,6 +111,7 @@ pub(crate) fn clear_remote_pairing(db: &SqliteConnection) -> Result<(), String> 
     Ok(())
 }
 
+#[cfg(test)]
 pub(crate) fn consume_remote_pairing(
     db: &mut SqliteConnection,
     secret_hash: &str,
@@ -132,6 +174,44 @@ pub(crate) fn insert_remote_device(
     )
     .map_err(|error| format!("failed to persist Remote WebUI device: {error}"))?;
     Ok(())
+}
+
+pub(crate) fn insert_remote_pairing_device(
+    db: &mut SqliteConnection,
+    secret_hash: &str,
+    device: &RemoteDevice,
+    token_hash: &str,
+    exhausted: bool,
+) -> Result<bool, String> {
+    let transaction = db
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|error| format!("failed to lock Remote WebUI pairing state: {error}"))?;
+    // A transaction may wait for the database lock; validate TTL after acquiring it.
+    let now_ms = super::now_ms();
+    let valid = transaction
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM remote_pairing WHERE id=1 AND secret_hash=?1
+             AND expires_at_ms>?2 AND consumed_at_ms IS NULL)",
+            params![secret_hash, as_i64(now_ms, "pairing time")?],
+            |row| row.get::<_, bool>(0),
+        )
+        .map_err(|error| format!("failed to validate Remote WebUI pairing: {error}"))?;
+    if !valid {
+        return Ok(false);
+    }
+    insert_remote_device(&transaction, device, token_hash)?;
+    if exhausted {
+        transaction
+            .execute(
+                "UPDATE remote_pairing SET consumed_at_ms=?1 WHERE id=1",
+                params![as_i64(now_ms, "pairing consume time")?],
+            )
+            .map_err(|error| format!("failed to complete Remote WebUI pairing: {error}"))?;
+    }
+    transaction
+        .commit()
+        .map_err(|error| format!("failed to commit Remote WebUI pairing: {error}"))?;
+    Ok(true)
 }
 
 pub(crate) fn rename_remote_device(

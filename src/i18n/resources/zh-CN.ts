@@ -96,7 +96,7 @@ const zhCN = {
 		sessionNaming: "会话命名",
 		remote: "远程",
 		remoteWebUi: "远程访问",
-		remoteDescription: "在同一局域网内用手机等其他设备访问 Pilo 的对话。",
+		remoteDescription: "通过局域网、外网或组网地址，用其他设备访问 Pilo。",
 		remoteLoading: "正在加载远程访问…",
 		remoteRunning: "运行中",
 		remoteStopped: "已关闭",
@@ -116,7 +116,7 @@ const zhCN = {
 		remoteError: "远程访问出错",
 		remoteActionFailed: "远程访问操作失败",
 		remotePairing: "连接设备",
-		remotePairingHint: "一次性链接 · 5 分钟",
+		remotePairingHint: "多地址配对 · 10 分钟",
 		remoteOpenLink: "扫描二维码或打开链接",
 		remoteCopyLink: "复制链接",
 		remoteAccessAddress: "访问地址",
@@ -128,8 +128,41 @@ const zhCN = {
 		remoteNewLink: "生成新链接",
 		remoteLinkCopied: "链接已复制",
 		remoteCopyFailed: "无法复制连接链接",
-		remotePairingExpired: "连接链接已过期",
-		remotePairingExpiredDescription: "生成新的单次链接来认证另一台设备。",
+		remotePairingExpired: "配对链接已过期或用满",
+		remotePairingExpiredDescription:
+			"此配对链接已失效。未完成的地址请重新扫码认证，已有设备授权不受影响。",
+		remoteAddressName: "名称（可选）",
+		remoteAddressNamePlaceholder: "家里 / 外网 / 组网（可选）",
+		remoteAddressUrl: "访问地址",
+		remoteAddressConfigHint:
+			"填写完整的 http(s) 根地址，必要时加上端口，保存后生效。更改地址会替换配对链接，不会清空已有设备授权。不可信网络请使用 HTTPS。",
+		remoteAddressesSaved: "访问地址已保存",
+		remoteAddAddress: "添加地址",
+		remoteQrEntry: "扫码入口地址",
+		remoteQrEntryHint:
+			"选择手机当前可达的地址并保存，一个二维码即可打开地址选择页。",
+		remotePairingPageTitle: "Pilo 认证",
+		remotePairingPageHint:
+			"点击各地址完成认证，再返回此页继续认证其他地址。只打开此页不会消耗地址名额。",
+		remotePairingRemaining: "剩余 {{remaining}} / {{total}} 个地址名额",
+		remotePairingUntil: "有效至 {{time}}",
+		remotePairingIssued: "本次配对已签发授权",
+		remotePairingComplete: "当前地址已认证",
+		remotePairingContinue: "继续认证其他地址",
+		remoteOpenPilo: "进入 Pilo",
+		remotePairingBookmarkHint:
+			"点击「进入 Pilo」后收藏普通地址。新设备授权有效期为 30 天，配对链接仅用于临时认证。",
+		remoteDeviceExpires: "设备授权到期：{{time}}",
+		remotePairingAddressUsed:
+			"此地址已被另一请求配对。如果当前浏览器已有授权，可直接打开；否则请重新扫码。",
+		remotePairingStorageUnavailable:
+			"浏览器存储被禁用或已满，请允许存储后再继续，配对期间不要关闭此标签页。",
+		remotePairingRandomUnavailable:
+			"当前浏览器无法生成安全的配对证明，请使用支持安全随机数的浏览器。",
+		remotePairingInvalidLink:
+			"配对链接或响应无效，请更新 Pilo 后打开新的二维码。",
+		remotePairingNetworkError:
+			"请求未完成，请确认 Pilo 正在运行且地址可达，并在配对链接过期前重试。",
 		remotePort: "端口",
 		remotePortInvalid: "端口必须是 1024–65535 之间的整数",
 		remotePortSaved: "端口已更新",

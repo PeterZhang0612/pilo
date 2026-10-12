@@ -24,6 +24,22 @@ pub struct RemoteHostConfig {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct RemoteAccessAddress {
+    pub id: String,
+    #[serde(default)]
+    pub name: String,
+    pub base_url: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteAccessConfig {
+    pub addresses: Vec<RemoteAccessAddress>,
+    pub entry_address_id: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RemoteDevice {
     pub id: String,
     pub name: String,
