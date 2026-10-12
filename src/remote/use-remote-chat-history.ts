@@ -90,6 +90,10 @@ export function useRemoteChatHistory({
 		isExternalOpenTurn(activeProjectId, selectedSessionPath),
 	);
 	const liveTurnOpen = externalTurnOpen || runtimeTurnOpen;
+	const liveTurnOpenRef = useRef(liveTurnOpen);
+	useEffect(() => {
+		liveTurnOpenRef.current = liveTurnOpen;
+	}, [liveTurnOpen]);
 
 	const historyPrefix = useMemo(
 		() => buildHistoryPrefix(historySnapshot),
@@ -165,6 +169,8 @@ export function useRemoteChatHistory({
 					reducerContext,
 				);
 				state = alignHistoryMessages(state, directory, windowStart);
+				// Restore the live tail before startChat or incoming events can create a new reply.
+				if (liveTurnOpenRef.current) state = markExternalTurnLive(state);
 				setConversation(state);
 				return client.startChat({
 					projectId: activeProjectId,

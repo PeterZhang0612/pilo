@@ -145,7 +145,9 @@ export function useRemoteConnection({
 		void client
 			.connectEvents({
 				after: Number.isFinite(stored) && stored > 0 ? stored : undefined,
-				onMessage: (message) => onSocketMessageRef.current(message),
+				onMessage: (message) => {
+					if (!cancelled) onSocketMessageRef.current(message);
+				},
 				onStatus: (isConnected) => {
 					if (cancelled) return;
 					setConnected(isConnected);

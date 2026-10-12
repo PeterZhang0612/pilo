@@ -48,31 +48,30 @@ function reviveExternalActivity<
 export function markExternalTurnLive(
 	state: ConversationState,
 ): ConversationState {
-	for (let index = state.messages.length - 1; index >= 0; index -= 1) {
-		const message = state.messages[index];
-		if (!message || message.role !== "assistant") continue;
-		if (message.completion !== "interrupted") return state;
-		const messages = state.messages.slice();
-		messages[index] = {
-			...message,
-			content: message.content?.map(reviveExternalActivity),
-			activity: message.activity?.map(reviveExternalActivity),
-			streaming: true,
-			completion: undefined,
-			errorMessage: undefined,
-		};
-		return {
-			...state,
-			messages,
-			active: {
-				turnStartedAtMs: message.timestampMs,
-				assistantUpdatedAtMs: message.timestampMs,
-				assistantMessageId: message.id,
-				firstRuntimeUserSeen: false,
-			},
-		};
-	}
-	return state;
+	if (state.active) return state;
+	const index = state.messages.length - 1;
+	const message = state.messages[index];
+	if (message?.role !== "assistant" || message.completion !== "interrupted")
+		return state;
+	const messages = state.messages.slice();
+	messages[index] = {
+		...message,
+		content: message.content?.map(reviveExternalActivity),
+		activity: message.activity?.map(reviveExternalActivity),
+		streaming: true,
+		completion: undefined,
+		errorMessage: undefined,
+	};
+	return {
+		...state,
+		messages,
+		active: {
+			turnStartedAtMs: message.timestampMs,
+			assistantUpdatedAtMs: message.timestampMs,
+			assistantMessageId: message.id,
+			firstRuntimeUserSeen: false,
+		},
+	};
 }
 
 function historyPlaceholderMessage(

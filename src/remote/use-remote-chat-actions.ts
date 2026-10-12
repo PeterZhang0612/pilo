@@ -102,10 +102,13 @@ export function useRemoteChatActions({
 	const [sendingSessionKeys, setSendingSessionKeys] = useState(
 		new Set<string>(),
 	);
+	const sendingSessionKeysRef = useRef(new Set<string>());
 	const sending =
 		activeSessionKey !== null && sendingSessionKeys.has(activeSessionKey);
 	const setSessionSending = useCallback(
 		(sessionKey: string, value: boolean) => {
+			if (value) sendingSessionKeysRef.current.add(sessionKey);
+			else sendingSessionKeysRef.current.delete(sessionKey);
 			setSendingSessionKeys((current) => {
 				const next = new Set(current);
 				if (value) next.add(sessionKey);
@@ -190,8 +193,7 @@ export function useRemoteChatActions({
 		) => {
 			if (!client || !activeSessionKey || readOnly) return;
 			if (!submission.text.trim() && submission.images.length === 0) return;
-			if (mode === "prompt" && (await tryHandleComposerCommand(submission)))
-				return;
+			if (sendingSessionKeysRef.current.has(activeSessionKey)) return;
 			const submissionSessionKey = activeSessionKey;
 			const isActiveSession = () =>
 				activeSessionKeyRef.current === submissionSessionKey;
@@ -203,38 +205,41 @@ export function useRemoteChatActions({
 			const clientMessageId = randomId();
 			const descriptors = summarizeChatImages(submission.images);
 			let queuedClientMessageId: string | null = null;
-			// 乐观更新：与桌面端 beginTurn 对齐，先落本地 user / assistant-pending
-			// 消息，再启动 runtime，避免 startChat 期间输入框毫无反馈。
+			// Lock before the first await; React's disabled state may not have rendered yet.
 			setSessionSending(submissionSessionKey, true);
-			if (mode === "prompt") {
-				runLocalAction({
-					type: "local_user_submit",
-					clientMessageId,
-					text: submission.text,
-					images: descriptors,
-					timestampMs: now,
-				});
-				runLocalAction({
-					type: "local_assistant_pending",
-					timestampMs: now,
-				});
-			} else {
-				queuedClientMessageId = clientMessageId;
-				queuedSubmissionsRef.current.set(clientMessageId, {
-					submission,
-					queueKind: mode,
-				});
-				runLocalAction({
-					type: "local_user_queue",
-					clientMessageId,
-					text: submission.text,
-					images: descriptors,
-					queueKind: mode,
-					timestampMs: now,
-				});
-			}
-			clearComposer();
 			try {
+				if (mode === "prompt" && (await tryHandleComposerCommand(submission)))
+					return;
+				// 乐观更新：与桌面端 beginTurn 对齐，先落本地 user / assistant-pending
+				// 消息，再启动 runtime，避免 startChat 期间输入框毫无反馈。
+				if (mode === "prompt") {
+					runLocalAction({
+						type: "local_user_submit",
+						clientMessageId,
+						text: submission.text,
+						images: descriptors,
+						timestampMs: now,
+					});
+					runLocalAction({
+						type: "local_assistant_pending",
+						timestampMs: now,
+					});
+				} else {
+					queuedClientMessageId = clientMessageId;
+					queuedSubmissionsRef.current.set(clientMessageId, {
+						submission,
+						queueKind: mode,
+					});
+					runLocalAction({
+						type: "local_user_queue",
+						clientMessageId,
+						text: submission.text,
+						images: descriptors,
+						queueKind: mode,
+						timestampMs: now,
+					});
+				}
+				clearComposer();
 				await ensureDraftRuntime();
 				const accepted =
 					mode === "prompt"
@@ -407,7 +412,8 @@ export function useRemoteChatActions({
 				!client ||
 				!activeSessionKey ||
 				readOnly ||
-				activeSessionKeyRef.current !== activeSessionKey
+				activeSessionKeyRef.current !== activeSessionKey ||
+				sendingSessionKeysRef.current.has(activeSessionKey)
 			)
 				return;
 			const targetSessionKey = activeSessionKey;

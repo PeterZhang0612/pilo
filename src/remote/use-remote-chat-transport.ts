@@ -6,6 +6,7 @@ import {
 	useRef,
 } from "react";
 
+import { markExternalTurnLive } from "@/components/chat/chat-conversation-model";
 import { i18n } from "@/i18n";
 import type { ChatSubmission } from "@/lib/chat-submission";
 import { chatRpcChangesActivity } from "@/lib/chat-session-runtime-model";
@@ -89,22 +90,32 @@ export function useRemoteChatTransport({
 }: UseRemoteChatTransportOptions) {
 	const rpcSequenceRef = useRef(0);
 	const pendingRpcRef = useRef(new Map<string, PendingRpc>());
+	const lastSequenceRef = useRef(0);
 
 	const handleSocketMessage = useCallback(
 		(message: PiloClientEventMessage) => {
-			if (message.type === "resyncRequired") {
+			if (
+				message.type === "resyncRequired" ||
+				(message.type === "hello" &&
+					message.latestSequence < lastSequenceRef.current)
+			) {
+				lastSequenceRef.current = message.latestSequence;
 				window.localStorage.setItem(
 					REMOTE_SEQUENCE_KEY,
 					String(message.latestSequence),
 				);
-				setResyncKey((value) => value + 1);
+				if (message.type === "resyncRequired") {
+					setResyncKey((value) => value + 1);
+				}
 				return;
 			}
 			if (message.type !== "events") return;
-			let lastSequence = 0;
+			let lastSequence = lastSequenceRef.current;
 			const actions: ConversationAction[] = [];
 			for (const event of message.events) {
-				lastSequence = Math.max(lastSequence, event.sequence);
+				// Foreground recovery can overlap a queued frame with socket replay.
+				if (event.sequence <= lastSequence) continue;
+				lastSequence = event.sequence;
 				if (event.type === "project_model_scope_changed") {
 					handleModelScopeEvent(event);
 					continue;
@@ -236,13 +247,29 @@ export function useRemoteChatTransport({
 					}, 500);
 				}
 			}
-			if (lastSequence > 0) {
+			if (lastSequence > lastSequenceRef.current) {
+				lastSequenceRef.current = lastSequence;
 				window.localStorage.setItem(REMOTE_SEQUENCE_KEY, String(lastSequence));
 			}
 			if (actions.length > 0) {
 				setConversation((current) => {
 					let next = current;
 					for (const action of actions) {
+						// Live events can arrive before the bootstrap reports the open turn.
+						switch (action.type) {
+							case "assistant_message_start":
+							case "assistant_text_delta":
+							case "assistant_text_snapshot":
+							case "assistant_thinking_start":
+							case "assistant_thinking_delta":
+							case "assistant_thinking_end":
+							case "tool_execution_start":
+							case "tool_execution_update":
+							case "tool_execution_end":
+							case "assistant_turn_end":
+								next = markExternalTurnLive(next);
+								break;
+						}
 						if (action.type === "user_message_start") {
 							const pending = next.pendingUsers[0];
 							if (pending?.queueKind) {
