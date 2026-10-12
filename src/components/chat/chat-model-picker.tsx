@@ -50,6 +50,11 @@ export function ChatModelPicker({
 	const { t } = useTranslation();
 	const pickerId = useId();
 	const [query, setQuery] = useState("");
+	const [activeSelection, setActiveSelection] = useState<{
+		listKey: string;
+		value: string;
+	} | null>(null);
+	const listRef = useRef<HTMLDivElement>(null);
 	const [view, setView] = useState<"all" | "scope">("scope");
 	const [draft, setDraft] = useState<{
 		initial: ProjectScopedModel[];
@@ -84,6 +89,27 @@ export function ChatModelPicker({
 				? models
 				: (modelScope?.models ?? [])
 	).filter((model) => matches(model.provider, model.id, model.name));
+	const preferredModel = showModels
+		? (visibleModels.find((model) => piModelsMatch(model, selectedModel)) ??
+			visibleModels[0])
+		: undefined;
+	const preferredValue = preferredModel
+		? identity(preferredModel.provider, preferredModel.id)
+		: "";
+	const listKey = JSON.stringify([view, preferredValue]);
+	const activeValue =
+		activeSelection?.listKey === listKey
+			? activeSelection.value
+			: preferredValue;
+	useEffect(() => {
+		if (editing || !activeValue) return;
+		const frame = requestAnimationFrame(() => {
+			listRef.current
+				?.querySelector('[aria-selected="true"]')
+				?.scrollIntoView({ block: "nearest" });
+		});
+		return () => cancelAnimationFrame(frame);
+	}, [activeValue, editing]);
 	const unavailable =
 		editing && draft
 			? [...draft.initial, ...draft.models].filter(
@@ -400,6 +426,7 @@ export function ChatModelPicker({
 				</fieldset>
 			) : (
 				<CommandList
+					ref={listRef}
 					aria-label={t("chat.model")}
 					containerClassName={listMaxHeight}
 					viewportClassName={listMaxHeight}
@@ -562,6 +589,8 @@ export function ChatModelPicker({
 	) : (
 		<Command
 			shouldFilter={false}
+			value={activeValue}
+			onValueChange={(value) => setActiveSelection({ listKey, value })}
 			className="h-auto rounded-xl bg-background font-sans text-sm font-normal text-foreground"
 		>
 			{content}
