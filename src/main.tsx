@@ -7,6 +7,7 @@ import {
 	resolveInitialLocale,
 	i18n,
 } from "@/i18n";
+import { tightenTripleClickSelection } from "@/lib/dom-text-selection";
 import { PreferencesProvider } from "@/lib/preferences-provider";
 import { ThemeProvider } from "@/lib/theme-provider";
 import { Toaster } from "@/ui";
@@ -154,6 +155,8 @@ async function bootstrap() {
 		typeof navigator === "undefined" ? undefined : navigator.language,
 	);
 	await initializeI18n(locale);
+	document.addEventListener("mousedown", tightenTripleClickSelection);
+	document.addEventListener("mouseup", tightenTripleClickSelection);
 
 	let RootApp: React.ComponentType;
 	if (DESKTOP_RUNTIME) {

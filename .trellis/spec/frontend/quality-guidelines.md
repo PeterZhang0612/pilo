@@ -58,6 +58,27 @@ test("parses the expanded skill block emitted by Pi", () => {
 - React components/hooks are not unit-tested here; verify them via `pnpm build`
   and manual desktop runs.
 
+### Browser Selection Regression
+
+`src/lib/dom-text-selection.ts` handles unmodified left-button triple-click
+`mousedown` and `mouseup` for prose in the shared desktop/WebUI bootstrap.
+Schedule tightening with `requestAnimationFrame`: the native `mousedown` default
+must establish its paragraph range first, but normalization must happen before
+paint, not only after mouse release (which causes a visible flash). Keep
+`mouseup` as the final pass for triple-click drag. Preserve the native paragraph
+range and selection direction; tighten only its outer text endpoints.
+Do not select the entire `li` or `td`: nested lists and multi-paragraph cells
+must retain native paragraph scope. Inputs, editable content, code blocks,
+buttons, terminals, ordinary drag selection and touch long-press stay native.
+
+DOM selection tests need a real browser, not mocked `Range`/`Selection` objects.
+Run `pnpm exec vite --host 127.0.0.1`, open
+`/tests/dom-text-selection.html`, and require `data-test-status="passed"` on the
+body. This suite is separate from `test:unit`. Verify both Chromium and WebKit:
+WebKit can clamp selections at editing boundaries, so native-control tests
+compare the actual range before/after rather than assuming requested endpoints.
+Selection assertions do not replace visual verification in the desktop WebView.
+
 ## Review Standards
 
 - No unrelated refactors or formatting churn in a feature change.
