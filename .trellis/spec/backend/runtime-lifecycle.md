@@ -2,7 +2,8 @@
 
 ## 1. Scope / Trigger
 
-Apply when changing chat-process retention, runtime-event replay, or server shutdown.
+Apply when changing chat-turn ownership, process retention, runtime-event replay,
+or server shutdown.
 Desktop and WebUI share `ChatSessions`; Local, WSL, and SSH use the same server lifecycle.
 Frontend controller eviction alone is not backend process cleanup.
 
@@ -31,6 +32,17 @@ Frontend controller eviction alone is not backend process cleanup.
   emits no `ProcessState` event for the removed session; the frontend only sees it
   disappear from `states()` and re-syncs when the next `ensure` respawns it and
   resets the generation.
+- `ChatSessions::send` defaults a missing `prompt.streamingBehavior` to `"followUp"`
+  for both desktop and WebUI. Idle prompts still start normally; a prompt racing
+  autonomous Pi continuation queues instead of failing with "Agent is already
+  processing". Preserve explicitly supplied behavior, and leave `steer`/`follow_up`
+  commands unchanged. This does not permit prompts during active compaction.
+- Desktop `useChatRuntimeEvents` adopts an active turn when live
+  `user_message_start`/`assistant_message_start` arrives without one, after its
+  generation/discard checks. Merely projecting autonomous output into the
+  conversation leaves the composer incorrectly idle and disables queue/stop.
+  Compaction/completion events alone must not create a turn. WebUI already derives
+  composer activity from the shared conversation reducer.
 - `prompt` and `compact` mark their respective busy flags before `send_rpc`;
   transport failure rolls back only flags that were previously idle. Compaction
   is tracked separately so `CompactionEnd` cannot clear an ongoing agent turn.
@@ -64,6 +76,8 @@ Frontend controller eviction alone is not backend process cleanup.
 | Eligible idle cache exceeds budget | Stop oldest eligible processes; keep requested chat |
 | Idle session evicted | No stop event; `states()` drops it; next `ensure` respawns and resets the generation |
 | Live/temporary/unsaved/in-flight session | Keep it, even above budget |
+| Extension resumes after compaction | Desktop adopts the live turn; queue and stop remain available |
+| Prompt races autonomous continuation | Missing `streamingBehavior` defaults to `followUp`; explicit behavior is preserved |
 | Background idle stop fails | Log warning; do not block another chat launch |
 | Replay byte/count eviction | Older sequence returns `None`; WebUI resyncs |
 | Single oversized event | Deliver live; clear replay and expose the gap |
@@ -84,6 +98,12 @@ Frontend controller eviction alone is not backend process cleanup.
 - `chat_sessions/event_sink.rs`: prompt rejection rolls back only the owning
   prompt's active-turn flag; a success response releases ownership without
   clearing the turn; compaction completion does not clear an active turn.
+- Prompt forwarding: absent `streamingBehavior` becomes `followUp`, explicit
+  `steer`/`followUp` survives, and non-prompt commands are unchanged.
+- Desktop manual regression: compact with extension-driven `continue`, then send
+  steering/follow-up messages and stop; verify running state until agent settles.
+  Late compaction/completion or stale/discarded generation events must not adopt
+  a running turn. Repeat prompt-race behavior through WebUI.
 - `events/mod.rs`: byte eviction before count limit, oversized live delivery, empty
   replay gap, latest-sequence empty replay, concurrent replay/broadcast ordering,
   existing sequence/count contracts.

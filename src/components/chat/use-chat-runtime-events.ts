@@ -302,6 +302,35 @@ export function useChatRuntimeEvents({
 		return () => window.clearTimeout(timer);
 	}, [recoveryState.status]);
 
+	const adoptActiveTurn = useCallback(
+		(generation: number, notificationSessionId = session.id) => {
+			const turn: ActiveTurn = {
+				sessionId: session.id,
+				sessionTitle,
+				projectId: session.projectRecord.id,
+				notificationSessionId,
+				generation,
+				promptSent: true,
+				queueReady: true,
+				preserveQueuedOnRelease: false,
+			};
+			activeTurnRef.current = turn;
+			if (activeTurnSessionIdRef) {
+				activeTurnSessionIdRef.current = turn.sessionId;
+			}
+			setActiveTurnSessionId(turn.sessionId);
+			return turn;
+		},
+		[
+			activeTurnRef,
+			activeTurnSessionIdRef,
+			session.id,
+			session.projectRecord.id,
+			sessionTitle,
+			setActiveTurnSessionId,
+		],
+	);
+
 	const handleRuntimeEvent = useCallback(
 		(event: PiloRuntimeEvent) => {
 			recordChatRuntimeEvent();
@@ -396,12 +425,18 @@ export function useChatRuntimeEvents({
 				return;
 			}
 
-			const turn = activeTurnRef.current;
+			let turn = activeTurnRef.current;
+			if (
+				!turn &&
+				(event.type === "user_message_start" ||
+					event.type === "assistant_message_start")
+			) {
+				// Extension-driven continuation must own a turn, not just render output.
+				turn = adoptActiveTurn(event.generation);
+			}
 			if (!turn || turn.generation === null) {
-				// Only a missing turn is autonomous output: extension-driven compaction
-				// continuation, extension-initiated messages, auto-retry continuation.
-				// A generation mismatch is a stale event from an earlier process and must
-				// stay dropped, otherwise it lands in the current assistant message.
+				// Late completion/compaction events can still update the conversation
+				// without creating a running turn. Generation mismatches stay dropped.
 				if (isAutonomousTurnEvent(event)) {
 					dispatchRuntimeEventToConversation(
 						event,
@@ -474,6 +509,7 @@ export function useChatRuntimeEvents({
 		[
 			acknowledgeQueuedMessage,
 			activeTurnRef,
+			adoptActiveTurn,
 			cancelContextStatsRefresh,
 			discardedRuntimeBarrierRef,
 			desktopNotifications,
@@ -558,23 +594,10 @@ export function useChatRuntimeEvents({
 				const agentState = await client.getPiAgentState();
 				if (cancelled || !agentState.isStreaming || activeTurnRef.current)
 					return;
-				const turn: ActiveTurn = {
-					sessionId: session.id,
-					sessionTitle,
-					projectId: session.projectRecord.id,
-					notificationSessionId: session.temporary
-						? session.id
-						: (agentState.sessionId ?? session.id),
-					generation: runtimeState.snapshot.generation,
-					promptSent: true,
-					queueReady: true,
-					preserveQueuedOnRelease: false,
-				};
-				activeTurnRef.current = turn;
-				if (activeTurnSessionIdRef) {
-					activeTurnSessionIdRef.current = turn.sessionId;
-				}
-				setActiveTurnSessionId(turn.sessionId);
+				adoptActiveTurn(
+					runtimeState.snapshot.generation,
+					session.temporary ? session.id : (agentState.sessionId ?? session.id),
+				);
 				if (!session.temporary) {
 					identifiedRef.current?.(agentState.sessionId ?? session.id);
 				}
@@ -593,15 +616,12 @@ export function useChatRuntimeEvents({
 		};
 	}, [
 		activeTurnRef,
-		activeTurnSessionIdRef,
+		adoptActiveTurn,
 		client,
 		identifiedRef,
 		runtimeGenerationRef,
 		session.id,
-		session.projectRecord.id,
 		session.temporary,
-		sessionTitle,
-		setActiveTurnSessionId,
 	]);
 
 	return {

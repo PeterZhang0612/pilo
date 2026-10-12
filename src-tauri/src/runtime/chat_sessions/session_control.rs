@@ -13,6 +13,14 @@ impl ChatSessions {
             .and_then(Value::as_str)
             .unwrap_or("unknown")
             .to_owned();
+        // Pi may resume autonomously before either UI observes its new turn.
+        if command_type == "prompt"
+            && let Some(command) = command.as_object_mut()
+        {
+            command
+                .entry("streamingBehavior")
+                .or_insert_with(|| Value::String("followUp".to_owned()));
+        }
         // Pi echoes this id in its prompt response. The desktop prompt path does not
         // send one, so generate it here to correlate the Pi-side prompt outcome with
         // the preemptive active-turn flag set below.
