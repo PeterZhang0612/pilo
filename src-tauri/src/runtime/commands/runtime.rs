@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use serde_json::Value;
-use tauri::{AppHandle, State, ipc::Channel};
+use tauri::{AppHandle, State, WebviewWindow, ipc::Channel};
 
 use super::super::{
     PiloRuntime,
@@ -16,10 +16,11 @@ use super::super::{
 
 #[tauri::command]
 pub fn runtime_subscribe_events(
+    window: WebviewWindow,
     events: State<'_, RuntimeEventBus>,
     channel: Channel<RuntimeEventEnvelope>,
 ) {
-    events.subscribe(channel);
+    events.subscribe(window.label(), channel);
 }
 
 const APPROVE_PROJECT_MCP_SCRIPT: &str = r#"

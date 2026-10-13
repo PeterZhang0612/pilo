@@ -1,5 +1,5 @@
 use std::{
-    collections::VecDeque,
+    collections::{HashMap, VecDeque},
     io::{self, Write},
     sync::{
         Arc, Mutex as StdMutex,
@@ -8,7 +8,7 @@ use std::{
 };
 
 use serde::Serialize;
-use serde_json::{Value, json};
+use serde_json::json;
 use tauri::{AppHandle, Manager, ipc::Channel};
 use tokio::sync::broadcast;
 
@@ -54,7 +54,7 @@ pub struct SequencedRuntimeEvent {
 
 #[derive(Clone)]
 pub struct RuntimeEventBus {
-    channel: Arc<StdMutex<Option<Channel<RuntimeEventEnvelope>>>>,
+    channels: Arc<StdMutex<HashMap<String, Channel<RuntimeEventEnvelope>>>>,
     web_sender: broadcast::Sender<SequencedRuntimeEvent>,
     replay: Arc<StdMutex<EventReplay>>,
     sequence: Arc<AtomicU64>,
@@ -64,7 +64,7 @@ impl Default for RuntimeEventBus {
     fn default() -> Self {
         let (web_sender, _) = broadcast::channel(WEB_EVENT_CHANNEL_CAPACITY);
         Self {
-            channel: Arc::new(StdMutex::new(None)),
+            channels: Arc::new(StdMutex::new(HashMap::new())),
             web_sender,
             replay: Arc::new(StdMutex::new(EventReplay::default())),
             sequence: Arc::new(AtomicU64::new(0)),
@@ -73,12 +73,25 @@ impl Default for RuntimeEventBus {
 }
 
 impl RuntimeEventBus {
-    pub fn subscribe(&self, channel: Channel<RuntimeEventEnvelope>) {
-        *self
-            .channel
+    pub fn subscribe(&self, window_label: &str, channel: Channel<RuntimeEventEnvelope>) {
+        // Reload replaces only this window's channel; other windows stay subscribed.
+        self.channels
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(channel);
-        runtime_trace("channel.subscribe", None, None, Value::Null);
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(window_label.to_owned(), channel);
+        runtime_trace(
+            "channel.subscribe",
+            None,
+            None,
+            json!({ "windowLabel": window_label }),
+        );
+    }
+
+    pub fn unsubscribe(&self, window_label: &str) {
+        self.channels
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(window_label);
     }
 
     pub(crate) fn subscribe_web(&self) -> broadcast::Receiver<SequencedRuntimeEvent> {
@@ -152,12 +165,12 @@ impl RuntimeEventBus {
             let _ = self.web_sender.send(sequenced);
         }
 
-        let channel = self
-            .channel
+        let channels = self
+            .channels
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone();
-        let Some(channel) = channel else {
+        if channels.is_empty() {
             if let Some((event_type, detail)) = trace {
                 runtime_trace(
                     "channel.drop_no_subscriber",
@@ -167,33 +180,40 @@ impl RuntimeEventBus {
                 );
             }
             return;
-        };
-
-        if let Some((event_type, detail)) = trace.as_ref() {
-            runtime_trace(
-                "channel.send",
-                session_key.as_deref(),
-                None,
-                json!({ "event": event_type, "eventDetail": detail }),
-            );
         }
-        if let Err(error) = channel.send(event) {
-            if let Some((event_type, detail)) = trace {
+
+        for (window_label, channel) in channels {
+            if let Some((event_type, detail)) = trace.as_ref() {
                 runtime_trace(
-                    "channel.send_error",
+                    "channel.send",
                     session_key.as_deref(),
                     None,
                     json!({
+                        "windowLabel": window_label,
                         "event": event_type,
                         "eventDetail": detail,
-                        "error": error.to_string(),
                     }),
                 );
             }
-            log::error!(
-                target: "runtime-events",
-                "failed to send Tauri channel event: {error}"
-            );
+            if let Err(error) = channel.send(event.clone()) {
+                if let Some((event_type, detail)) = trace.as_ref() {
+                    runtime_trace(
+                        "channel.send_error",
+                        session_key.as_deref(),
+                        None,
+                        json!({
+                            "windowLabel": window_label,
+                            "event": event_type,
+                            "eventDetail": detail,
+                            "error": error.to_string(),
+                        }),
+                    );
+                }
+                log::error!(
+                    target: "runtime-events",
+                    "failed to send Tauri channel event to {window_label}: {error}"
+                );
+            }
         }
     }
 }

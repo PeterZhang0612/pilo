@@ -44,6 +44,14 @@ remote_device_rename(deviceId: String, name: String) -> RemoteHostState
 `pairingUrl?`, `pairingExpiresAtMs?`, `pairingRemainingUses`, `pairingTotalUses`,
 `lastError?`, `devices[]`. Desktop alone receives the active pairing URL.
 
+### Desktop runtime subscriptions (`runtime/commands/runtime.rs`)
+
+- `runtime_subscribe_events(window: WebviewWindow, events: State<RuntimeEventBus>, channel)`:
+  Tauri injects the calling window; the frontend still sends only `{ channel }`.
+- `RuntimeEventBus::subscribe(window_label, channel)` replaces that window's
+  subscription, not other windows. `unsubscribe(window_label)` runs on
+  `WindowEvent::Destroyed`, not a cancellable close request.
+
 ### HTTP routes (`runtime/remote/api/mod.rs`)
 
 Public:
@@ -207,6 +215,14 @@ remote_devices(id, name, pair_ip, token_hash, created_at_ms, last_seen_at_ms, ex
   finds the token revoked/expired. The signal is therefore **lossy on the socket
   path**: `remote-app.tsx` re-probes `bootstrap` on every socket disconnect so the
   `401 → REMOTE_AUTH_EXPIRED → clear token → pairing screen` chain still runs.
+- **Desktop windows**: keep one Tauri channel per window label. Broadcast each
+  runtime event (including completion and RPC replies) to every registered window.
+  Reload replaces only the caller's channel; destroying a window removes only its
+  subscription. Send outside the registry lock; failure for one window must not
+  prevent delivery to others. Desktop RPC IDs use `pilo-<randomId()>`, not a
+  timestamp plus a window-local counter: concurrent windows sharing a session
+  must not resolve each other's pending requests. Preserve the `pilo-` prefix
+  used for caller-correlated error handling. Web broadcast/replay remains independent.
 - **Backpressure**: each Web subscriber has a bounded broadcast channel; a lagging
   subscriber receives `Lagged` and is told to `resyncRequired` instead of blocking
   the runtime. Desktop Tauri channel is another subscriber and is unaffected.
@@ -250,11 +266,15 @@ remote_devices(id, name, pair_ip, token_hash, created_at_ms, last_seen_at_ms, ex
 | Request body over `MAX_REQUEST_BYTES`       | rejected by `DefaultBodyLimit`                  |
 | Handler over 45 s                           | `408` (Tower timeout)                           |
 | WS buffer lag                               | `resyncRequired`, connection kept               |
+| Another desktop window subscribes/reloads   | Existing windows retain completion/RPC delivery |
+| Desktop window destroyed                   | Remove only that window's channel               |
 
 ---
 
 ## 5. Good / Base / Bad Cases
 
+- **Good desktop**: main and session windows both receive completion; reloading
+  or closing the session window does not strand the main window in processing.
 - **Good**: Desktop + two Web clients observe the same session; each subscriber
   gets ordered identical sequences; a brief disconnect replays from `after`.
 - **Good pairing**: scan once → selection (zero consumption) → manually open
@@ -289,6 +309,18 @@ Existing assertions (not changed for multi-address pairing):
   `seq + 1`; replay slice after eviction returns exactly the latest event.
 
 ---
+
+Desktop multi-window assertion points, pending explicit test authorization:
+
+- Two window labels both receive the same runtime event; resubscribing one label
+  replaces only its old channel. Unsubscribing one label preserves the other.
+- A failed desktop send does not skip another desktop or Web subscriber.
+- Concurrent same-session desktop RPCs use distinct IDs even with identical
+  timestamps/counters; a reply resolves only its own pending request.
+- Windows manual regression: open a session window during a reply, finish/stop
+  from each window, reload/close the extra window, and confirm completion plus
+  correlated RPC replies still reach the main window. No tests were added or run
+  for this fix; source review alone does not establish native delivery behavior.
 
 Additional multi-address assertion points, pending explicit test authorization
 (no new tests added or run during this implementation):
@@ -374,9 +406,12 @@ Do not return a receipt based on only the reusable secret + address ID.
 - **Manager owns the listener.** `RemoteServerManager` is the single place that
   starts/stops the listener, persists `enabled`, and restores on app start.
   Remote OFF means the listener does not exist.
-- **EventHub over EventBus.** `RuntimeEventBus` keeps the Tauri `Channel`
-  subscriber and adds a bounded `broadcast` sender plus a bounded replay deque;
-  replay/sequence live in the adapter layer, never in the Pi runtime.
+- **EventHub over EventBus.** `RuntimeEventBus` keeps Tauri `Channel` subscribers
+  keyed by window label, plus a bounded Web `broadcast` sender and replay deque.
+  Wrong: a single global `Option<Channel>` lets the newest window steal all
+  completion/RPC replies. Correct: replace only the subscribing window's channel
+  and fan out to all windows. Replay/sequence live in the adapter layer, never
+  in the Pi runtime.
 - **Transport-neutral client.** `PiloClient` is implemented by `TauriPiloClient`
   (invoke/channel) and `WebPiloClient` (fetch/WebSocket); only Remote-MVP features
   are migrated — generic Files/Terminal/Git stay Tauri-only. Project image reads

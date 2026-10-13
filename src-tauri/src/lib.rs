@@ -215,6 +215,14 @@ pub fn run() {
             remote_device_rename,
             system_font_families,
         ])
+        .on_window_event(|window, event| {
+            if matches!(event, tauri::WindowEvent::Destroyed) {
+                use tauri::Manager;
+                window
+                    .state::<runtime::RuntimeEventBus>()
+                    .unsubscribe(window.label());
+            }
+        })
         .setup(|app| {
             use tauri::Manager;
             use tauri_plugin_window_state::WindowExt;
