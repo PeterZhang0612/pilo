@@ -44,6 +44,7 @@ impl ChatSessions {
                     continue;
                 }
                 if let Some(process) = registry.processes.remove(&key) {
+                    registry.snapshots.remove(&key);
                     process.closed.store(true, Ordering::Release);
                     evicted.push((key, process));
                     remaining -= 1;

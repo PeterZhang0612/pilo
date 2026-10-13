@@ -47,6 +47,12 @@ impl ChatSessions {
         registry
             .processes
             .retain(|_, process| process.project_id != project_id);
+        let retained = registry
+            .processes
+            .keys()
+            .cloned()
+            .collect::<std::collections::HashSet<_>>();
+        registry.snapshots.retain(|key, _| retained.contains(key));
         registry
             .unavailable_projects
             .insert(project_id.to_owned(), false);
@@ -57,6 +63,7 @@ impl ChatSessions {
         let processes = {
             let mut registry = self.registry.lock().await;
             registry.shutting_down = true;
+            registry.snapshots.clear();
             registry
                 .processes
                 .drain()

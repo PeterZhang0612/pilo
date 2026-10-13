@@ -1,5 +1,5 @@
 use std::sync::{
-    Arc,
+    Arc, Mutex as StdMutex,
     atomic::{AtomicU8, AtomicU64, Ordering},
 };
 
@@ -75,8 +75,27 @@ struct Launch {
     options: PiLaunchOptions,
 }
 
+#[derive(Clone)]
+pub(crate) struct SessionSnapshotReader {
+    metadata: Arc<StdMutex<PiSessionSnapshot>>,
+    state: Arc<StateCell>,
+}
+
+impl SessionSnapshotReader {
+    pub(crate) fn snapshot(&self) -> PiSessionSnapshot {
+        let mut snapshot = self
+            .metadata
+            .lock()
+            .unwrap_or_else(|error| error.into_inner())
+            .clone();
+        snapshot.state = self.state.get();
+        snapshot
+    }
+}
+
 pub struct ServerPiSession {
     generation: u64,
+    snapshot_metadata: Arc<StdMutex<PiSessionSnapshot>>,
     state: Arc<StateCell>,
     launch: Option<Launch>,
     client: Option<Arc<ServerClient>>,
@@ -88,6 +107,12 @@ impl Default for ServerPiSession {
     fn default() -> Self {
         Self {
             generation: 0,
+            snapshot_metadata: Arc::new(StdMutex::new(PiSessionSnapshot {
+                generation: 0,
+                state: PiProcessState::Stopped,
+                connection: None,
+                project_id: None,
+            })),
             state: Arc::new(StateCell::default()),
             launch: None,
             client: None,
@@ -102,16 +127,15 @@ impl ServerPiSession {
         self.stream_id.as_deref()
     }
 
-    pub fn snapshot(&self) -> PiSessionSnapshot {
-        PiSessionSnapshot {
-            generation: self.generation,
-            state: self.state.get(),
-            connection: self.launch.as_ref().map(|launch| launch.connection.clone()),
-            project_id: self
-                .launch
-                .as_ref()
-                .and_then(|launch| launch.project_id.clone()),
+    pub(crate) fn snapshot_reader(&self) -> SessionSnapshotReader {
+        SessionSnapshotReader {
+            metadata: Arc::clone(&self.snapshot_metadata),
+            state: Arc::clone(&self.state),
         }
+    }
+
+    pub fn snapshot(&self) -> PiSessionSnapshot {
+        self.snapshot_reader().snapshot()
     }
 
     pub async fn spawn<S: RuntimeEventSink>(
@@ -131,6 +155,15 @@ impl ServerPiSession {
         let client = servers.client(&project.connection).await?;
         let generation = self.generation.saturating_add(1);
         self.generation = generation;
+        *self
+            .snapshot_metadata
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()) = PiSessionSnapshot {
+            generation,
+            state: PiProcessState::Starting,
+            connection: Some(project.connection.clone()),
+            project_id: Some(project.id.clone()),
+        };
         self.state.set(PiProcessState::Starting);
         sink.send(RuntimeEvent::ProcessState {
             generation,

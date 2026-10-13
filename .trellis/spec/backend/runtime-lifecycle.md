@@ -19,6 +19,9 @@ Frontend controller eviction alone is not backend process cleanup.
   prompt preflight uses `PI_PROMPT_RPC_TIMEOUT_MS = 120_000`.
 - `session_activity(...)` distinguishes process-confirmed `--session` paths from
   project-matched fallback candidates before reading their last JSONL message.
+- `ChatSessions::state(...)` / `states()` read registered `SessionSnapshotReader`
+  handles without awaiting the Pi startup/RPC session mutex. Remove readers with
+  their processes on eviction, detach, project stop and global shutdown.
 - `RuntimeEventBus::replay_after(sequence) -> Option<Vec<SequencedRuntimeEvent>>`:
   `None` means replay is incomplete and the WebUI must resync.
 - `ServerClient::stop()` closes stdin, waits for server cleanup, then force-kills
@@ -127,6 +130,7 @@ Frontend controller eviction alone is not backend process cleanup.
 | Background idle stop fails | Log warning; do not block another chat launch |
 | Replay byte/count eviction | Older sequence returns `None`; WebUI resyncs |
 | Single oversized event | Deliver live; clear replay and expose the gap |
+| Session startup/RPC lock held | State queries use the independent snapshot reader |
 | Server stdin EOF or invalid frame | Cancel requests, clean up children, finish writer |
 | Server ignores EOF | Bounded force-kill fallback |
 

@@ -18,7 +18,9 @@ use tokio::sync::{Mutex, oneshot};
 use crate::domain::Project;
 
 use super::{
-    events::RuntimeEventBus, server_pi::ServerPiSession, session_snapshot::PiSessionSnapshot,
+    events::RuntimeEventBus,
+    server_pi::{ServerPiSession, SessionSnapshotReader},
+    session_snapshot::PiSessionSnapshot,
 };
 
 #[derive(Clone, Serialize)]
@@ -81,6 +83,7 @@ impl ChatProcess {
 #[derive(Default)]
 struct ChatRegistry {
     processes: HashMap<String, Arc<ChatProcess>>,
+    snapshots: HashMap<String, SessionSnapshotReader>,
     events: Option<RuntimeEventBus>,
     // true while stopping, false once closed; re-adding may only reopen a closed project.
     unavailable_projects: HashMap<String, bool>,
@@ -97,13 +100,13 @@ type InitializationReply = oneshot::Sender<Result<(), String>>;
 
 impl ChatSessions {
     pub async fn state(&self, session_key: &str) -> Option<ChatSessionState> {
-        let process = self
-            .registry
-            .lock()
-            .await
-            .processes
-            .get(session_key)
-            .cloned()?;
+        let (process, snapshot_reader) = {
+            let registry = self.registry.lock().await;
+            (
+                registry.processes.get(session_key).cloned()?,
+                registry.snapshots.get(session_key).cloned(),
+            )
+        };
         if process.closed.load(Ordering::Acquire) {
             return None;
         }
@@ -112,7 +115,10 @@ impl ChatSessions {
             .lock()
             .unwrap_or_else(|error| error.into_inner())
             .clone();
-        let snapshot = process.session.lock().await.snapshot();
+        let snapshot = match snapshot_reader {
+            Some(reader) => reader.snapshot(),
+            None => process.session.try_lock().ok()?.snapshot(),
+        };
         Some(ChatSessionState {
             session_key: session_key.to_owned(),
             project_id: process.project_id.clone(),
@@ -130,11 +136,17 @@ impl ChatSessions {
             registry
                 .processes
                 .iter()
-                .map(|(session_key, process)| (session_key.clone(), Arc::clone(process)))
+                .map(|(session_key, process)| {
+                    (
+                        session_key.clone(),
+                        Arc::clone(process),
+                        registry.snapshots.get(session_key).cloned(),
+                    )
+                })
                 .collect::<Vec<_>>()
         };
         let mut states = Vec::with_capacity(processes.len());
-        for (session_key, process) in processes {
+        for (session_key, process, snapshot_reader) in processes {
             if process.closed.load(Ordering::Acquire) {
                 continue;
             }
@@ -143,7 +155,13 @@ impl ChatSessions {
                 .lock()
                 .unwrap_or_else(|error| error.into_inner())
                 .clone();
-            let snapshot = process.session.lock().await.snapshot();
+            let snapshot = match snapshot_reader {
+                Some(reader) => reader.snapshot(),
+                None => match process.session.try_lock() {
+                    Ok(session) => session.snapshot(),
+                    Err(_) => continue,
+                },
+            };
             states.push(ChatSessionState {
                 session_key,
                 project_id: process.project_id.clone(),
@@ -180,32 +198,37 @@ impl ChatSessions {
             registry.events = Some(events.clone());
             registry.usage_sequence = registry.usage_sequence.saturating_add(1);
             let usage_sequence = registry.usage_sequence;
-            let process = Arc::clone(
+            let process = if let Some(process) = registry.processes.get(session_key) {
+                Arc::clone(process)
+            } else {
+                let session = ServerPiSession::default();
+                registry
+                    .snapshots
+                    .insert(session_key.to_owned(), session.snapshot_reader());
+                let process = Arc::new(ChatProcess {
+                    project_id: project.id.clone(),
+                    no_session: launch.no_session,
+                    extensions: launch.extensions.clone(),
+                    disable_builtin_tools: launch.disable_builtin_tools,
+                    disable_extension_discovery: launch.disable_extension_discovery,
+                    disable_context_files: launch.disable_context_files,
+                    session: Mutex::new(session),
+                    session_path: Arc::new(StdMutex::new(session_path.cloned())),
+                    control_reply: Arc::new(StdMutex::new(None)),
+                    initialization_stderr: Arc::new(StdMutex::new(String::new())),
+                    prepared: AtomicBool::new(false),
+                    initialized: AtomicBool::new(false),
+                    active_turn: Arc::new(AtomicBool::new(false)),
+                    compacting: Arc::new(AtomicBool::new(false)),
+                    pending_prompt_id: Arc::new(StdMutex::new(None)),
+                    closed: Arc::new(AtomicBool::new(false)),
+                    last_used: AtomicU64::new(usage_sequence),
+                });
                 registry
                     .processes
-                    .entry(session_key.to_owned())
-                    .or_insert_with(|| {
-                        Arc::new(ChatProcess {
-                            project_id: project.id.clone(),
-                            no_session: launch.no_session,
-                            extensions: launch.extensions.clone(),
-                            disable_builtin_tools: launch.disable_builtin_tools,
-                            disable_extension_discovery: launch.disable_extension_discovery,
-                            disable_context_files: launch.disable_context_files,
-                            session: Mutex::new(ServerPiSession::default()),
-                            session_path: Arc::new(StdMutex::new(session_path.cloned())),
-                            control_reply: Arc::new(StdMutex::new(None)),
-                            initialization_stderr: Arc::new(StdMutex::new(String::new())),
-                            prepared: AtomicBool::new(false),
-                            initialized: AtomicBool::new(false),
-                            active_turn: Arc::new(AtomicBool::new(false)),
-                            compacting: Arc::new(AtomicBool::new(false)),
-                            pending_prompt_id: Arc::new(StdMutex::new(None)),
-                            closed: Arc::new(AtomicBool::new(false)),
-                            last_used: AtomicU64::new(usage_sequence),
-                        })
-                    }),
-            );
+                    .insert(session_key.to_owned(), Arc::clone(&process));
+                process
+            };
             process.last_used.store(usage_sequence, Ordering::Release);
             process
         };

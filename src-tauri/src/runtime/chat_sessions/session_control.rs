@@ -20,6 +20,7 @@ impl ChatSessions {
         let (process, events) = {
             let mut registry = self.registry.lock().await;
             let process = registry.processes.remove(session_key)?;
+            registry.snapshots.remove(session_key);
             process.mark_closed();
             (process, registry.events.clone())
         };
