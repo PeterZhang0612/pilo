@@ -25,7 +25,7 @@ use transport::{
 };
 
 pub(crate) use manager::ServerManager;
-pub use transport::{SERVER_DISCONNECTED_EVENT, ServerEvent, ServerEventReceiver};
+pub use transport::{SERVER_DISCONNECTED_EVENT, ServerEventReceiver};
 
 const REQUEST_CAPACITY: usize = 256;
 const HANDSHAKE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
