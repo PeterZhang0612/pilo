@@ -29,6 +29,7 @@ import {
 	loadRemoteChatState,
 	loadRemoteHistory,
 	loadRemoteHistoryImage,
+	loadRemoteProjectImage,
 	loadRemoteExternalActivity,
 	loadRemoteModels,
 	loadRemoteModelScope,
@@ -85,6 +86,13 @@ export class WebPiloClient implements PiloClient {
 			imageId,
 			fingerprint,
 		);
+	}
+
+	readProjectImage(
+		projectId: string,
+		path: string,
+	): Promise<Uint8Array<ArrayBuffer>> {
+		return loadRemoteProjectImage(this.token, projectId, path);
 	}
 
 	generateSessionTitle(

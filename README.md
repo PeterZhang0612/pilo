@@ -93,6 +93,22 @@ bash scripts/build-pilo-server.sh <target>
 
 For WSL or SSH, Pilo probes the target platform and deploys the matching `pilo-server` runtime before starting it. If that runtime has not been staged, Pilo reports the missing resource instead of silently using an incompatible binary.
 
+## Images in replies
+
+Ask Pi to save screenshots inside the project and include them in its reply using ordinary Markdown:
+
+```markdown
+Here is the current page:
+
+![Page screenshot](./screenshots/page.png)
+
+The button in the upper-right corner is misaligned.
+```
+
+Desktop and WebUI load project-relative images from the project's Local, WSL, or SSH environment. PNG, JPEG, WebP, and GIF are supported, up to 10 MB each; click an image to preview or save it. Absolute paths, parent-directory traversal, and SVG are not supported. HTTP(S) images also render inline and offer an Open original image action in a new tab instead of a direct download. No Pi plugin or core changes are required.
+
+Images reference existing files, not immutable snapshots: deleting or overwriting a file can affect old replies. This feature does not add screenshot capture tools or automatically change Pi's prompts.
+
 ## Development
 
 | Command                                                                | Purpose                                                           |

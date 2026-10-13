@@ -66,6 +66,10 @@ export interface PiloClient {
 		imageId: string,
 		fingerprint?: SessionHistoryFingerprint,
 	): Promise<Uint8Array<ArrayBuffer>>;
+	readProjectImage(
+		projectId: string,
+		path: string,
+	): Promise<Uint8Array<ArrayBuffer>>;
 	generateSessionTitle(
 		projectId: string,
 		message: string,

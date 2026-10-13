@@ -235,6 +235,36 @@ pub(super) async fn history_image(
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub(super) struct ProjectImageQuery {
+    project_id: String,
+    path: String,
+}
+
+pub(super) async fn project_image(
+    State(state): State<RemoteHttpState>,
+    Query(query): Query<ProjectImageQuery>,
+) -> Response {
+    let project = match get_project(&state.paths, &query.project_id) {
+        Ok(project) => project,
+        Err(error) => return api_error(StatusCode::NOT_FOUND, &error),
+    };
+    let runtime = state.app.state::<PiloRuntime>();
+    match remote_fs::read_image(&runtime.servers, &project, &query.path).await {
+        Ok(bytes) => Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, "application/octet-stream")
+            .header(header::CACHE_CONTROL, "no-store")
+            .header(header::X_CONTENT_TYPE_OPTIONS, "nosniff")
+            .body(Body::from(bytes))
+            .unwrap_or_else(|error| {
+                api_error(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string())
+            }),
+        Err(error) => api_error(StatusCode::BAD_REQUEST, &error),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub(super) struct SessionTitleRequest {
     project_id: String,
     message: String,

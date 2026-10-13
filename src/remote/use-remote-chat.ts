@@ -476,6 +476,18 @@ export function useRemoteChat({
 		[activeProjectId, client, history.fingerprint, selectedSession],
 	);
 
+	const projectImageScope = useMemo(
+		() =>
+			client && activeProjectId
+				? {
+						projectId: activeProjectId,
+						sessionKey: routeKey ?? "remote-draft",
+						readImage: client.readProjectImage.bind(client),
+					}
+				: null,
+		[activeProjectId, client, routeKey],
+	);
+
 	const {
 		startDraft,
 		toggleTemporaryChat,
@@ -770,6 +782,7 @@ export function useRemoteChat({
 		activeAssistantMessageId,
 		latestTurnInterrupted,
 		historyImageScope,
+		projectImageScope,
 		// view state
 		headerSession,
 		chatState,

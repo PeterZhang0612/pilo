@@ -13,6 +13,7 @@ import {
 	type PiloClientStartChatInput,
 } from "@/lib/pilo-client";
 import { listProjects } from "@/lib/projects";
+import { readProjectImage } from "@/lib/files";
 import type {
 	ProjectModelScope,
 	ProjectScopedModel,
@@ -89,6 +90,13 @@ export class TauriPiloClient implements PiloClient {
 			imageId,
 			fingerprint,
 		);
+	}
+
+	readProjectImage(
+		projectId: string,
+		path: string,
+	): Promise<Uint8Array<ArrayBuffer>> {
+		return readProjectImage(projectId, path);
 	}
 
 	generateSessionTitle(

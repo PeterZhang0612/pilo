@@ -1,5 +1,5 @@
 pub use pilo_protocol::FsEntry;
-use pilo_protocol::MAX_BINARY_PAYLOAD_BYTES;
+use pilo_protocol::{FsEntryKind, MAX_BINARY_PAYLOAD_BYTES};
 use serde_json::json;
 
 use crate::domain::{Connection, Project};
@@ -55,6 +55,70 @@ pub async fn read_file(
         ));
     }
     Ok(binary.into_iter().next().expect("binary length checked"))
+}
+
+const MAX_PROJECT_IMAGE_BYTES: usize = 10 * 1024 * 1024;
+
+fn project_image_mime_type(path: &str) -> Result<&'static str, String> {
+    if path.is_empty()
+        || path.len() > 4096
+        || path.starts_with('/')
+        || path.contains(['\\', ':', '?', '#'])
+        || path.chars().any(char::is_control)
+        || path.split('/').any(|part| part == "..")
+    {
+        return Err("image path must be relative and stay inside the project".to_owned());
+    }
+    match path
+        .rsplit('.')
+        .next()
+        .unwrap_or_default()
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "png" => Ok("image/png"),
+        "jpg" | "jpeg" => Ok("image/jpeg"),
+        "webp" => Ok("image/webp"),
+        "gif" => Ok("image/gif"),
+        _ => Err("unsupported project image format".to_owned()),
+    }
+}
+
+fn validate_image_bytes(bytes: &[u8], mime_type: &str) -> Result<(), String> {
+    if bytes.len() > MAX_PROJECT_IMAGE_BYTES {
+        return Err("project image exceeds the 10 MB limit".to_owned());
+    }
+    let valid = match mime_type {
+        "image/png" => bytes.starts_with(b"\x89PNG\r\n\x1a\n"),
+        "image/jpeg" => bytes.starts_with(&[0xff, 0xd8, 0xff]),
+        "image/gif" => bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a"),
+        "image/webp" => bytes.starts_with(b"RIFF") && bytes.get(8..12) == Some(b"WEBP"),
+        _ => false,
+    };
+    if !valid {
+        return Err("project image content does not match its format".to_owned());
+    }
+    Ok(())
+}
+
+/// Image-only surface for Markdown; never expose generic file reads to WebUI.
+/// The server canonicalizes paths and rejects symlink escapes on every read.
+pub async fn read_image(
+    servers: &ServerManager,
+    project: &Project,
+    path: &str,
+) -> Result<Vec<u8>, String> {
+    let mime_type = project_image_mime_type(path)?;
+    let entry = stat(servers, project, path).await?;
+    if entry.kind != FsEntryKind::File {
+        return Err("project image must be a regular file".to_owned());
+    }
+    if entry.size > MAX_PROJECT_IMAGE_BYTES as u64 {
+        return Err("project image exceeds the 10 MB limit".to_owned());
+    }
+    let bytes = read_file(servers, project, path).await?;
+    validate_image_bytes(&bytes, mime_type)?;
+    Ok(bytes)
 }
 
 pub async fn write_file(
@@ -148,4 +212,57 @@ pub async fn search(
             json!({ "project": project.path, "query": query }),
         )
         .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn project_image_paths_are_relative_and_image_only() {
+        assert_eq!(
+            project_image_mime_type("screenshots/page.PNG").unwrap(),
+            "image/png"
+        );
+        assert_eq!(project_image_mime_type("./a.jpeg").unwrap(), "image/jpeg");
+        for path in [
+            "",
+            "/tmp/a.png",
+            "../a.png",
+            "x/../a.png",
+            "C:/a.png",
+            "x\\a.png",
+            "file://a.png",
+            "a.png?x",
+            "a.svg",
+            "a.txt",
+            "a\0.png",
+        ] {
+            assert!(project_image_mime_type(path).is_err(), "accepted {path:?}");
+        }
+    }
+
+    #[test]
+    fn project_images_require_matching_binary_signatures() {
+        for (mime, bytes) in [
+            ("image/png", b"\x89PNG\r\n\x1a\n".as_slice()),
+            ("image/jpeg", [0xff, 0xd8, 0xff].as_slice()),
+            ("image/gif", b"GIF89a".as_slice()),
+            ("image/webp", b"RIFF1234WEBP".as_slice()),
+        ] {
+            assert!(validate_image_bytes(bytes, mime).is_ok());
+            assert!(validate_image_bytes(b"<html>not an image</html>", mime).is_err());
+            assert!(validate_image_bytes(&[], mime).is_err());
+        }
+        assert!(validate_image_bytes(b"GIF89a", "image/png").is_err());
+    }
+
+    #[test]
+    fn project_images_are_size_bounded_even_after_the_stat_check() {
+        let mut bytes = vec![0; MAX_PROJECT_IMAGE_BYTES + 1];
+        bytes[..8].copy_from_slice(b"\x89PNG\r\n\x1a\n");
+        assert!(validate_image_bytes(&bytes, "image/png").is_err());
+        bytes.pop();
+        assert!(validate_image_bytes(&bytes, "image/png").is_ok());
+    }
 }

@@ -1,10 +1,12 @@
+import { readProjectImage } from "@/lib/files";
 import {
 	readSessionHistoryImage,
 	type SessionHistoryFingerprint,
 } from "@/lib/sessions";
-import type {
-	ChatConversationImage,
-	ChatImageAttachment,
+import {
+	MAX_CHAT_IMAGE_BYTES,
+	type ChatConversationImage,
+	type ChatImageAttachment,
 } from "@/lib/chat-submission";
 
 /**
@@ -29,9 +31,9 @@ function touchImageUrl(key: string) {
 	imageUrlCache.set(key, entry);
 }
 
-function storeImageUrl(key: string, blob: Blob): string {
+function storeImageUrl(key: string | null, blob: Blob): string {
 	const url = URL.createObjectURL(blob);
-	imageUrlCache.set(key, { url });
+	imageUrlCache.set(key ?? url, { url });
 	while (imageUrlCache.size > MAX_CACHED_IMAGE_URLS) {
 		const oldest = imageUrlCache.keys().next().value;
 		if (oldest === undefined) break;
@@ -101,32 +103,20 @@ export function getLocalChatImageUrl(imageId: string): string | null {
 	return entry.url;
 }
 
-/**
- * Lazily loads a history image payload. Concurrent requests for the same key
- * share one IPC round trip; resolved URLs land in the shared LRU cache.
- */
-export function loadChatHistoryImageUrl(
+function loadCachedImageUrl(
 	key: string,
-	image: ChatConversationImage,
-	scope: ChatHistoryImageScope,
+	readBlob: () => Promise<Blob>,
+	reuseCachedUrl = true,
 ): Promise<string> {
-	const entry = imageUrlCache.get(key);
+	const entry = reuseCachedUrl ? imageUrlCache.get(key) : undefined;
 	if (entry) {
 		touchImageUrl(key);
 		return Promise.resolve(entry.url);
 	}
 	const inFlight = historyImageFetches.get(key);
 	if (inFlight) return inFlight;
-	const readImage = scope.readImage ?? readSessionHistoryImage;
-	const request = readImage(
-		scope.projectId,
-		scope.sessionPath,
-		image.id,
-		scope.fingerprint ?? undefined,
-	)
-		.then((bytes) =>
-			storeImageUrl(key, new Blob([bytes], { type: image.mimeType })),
-		)
+	const request = readBlob()
+		.then((blob) => storeImageUrl(reuseCachedUrl ? key : null, blob))
 		.finally(() => {
 			if (historyImageFetches.get(key) === request) {
 				historyImageFetches.delete(key);
@@ -134,4 +124,53 @@ export function loadChatHistoryImageUrl(
 		});
 	historyImageFetches.set(key, request);
 	return request;
+}
+
+/** Concurrent requests share one read; resolved URLs use the bounded LRU cache. */
+export function loadChatHistoryImageUrl(
+	key: string,
+	image: ChatConversationImage,
+	scope: ChatHistoryImageScope,
+): Promise<string> {
+	return loadCachedImageUrl(key, async () => {
+		const readImage = scope.readImage ?? readSessionHistoryImage;
+		const bytes = await readImage(
+			scope.projectId,
+			scope.sessionPath,
+			image.id,
+			scope.fingerprint ?? undefined,
+		);
+		return new Blob([bytes], { type: image.mimeType });
+	});
+}
+
+export type ChatProjectImageScope = {
+	projectId: string;
+	sessionKey: string;
+	readImage?: (
+		projectId: string,
+		path: string,
+	) => Promise<Uint8Array<ArrayBuffer>>;
+};
+
+export function loadChatProjectImageUrl(
+	path: string,
+	mimeType: string,
+	scope: ChatProjectImageScope,
+): Promise<string> {
+	const key = `project\0${scope.projectId}\0${scope.sessionKey}\0${path}`;
+	// Project files can change between replies; share in-flight reads, not snapshots.
+	return loadCachedImageUrl(
+		key,
+		async () => {
+			const bytes = await (scope.readImage ?? readProjectImage)(
+				scope.projectId,
+				path,
+			);
+			if (bytes.length > MAX_CHAT_IMAGE_BYTES)
+				throw new Error("Image is too large");
+			return new Blob([bytes], { type: mimeType });
+		},
+		false,
+	);
 }

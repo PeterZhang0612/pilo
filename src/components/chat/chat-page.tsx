@@ -12,6 +12,7 @@ import {
 	type ChatConversationViewportHandle,
 } from "@/components/chat/chat-conversation-viewport";
 import { ChatImageScopeProvider } from "@/components/chat/chat-image-viewer";
+import { ChatMarkdownImageScopeProvider } from "@/components/chat/chat-markdown-image";
 import { ChatPendingQueue } from "@/components/chat/chat-pending-queue";
 import { ChatRuntimeRecoveryNotice } from "@/components/chat/chat-runtime-recovery-notice";
 import { ChatInterruptedTurnNotice } from "@/components/chat/chat-interrupted-turn-notice";
@@ -235,6 +236,10 @@ function ChatPageImpl(props: ChatPageProps) {
 					}
 				: null,
 		[historyImageFingerprint, session.projectRecord.id, session.sessionPath],
+	);
+	const projectImageScope = useMemo(
+		() => ({ projectId: session.projectRecord.id, sessionKey: session.id }),
+		[session.projectRecord.id, session.id],
 	);
 	const scrollToBottom = useCallback((smooth = true) => {
 		conversationViewportRef.current?.scrollToBottom(smooth);
@@ -471,42 +476,47 @@ function ChatPageImpl(props: ChatPageProps) {
 							overlay={emptyTemporarySession}
 						/>
 						<div className="relative flex min-h-0 flex-1 flex-col">
-							<ChatImageScopeProvider scope={historyImageScope}>
-								<ChatConversationViewport
-									ref={conversationViewportRef}
-									active={active}
-									visualLive={live}
-									showSwitchSkeleton={showSwitchSkeleton}
-									sessionId={performanceSessionId ?? session.id}
-									sessionPath={session.sessionPath}
-									messages={messages}
-									onVisibleRangeChange={requestHistoryRange}
-									activeAssistantMessageId={activeAssistantMessageId}
-									compacting={compacting}
-									effectiveLoadState={effectiveLoadState}
-									initialScrollTop={viewportUiState.scrollTop}
-									initialSticky={viewportUiState.sticky}
-									initialVirtualizerCache={
-										viewportUiState.virtualizerMessageCount === messages.length
-											? viewportUiState.virtualizerCache
-											: undefined
-									}
-									onScrollStateChange={persistScrollState}
-									onVirtualizerCacheChange={persistVirtualizerCache}
-									runtimeScrollRef={scrollRef}
-									onForkAssistant={
-										!session.temporary ? handleForkAssistant : undefined
-									}
-									forkingMessageId={forkingMessageId}
-									forkDisabled={
-										runtimeBusy || historyPending || Boolean(forkingMessageId)
-									}
-									suppressInterruptedError={session.externalTurnOpen || running}
-									onVisualReady={handleVisualReady}
-									onRetry={onRetry}
-									onRetryHistory={retryHistory}
-								/>
-							</ChatImageScopeProvider>
+							<ChatMarkdownImageScopeProvider scope={projectImageScope}>
+								<ChatImageScopeProvider scope={historyImageScope}>
+									<ChatConversationViewport
+										ref={conversationViewportRef}
+										active={active}
+										visualLive={live}
+										showSwitchSkeleton={showSwitchSkeleton}
+										sessionId={performanceSessionId ?? session.id}
+										sessionPath={session.sessionPath}
+										messages={messages}
+										onVisibleRangeChange={requestHistoryRange}
+										activeAssistantMessageId={activeAssistantMessageId}
+										compacting={compacting}
+										effectiveLoadState={effectiveLoadState}
+										initialScrollTop={viewportUiState.scrollTop}
+										initialSticky={viewportUiState.sticky}
+										initialVirtualizerCache={
+											viewportUiState.virtualizerMessageCount ===
+											messages.length
+												? viewportUiState.virtualizerCache
+												: undefined
+										}
+										onScrollStateChange={persistScrollState}
+										onVirtualizerCacheChange={persistVirtualizerCache}
+										runtimeScrollRef={scrollRef}
+										onForkAssistant={
+											!session.temporary ? handleForkAssistant : undefined
+										}
+										forkingMessageId={forkingMessageId}
+										forkDisabled={
+											runtimeBusy || historyPending || Boolean(forkingMessageId)
+										}
+										suppressInterruptedError={
+											session.externalTurnOpen || running
+										}
+										onVisualReady={handleVisualReady}
+										onRetry={onRetry}
+										onRetryHistory={retryHistory}
+									/>
+								</ChatImageScopeProvider>
+							</ChatMarkdownImageScopeProvider>
 							<ChatFindLayer
 								open={findOpen}
 								onClose={() => setFindOpen(false)}

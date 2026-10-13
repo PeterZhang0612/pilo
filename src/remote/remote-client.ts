@@ -290,6 +290,15 @@ export function loadRemoteHistoryImage(
 	return remoteFetchBytes(token, `/api/v1/history/image?${query.toString()}`);
 }
 
+export function loadRemoteProjectImage(
+	token: string,
+	projectId: string,
+	path: string,
+) {
+	const query = new URLSearchParams({ projectId, path });
+	return remoteFetchBytes(token, `/api/v1/files/image?${query.toString()}`);
+}
+
 export function generateRemoteSessionTitle(
 	token: string,
 	projectId: string,

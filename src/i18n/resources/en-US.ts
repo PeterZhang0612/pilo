@@ -423,11 +423,13 @@ const enUS = {
 		pluginNotifications: "Plugin notifications",
 		closePluginNotifications: "Close plugin notifications",
 		saveImage: "Save image",
+		openOriginalImage: "Open original image (new tab)",
 		closeImage: "Close",
 		viewImage: "View image {{name}}",
 		imagePreviewReleased:
 			"Image preview was released; reopen the session to load it",
 		loadImageFailed: "Failed to load; click to retry",
+		imageUnavailable: "Image unavailable",
 		noPiReply: "No Pi reply yet.",
 		messageNavigation: "Message navigation",
 		scrollLatest: "Scroll to latest message",

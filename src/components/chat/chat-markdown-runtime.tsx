@@ -8,7 +8,10 @@ import {
 	type PluginConfig,
 } from "streamdown";
 
-import { MARKDOWN_COMPONENTS } from "@/components/chat/chat-markdown-components";
+import {
+	MARKDOWN_COMPONENTS,
+	MARKDOWN_REHYPE_PLUGINS,
+} from "@/components/chat/chat-markdown-components";
 import {
 	createMarkdownMermaidConfig,
 	createMarkdownMermaidPlugin,
@@ -358,6 +361,7 @@ const ChatMarkdownBody = memo(function ChatMarkdownBody({
 				parseMarkdownIntoBlocksFn={blockParser}
 				plugins={plugins}
 				remarkPlugins={MARKDOWN_REMARK_PLUGINS}
+				rehypePlugins={MARKDOWN_REHYPE_PLUGINS}
 				components={MARKDOWN_COMPONENTS}
 				translations={{
 					copied: t("chat.copied"),

@@ -12,7 +12,7 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { Download, ImageOff, X } from "lucide-react";
+import { Download, ExternalLink, ImageOff, X } from "lucide-react";
 
 import {
 	chatImageCacheKey,
@@ -114,7 +114,7 @@ const INTERSECTION_OBSERVER_SUPPORTED =
 	typeof IntersectionObserver !== "undefined";
 
 /** Observes the thumbnail and flips to visible slightly before it enters the viewport. */
-function useLazyImageVisible<T extends HTMLElement>(disabled: boolean) {
+export function useLazyImageVisible<T extends HTMLElement>(disabled: boolean) {
 	const ref = useRef<T | null>(null);
 	const [visible, setVisible] = useState(!INTERSECTION_OBSERVER_SUPPORTED);
 	useEffect(() => {
@@ -170,6 +170,7 @@ function useChatImageLightboxState() {
 export const ChatImageLightbox = memo(function ChatImageLightbox() {
 	const { t } = useTranslation();
 	const state = useChatImageLightboxState();
+	const downloadable = state?.url.startsWith("blob:") ?? false;
 	return (
 		<DialogPrimitive.Root
 			open={state !== null}
@@ -180,7 +181,7 @@ export const ChatImageLightbox = memo(function ChatImageLightbox() {
 			<DialogPrimitive.Portal>
 				<DialogPrimitive.Overlay className="fixed inset-0 z-[var(--z-dialog-overlay)] bg-black/75 backdrop-blur-[2px] duration-100 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0" />
 				<DialogPrimitive.Content
-					className="fixed inset-0 z-[var(--z-dialog)] flex flex-col p-3 outline-none @min-[40rem]:p-6"
+					className="fixed inset-0 z-[var(--z-dialog)] flex flex-col pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pt-[max(0.75rem,env(safe-area-inset-top))] outline-none @min-[40rem]:p-6"
 					onEscapeKeyDown={(event) => {
 						if (isImeComposingNativeKeyboardEvent(event)) {
 							event.preventDefault();
@@ -200,15 +201,23 @@ export const ChatImageLightbox = memo(function ChatImageLightbox() {
 							{state ? (
 								<a
 									href={state.url}
-									download={state.name || "image"}
-									className="inline-flex size-7 items-center justify-center rounded-md text-white/80 transition-colors hover:bg-white/15 hover:text-white"
-									aria-label={t("chat.saveImage")}
+									download={downloadable ? state.name || "image" : undefined}
+									target={downloadable ? undefined : "_blank"}
+									rel={downloadable ? undefined : "noopener noreferrer"}
+									className="inline-flex size-9 items-center justify-center rounded-md text-white/80 transition-colors hover:bg-white/15 hover:text-white any-pointer-coarse:size-11"
+									aria-label={t(
+										downloadable ? "chat.saveImage" : "chat.openOriginalImage",
+									)}
 								>
-									<Download className="size-4" />
+									{downloadable ? (
+										<Download className="size-4" />
+									) : (
+										<ExternalLink className="size-4" />
+									)}
 								</a>
 							) : null}
 							<DialogPrimitive.Close
-								className="inline-flex size-7 items-center justify-center rounded-md text-white/80 transition-colors hover:bg-white/15 hover:text-white"
+								className="inline-flex size-9 items-center justify-center rounded-md text-white/80 transition-colors hover:bg-white/15 hover:text-white any-pointer-coarse:size-11"
 								aria-label={t("chat.closeImage")}
 							>
 								<X className="size-4" />

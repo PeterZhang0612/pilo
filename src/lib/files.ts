@@ -27,6 +27,17 @@ export function readProjectFile(
 	}).then((data) => new Uint8Array(data));
 }
 
+/** Image-only, project-contained read for assistant Markdown replies. */
+export function readProjectImage(
+	projectId: string,
+	path: string,
+): Promise<Uint8Array<ArrayBuffer>> {
+	return invoke<number[]>("project_fs_read_image", {
+		id: projectId,
+		path,
+	}).then((data) => new Uint8Array(data));
+}
+
 export function writeProjectFile(
 	projectId: string,
 	path: string,

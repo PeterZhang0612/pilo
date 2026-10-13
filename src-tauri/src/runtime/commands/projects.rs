@@ -320,6 +320,17 @@ pub async fn project_fs_read_file(
 }
 
 #[tauri::command]
+pub async fn project_fs_read_image(
+    app: AppHandle,
+    runtime: State<'_, PiloRuntime>,
+    id: String,
+    path: String,
+) -> Result<Vec<u8>, String> {
+    let project = project::get(&app, &id)?;
+    remote_fs::read_image(&runtime.servers, &project, &path).await
+}
+
+#[tauri::command]
 pub async fn project_fs_write_file(
     app: AppHandle,
     runtime: State<'_, PiloRuntime>,

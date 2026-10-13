@@ -67,6 +67,7 @@ POST /api/v1/chat/start      -> PiSessionSnapshot        body: ChatStartRequest
 GET  /api/v1/chat/state?sessionKey=...
 POST /api/v1/chat/rpc        -> 204                      body: { sessionKey, command }
 GET  /api/v1/files/search?projectId=&query= -> string[]  (read-only @ mention search)
+GET  /api/v1/files/image?projectId=&path= -> binary image bytes (project-relative, image-only)
 GET  /api/v1/events          -> WebSocket upgrade
 ```
 
@@ -188,9 +189,9 @@ remote_devices(id, name, pair_ip, token_hash, created_at_ms, last_seen_at_ms, ex
   cannot prevent a late response from deleting credentials.
 - **RPC allowlist**: only chat-mutating/querying commands are forwarded (see
   `ALLOWED` in `api.rs`). No generic command proxy; Terminal/Files/Git are not exposed.
-- **`@` mentions**: `GET /api/v1/files/search` is the only Files surface. It
-  forwards the host `fs.search` and returns file **paths only** — no reads,
-  writes, or directory listing.
+- **Files surfaces**: `GET /api/v1/files/search` forwards host `fs.search` and
+  returns paths only. `/files/image` is the image-only exception for Markdown
+  replies (see below); generic reads, writes, and directory listing stay private.
 - **Model catalog**: `GET /api/v1/models` is read-only and returns the
   Desktop-maintained `project_model_cache` snapshot (or `null` when absent).
   Remote must not spawn its own Pi probe session for the draft composer; the
@@ -378,4 +379,84 @@ Do not return a receipt based on only the reusable secret + address ID.
   replay/sequence live in the adapter layer, never in the Pi runtime.
 - **Transport-neutral client.** `PiloClient` is implemented by `TauriPiloClient`
   (invoke/channel) and `WebPiloClient` (fetch/WebSocket); only Remote-MVP features
-  are migrated — Files/Terminal/Git stay Tauri-only.
+  are migrated — generic Files/Terminal/Git stay Tauri-only. Project image reads
+  are shared through `PiloClient.readProjectImage`.
+
+## Project Images in Markdown Replies
+
+### 1. Scope / Trigger
+
+Apply when changing Markdown image rendering, project image transport, or its
+security boundary. This uses plain Pi reply text; it does not extend Pi RPC.
+
+### 2. Signatures
+
+- `project_fs_read_image(id: String, path: String) -> Result<Vec<u8>, String>`
+- Authenticated `GET /api/v1/files/image?projectId=&path=` -> binary bytes
+- `PiloClient.readProjectImage(projectId, path) -> Promise<Uint8Array<ArrayBuffer>>`
+- `remote_fs::read_image(servers, project, path)` owns both transport validations.
+
+### 3. Contracts
+
+- `![caption](./screenshots/page.png)` resolves relative to the original project
+  in its connection environment, not the browser origin or the Pi session file.
+- Frontend decodes URL escaping once and normalizes separators. Backend accepts
+  relative paths only; rejects parent components, control characters and URL syntax.
+- PNG/JPEG/WebP/GIF only, regular files only, at most 10 MB. Check metadata before
+  reading and length/signature afterward. Server canonicalization prevents symlink
+  escapes; no generic filesystem API is exposed to WebUI.
+- HTTP uses Bearer auth and returns `application/octet-stream`, `no-store`,
+  `nosniff`. Tokens must never appear in Markdown, image URLs or query parameters.
+- Desktop and WebUI inject project scope into the shared Markdown image component,
+  including temporary chats. Project reads deduplicate only in flight by project +
+  session + path; new references reread live files instead of reusing completed
+  reads. Each resolved Blob has its own entry in the bounded URL LRU, so rereading
+  a path does not revoke an earlier reply's URL. History images still reuse URLs
+  keyed by session fingerprint.
+- Blob images offer Save image. HTTP(S) images offer Open original image (new tab)
+  with `target="_blank"` and `rel="noopener noreferrer"`, not `download`: browsers
+  ignore that attribute on ordinary cross-origin URLs and otherwise navigate away.
+- `MARKDOWN_REHYPE_PLUGINS` keeps raw/sanitize/harden protections. Between sanitize
+  and harden, `rehypeProjectImages` preserves non-external `src` in the internal
+  `data-pilo-image-src` prop and replaces it with a non-fetchable-by-our-component
+  sentinel. The custom image component validates the preserved path. Do not rely
+  on harden's rewritten URL: it rebases `./` and silently consumes `../`.
+- Images reference live project files, not historical snapshots. No automatic
+  prompt injection, screenshot capture, Pi extension or duplicate session store.
+
+### 4. Validation & Error Matrix
+
+| Condition | Result |
+| --- | --- |
+| Invalid/revoked token | Existing 401 auth handling |
+| Unknown project | HTTP 404 |
+| Absolute/traversal path, unsupported type, non-regular file, >10 MB, signature mismatch | Command error / HTTP 400, no image bytes returned |
+| Missing file / image decode failure | Inline failure with retry |
+| No project scope / invalid Markdown source | Unavailable placeholder; never fetch a browser-relative path |
+
+### 5. Good / Base / Bad Cases
+
+- Good: a project screenshot is interleaved with reply text, previewable and savable.
+- Base: HTTP(S) images and user/tool image display remain supported.
+- Bad: `../private.png`, `/tmp/a.png`, `file://`, data URLs or SVG must not read files.
+
+### 6. Tests Required
+
+- `tests/chat-markdown-images.test.ts`: path decoding/rejection, real Markdown
+  plugin order, surrounding text, HTTPS images, in-flight deduplication, rereading
+  overwritten files without revoking previous URLs, bounded URL retention, retry
+  and history cache regression.
+- `remote_fs::tests`: extension/path, matching signatures and post-read size cap.
+- Existing server filesystem tests: canonical paths and symlink escape rejection.
+- `/tests/chat-markdown-images.html` under Vite: require body
+  `data-test-status="passed"`; checks desktop/mobile layout, inline images,
+  lightbox/save actions, retry, overwritten screenshots in new replies, external
+  action label/target/no-download and no unsafe reader calls. Reader is injected;
+  this does not replace Windows desktop and real Local/WSL/SSH end-to-end checks.
+
+### 7. Wrong vs Correct
+
+- Wrong: render a relative `<img src>` directly, infer safety from harden's rebased
+  URL, use unauthenticated file URLs, or serve arbitrary project bytes to WebUI.
+- Correct: preserve and validate the original source, use the image-only scoped
+  host read, and display Blob URLs through the shared preview component.

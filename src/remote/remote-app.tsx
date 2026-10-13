@@ -21,6 +21,7 @@ import {
 	ChatImageScopeProvider,
 } from "@/components/chat/chat-image-viewer";
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
+import { ChatMarkdownImageScopeProvider } from "@/components/chat/chat-markdown-image";
 import { connectionLabel } from "@/lib/projects";
 import type { PiloClientEventMessage } from "@/lib/pilo-client";
 import { TooltipProvider } from "@/ui";
@@ -384,42 +385,44 @@ function RemoteWorkspace() {
 					/>
 
 					<div className="relative flex min-h-0 flex-1 flex-col">
-						<ChatImageScopeProvider scope={chat.historyImageScope}>
-							<ChatConversationViewport
-								key={chat.routeKey ?? "remote-draft"}
-								active
-								visualLive
-								showSwitchSkeleton={chat.showSwitchSkeleton}
-								sessionId={chat.activeSessionKey ?? "remote-draft"}
-								sessionPath={chat.headerSession?.sessionPath}
-								messages={chat.visibleMessages}
-								onVisibleRangeChange={chat.requestHistoryRange}
-								activeAssistantMessageId={chat.activeAssistantMessageId}
-								compacting={chat.compacting}
-								effectiveLoadState={
-									chat.loadingConversation ? "loading" : "ready"
-								}
-								initialScrollTop={chat.initialScrollState.scrollTop}
-								initialSticky={chat.initialScrollState.sticky}
-								initialVirtualizerCache={
-									chat.initialUiState.virtualizerMessageCount ===
-									chat.visibleMessages.length
-										? chat.initialUiState.virtualizerCache
-										: undefined
-								}
-								onScrollStateChange={chat.persistScrollState}
-								onVirtualizerCacheChange={chat.persistVirtualizerCache}
-								runtimeScrollRef={scrollRef}
-								suppressInterruptedError={active || chat.readOnly}
-								onVisualReady={chat.handleVisualReady}
-								onRetryHistory={chat.retryHistory}
-								onForkAssistant={
-									chat.selectedSession ? chat.handleForkAssistant : undefined
-								}
-								forkingMessageId={chat.forkingMessageId}
-								forkDisabled={chat.forkDisabled}
-							/>
-						</ChatImageScopeProvider>
+						<ChatMarkdownImageScopeProvider scope={chat.projectImageScope}>
+							<ChatImageScopeProvider scope={chat.historyImageScope}>
+								<ChatConversationViewport
+									key={chat.routeKey ?? "remote-draft"}
+									active
+									visualLive
+									showSwitchSkeleton={chat.showSwitchSkeleton}
+									sessionId={chat.activeSessionKey ?? "remote-draft"}
+									sessionPath={chat.headerSession?.sessionPath}
+									messages={chat.visibleMessages}
+									onVisibleRangeChange={chat.requestHistoryRange}
+									activeAssistantMessageId={chat.activeAssistantMessageId}
+									compacting={chat.compacting}
+									effectiveLoadState={
+										chat.loadingConversation ? "loading" : "ready"
+									}
+									initialScrollTop={chat.initialScrollState.scrollTop}
+									initialSticky={chat.initialScrollState.sticky}
+									initialVirtualizerCache={
+										chat.initialUiState.virtualizerMessageCount ===
+										chat.visibleMessages.length
+											? chat.initialUiState.virtualizerCache
+											: undefined
+									}
+									onScrollStateChange={chat.persistScrollState}
+									onVirtualizerCacheChange={chat.persistVirtualizerCache}
+									runtimeScrollRef={scrollRef}
+									suppressInterruptedError={active || chat.readOnly}
+									onVisualReady={chat.handleVisualReady}
+									onRetryHistory={chat.retryHistory}
+									onForkAssistant={
+										chat.selectedSession ? chat.handleForkAssistant : undefined
+									}
+									forkingMessageId={chat.forkingMessageId}
+									forkDisabled={chat.forkDisabled}
+								/>
+							</ChatImageScopeProvider>
+						</ChatMarkdownImageScopeProvider>
 						<div
 							className="relative z-20 -mt-4 w-full shrink-0 pb-[max(1rem,env(safe-area-inset-bottom))]"
 							style={{ paddingRight: scrollbarWidth }}

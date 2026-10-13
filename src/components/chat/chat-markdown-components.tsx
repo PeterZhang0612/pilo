@@ -1,5 +1,7 @@
 import type { ComponentPropsWithoutRef } from "react";
-import type { Components } from "streamdown";
+import { defaultRehypePlugins, type Components } from "streamdown";
+import { rehypeProjectImages } from "@/lib/chat-markdown-images";
+import { MarkdownImage } from "@/components/chat/chat-markdown-image";
 import { cn } from "@/lib/utils";
 
 type MarkdownLinkProps = ComponentPropsWithoutRef<"a"> & {
@@ -57,8 +59,16 @@ function MarkdownTable({ node: _node, ...props }: MarkdownTableProps) {
 	);
 }
 
+export const MARKDOWN_REHYPE_PLUGINS = [
+	defaultRehypePlugins.raw,
+	defaultRehypePlugins.sanitize,
+	rehypeProjectImages,
+	defaultRehypePlugins.harden,
+];
+
 export const MARKDOWN_COMPONENTS = {
 	a: MarkdownLink,
+	img: MarkdownImage,
 	inlineCode: MarkdownInlineCode,
 	table: MarkdownTable,
 } satisfies Components;
