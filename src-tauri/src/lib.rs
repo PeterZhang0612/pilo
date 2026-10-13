@@ -84,9 +84,12 @@ pub fn run() {
             .target(
                 tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Webview).filter(
                     |metadata| {
+                        // Keep WebView runtime failures in file logs only: forwarding
+                        // them to a broken WebView creates a log/eval feedback loop.
                         !metadata
                             .target()
                             .starts_with(tauri_plugin_log::WEBVIEW_TARGET)
+                            && !metadata.target().starts_with("tauri_runtime_wry")
                     },
                 ),
             )

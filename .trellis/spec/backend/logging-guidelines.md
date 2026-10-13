@@ -20,7 +20,13 @@ only `console.error` and `console.warn` to the plugin's `error` and `warn` APIs.
 `console.log` and other hot-path console output are not persisted. The Rust
 `Webview` target filters records whose target starts with `WEBVIEW_TARGET`, so
 frontend-originated records are persisted to the log file without being echoed
-back into the webview.
+back into the webview. This target also rejects `tauri_runtime_wry*` records:
+`app.emit("log://log", ...)` evaluates JavaScript, and an invalid/closing WebView
+can log that evaluation failure through `tauri_runtime_wry`. Forwarding that error
+back to the same WebView creates an unbounded log/eval feedback loop. Apply this
+filter only to the Webview target, never globally; file and stdout diagnostics
+must retain runtime errors. When Windows verification is authorized, confirm an
+unavailable WebView cannot amplify one runtime error into repeated log delivery.
 
 The About settings page opens the same directory with `appLogDir()` and the
 `opener` plugin. Scope `opener:allow-open-path` to `$APPLOG`; the bare command
