@@ -94,9 +94,11 @@ export function useRemoteChatTransport({
 	const rpcSequenceRef = useRef(0);
 	const pendingRpcRef = useRef(new Map<string, PendingRpc>());
 	const lastSequenceRef = useRef(0);
+	const lastSocketMessageAtRef = useRef<number | null>(null);
 
 	const handleSocketMessage = useCallback(
 		(message: PiloClientEventMessage) => {
+			lastSocketMessageAtRef.current = Date.now();
 			if (
 				message.type === "resyncRequired" ||
 				(message.type === "hello" &&
@@ -333,8 +335,28 @@ export function useRemoteChatTransport({
 			if (!client) throw new Error("Chat is not ready");
 			rpcSequenceRef.current += 1;
 			const id = "remote-" + Date.now() + "-" + String(rpcSequenceRef.current);
+			const startedAt = Date.now();
+			let sendCompleted = false;
 			const response = new Promise<T>((resolve, reject) => {
 				const timer = window.setTimeout(() => {
+					console.warn(
+						"Remote Pi RPC timeout",
+						JSON.stringify({
+							id,
+							command:
+								typeof command.type === "string" ? command.type : "unknown",
+							sessionKey: targetSessionKey,
+							timeoutMs,
+							elapsedMs: Date.now() - startedAt,
+							sendCompleted,
+							pendingRequests: pendingRpcRef.current.size,
+							lastSequence: lastSequenceRef.current,
+							lastSocketMessageAgeMs:
+								lastSocketMessageAtRef.current === null
+									? null
+									: Date.now() - lastSocketMessageAtRef.current,
+						}),
+					);
 					pendingRpcRef.current.delete(id);
 					reject(new Error("Pi command timed out"));
 				}, timeoutMs);
@@ -347,7 +369,11 @@ export function useRemoteChatTransport({
 			});
 			try {
 				const [, result] = await Promise.all([
-					client.sendChatCommand(targetSessionKey, { ...command, id }),
+					client
+						.sendChatCommand(targetSessionKey, { ...command, id })
+						.then(() => {
+							sendCompleted = true;
+						}),
 					response,
 				]);
 				return result;

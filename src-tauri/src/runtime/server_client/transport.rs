@@ -117,6 +117,7 @@ impl ServerEventHub {
             .ok()
             .and_then(|bytes| Arc::clone(&queue.bytes).try_acquire_many_owned(bytes).ok());
         if queue.sender.capacity() <= 1 || permit.is_none() {
+            log::warn!(target: "pilo-server", "event stream overflow streamId={stream_id} event={} payloadBytes={bytes} queueCapacity={} availableBytes={}", event.event, queue.sender.capacity(), queue.bytes.available_permits());
             let _ = queue.sender.try_send(QueuedServerEvent {
                 event: ServerEvent {
                     stream_id: stream_id.clone(),
@@ -161,6 +162,7 @@ impl ServerEventHub {
                 .into_values()
                 .collect::<Vec<_>>()
         };
+        log::warn!(target: "pilo-server", "disconnect notifying streams={} reason={message}", senders.len());
         for queue in senders {
             let _ = queue.sender.try_send(QueuedServerEvent {
                 event: event.clone(),
@@ -237,6 +239,8 @@ pub(super) async fn reader_loop(
                         }),
                     };
                     let _ = pending.reply.send(response);
+                } else {
+                    log::warn!(target: "pilo-server", "late or unclaimed response requestId={id}");
                 }
             }
             Ok(Some(Envelope::Event {
@@ -269,6 +273,8 @@ pub(super) async fn mark_disconnected(
     if closed.swap(true, Ordering::AcqRel) {
         return;
     }
+    let pending_count = pending.lock().await.len();
+    log::warn!(target: "pilo-server", "transport disconnected pendingRequests={pending_count} reason={message}");
     events.disconnect(message.clone());
     fail_pending(pending, &message).await;
 }

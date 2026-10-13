@@ -1,6 +1,6 @@
 use std::{
     sync::{Arc, atomic::Ordering},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use serde_json::{Value, json};
@@ -114,8 +114,21 @@ impl ChatSessions {
     async fn wait_for_control_response(
         process: &Arc<ChatProcess>,
         session: &ServerPiSession,
+        session_key: &str,
         command: Value,
     ) -> Result<(), String> {
+        let started = Instant::now();
+        let command_type = command
+            .get("type")
+            .and_then(Value::as_str)
+            .map(str::to_owned);
+        let command_id = command.get("id").and_then(Value::as_str).map(str::to_owned);
+        runtime_trace(
+            "chat.control.begin",
+            Some(session_key),
+            session.stream_id(),
+            json!({ "command": command_type, "id": command_id, "timeoutMs": 30_000 }),
+        );
         let (sender, response) = oneshot::channel();
         {
             let mut reply = process
@@ -129,12 +142,28 @@ impl ChatSessions {
         }
         let result = async {
             session.send_rpc(command).await?;
+            runtime_trace(
+                "chat.control.sent",
+                Some(session_key),
+                session.stream_id(),
+                json!({ "command": command_type, "id": command_id, "elapsedMs": started.elapsed().as_millis() }),
+            );
             tokio::time::timeout(Duration::from_secs(30), response)
                 .await
                 .map_err(|_| "Pi session initialization timed out".to_owned())?
                 .map_err(|_| "Pi session initialization channel closed".to_owned())?
         }
         .await;
+        runtime_trace(
+            "chat.control.end",
+            Some(session_key),
+            session.stream_id(),
+            json!({
+                "command": command_type, "id": command_id, "ok": result.is_ok(),
+                "elapsedMs": started.elapsed().as_millis(),
+                "timedOut": result.as_ref().err().is_some_and(|error| error.contains("timed out")),
+            }),
+        );
         if result.is_err() {
             *process
                 .control_reply
@@ -164,7 +193,14 @@ impl ChatSessions {
         let process = self
             .process(&project, &session_key, &launch, &events)
             .await?;
+        let lock_started = Instant::now();
         let mut session = process.session.lock().await;
+        runtime_trace(
+            "chat.prepare.locked",
+            Some(&session_key),
+            session.stream_id(),
+            json!({ "lockWaitMs": lock_started.elapsed().as_millis() }),
+        );
         if process.closed.load(Ordering::Acquire) {
             return Err("project is closing".to_owned());
         }
@@ -189,6 +225,7 @@ impl ChatSessions {
         let prepared = Self::wait_for_control_response(
             &process,
             &session,
+            &session_key,
             serde_json::json!({ "id": "pilo-session-prepare", "type": "get_state" }),
         )
         .await;
@@ -241,7 +278,14 @@ impl ChatSessions {
         let process = self
             .process(&project, &session_key, &launch, &events)
             .await?;
+        let lock_started = Instant::now();
         let mut session = process.session.lock().await;
+        runtime_trace(
+            "chat.ensure.locked",
+            Some(&session_key),
+            session.stream_id(),
+            json!({ "lockWaitMs": lock_started.elapsed().as_millis() }),
+        );
         if process.closed.load(Ordering::Acquire) {
             return Err("project is closing".to_owned());
         }
@@ -278,7 +322,8 @@ impl ChatSessions {
                 None => serde_json::json!({ "id": "pilo-session-init", "type": "new_session" }),
             }
         };
-        let initialized = Self::wait_for_control_response(&process, &session, command).await;
+        let initialized =
+            Self::wait_for_control_response(&process, &session, &session_key, command).await;
         if let Err(error) = initialized {
             runtime_trace(
                 "chat.ensure.end",

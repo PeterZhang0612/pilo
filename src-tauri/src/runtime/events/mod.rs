@@ -140,6 +140,7 @@ impl Default for RuntimeEventBus {
 
 impl RuntimeEventBus {
     pub fn subscribe(&self, window_label: &str, channel: Channel<RuntimeEventEnvelope>) {
+        let channel_id = channel.id();
         // Reload replaces only this window's channel; other windows stay subscribed.
         self.channels
             .lock()
@@ -149,7 +150,7 @@ impl RuntimeEventBus {
             "channel.subscribe",
             None,
             None,
-            json!({ "windowLabel": window_label }),
+            json!({ "windowLabel": window_label, "channelId": channel_id }),
         );
     }
 
@@ -158,6 +159,12 @@ impl RuntimeEventBus {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .remove(window_label);
+        runtime_trace(
+            "channel.unsubscribe",
+            None,
+            None,
+            json!({ "windowLabel": window_label }),
+        );
     }
 
     pub(crate) fn subscribe_web(&self) -> WebEventReceiver {
@@ -202,7 +209,7 @@ impl RuntimeEventBus {
     pub fn send(&self, event: RuntimeEventEnvelope) {
         let trace = traceable_runtime_event(&event.event);
         let session_key = event.session_key.clone();
-        {
+        let (sequence, payload_bytes) = {
             let mut replay = self
                 .replay
                 .lock()
@@ -257,7 +264,8 @@ impl RuntimeEventBus {
                 queue.buffer.events.push_back((sequenced, bytes));
             }
             let _ = self.web_sender.send(());
-        }
+            (sequence, bytes)
+        };
 
         let channels = self
             .channels
@@ -284,6 +292,9 @@ impl RuntimeEventBus {
                     None,
                     json!({
                         "windowLabel": window_label,
+                        "channelId": channel.id(),
+                        "sequence": sequence,
+                        "payloadBytes": payload_bytes,
                         "event": event_type,
                         "eventDetail": detail,
                     }),
@@ -297,6 +308,9 @@ impl RuntimeEventBus {
                         None,
                         json!({
                             "windowLabel": window_label,
+                            "channelId": channel.id(),
+                            "sequence": sequence,
+                            "payloadBytes": payload_bytes,
                             "event": event_type,
                             "eventDetail": detail,
                             "error": error.to_string(),

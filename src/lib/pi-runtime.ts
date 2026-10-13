@@ -30,6 +30,9 @@ const runtimeEventHandlersBySession = new Map<
 >();
 let runtimeListenerReady: Promise<void> | null = null;
 let runtimeEventChannel: Channel<PiloRuntimeEvent> | null = null;
+let runtimeEventCount = 0;
+let lastRuntimeEventAt: number | null = null;
+let lastRuntimeEventType: PiloRuntimeEvent["type"] | null = null;
 
 function invokeRuntimeEventHandlers(
 	handlers: Iterable<RuntimeEventHandler>,
@@ -45,16 +48,29 @@ function invokeRuntimeEventHandlers(
 }
 
 function traceRuntimeDebug(stage: string, detail: Record<string, unknown>) {
-	if (!import.meta.env.DEV) return;
+	if (
+		!import.meta.env.DEV &&
+		!stage.startsWith("webview.rpc.") &&
+		!stage.startsWith("webview.channel.subscribe.")
+	)
+		return;
 	void invoke("debug_runtime_trace_log", {
 		payload: JSON.stringify({ stage, ...detail }),
 	}).catch(() => undefined);
 }
 
 function traceRuntimeLifecycle(event: PiloRuntimeEvent) {
-	if (!import.meta.env.DEV || event.type === "project_model_scope_changed")
+	if (event.type === "project_model_scope_changed") return;
+	if (
+		!import.meta.env.DEV &&
+		event.type !== "rpc_message" &&
+		event.type !== "process_state" &&
+		event.type !== "runtime_error" &&
+		event.type !== "assistant_message_end"
+	)
 		return;
 	const detail: Record<string, unknown> = {
+		channelId: runtimeEventChannel?.id,
 		sessionKey: event.sessionKey,
 		event: event.type,
 		generation: event.generation,
@@ -117,6 +133,9 @@ function traceRuntimeLifecycle(event: PiloRuntimeEvent) {
 }
 
 function dispatchRuntimeEvent(event: PiloRuntimeEvent) {
+	runtimeEventCount += 1;
+	lastRuntimeEventAt = Date.now();
+	lastRuntimeEventType = event.type;
 	traceRuntimeLifecycle(event);
 	invokeRuntimeEventHandlers(globalRuntimeEventHandlers, event);
 	const scoped = runtimeEventHandlersBySession.get(event.sessionKey);
@@ -130,11 +149,15 @@ function ensureRuntimeEventListener() {
 	runtimeEventChannel = channel;
 	runtimeListenerReady = invoke("runtime_subscribe_events", { channel })
 		.then(() => {
-			traceRuntimeDebug("webview.channel.subscribe.end", { ok: true });
+			traceRuntimeDebug("webview.channel.subscribe.end", {
+				ok: true,
+				channelId: channel.id,
+			});
 		})
 		.catch((error) => {
 			traceRuntimeDebug("webview.channel.subscribe.end", {
 				ok: false,
+				channelId: channel.id,
 				error: String(error),
 			});
 			if (runtimeEventChannel === channel) runtimeEventChannel = null;
@@ -219,6 +242,12 @@ export async function requestPiRpc<T>(
 ): Promise<T> {
 	// Replies are broadcast to all windows, including callers in the same session.
 	const id = `pilo-${randomId()}`;
+	const startedAt = Date.now();
+	const initialEventCount = runtimeEventCount;
+	let sendCompleted = false;
+	let responseReceived = false;
+	let lastSessionEventType: PiloRuntimeEvent["type"] | null = null;
+	let generation: number | null = null;
 	const commandType =
 		typeof command.type === "string" ? command.type : "unknown";
 	traceRuntimeDebug("webview.rpc.begin", {
@@ -241,6 +270,10 @@ export async function requestPiRpc<T>(
 	try {
 		unlisten = await listenRuntimeEvents(
 			(event) => {
+				lastSessionEventType = event.type;
+				if (event.type !== "project_model_scope_changed") {
+					generation = event.generation;
+				}
 				if (event.type === "runtime_error") {
 					rejectResponse?.(new Error(event.message));
 					return;
@@ -263,18 +296,41 @@ export async function requestPiRpc<T>(
 				if (event.type !== "rpc_message" || !isRecord(event.message)) return;
 				if (event.message.type !== "response" || event.message.id !== id)
 					return;
+				responseReceived = true;
 				resolveResponse?.(event.message as PiRpcResponse<T>);
 			},
 			{ sessionKey },
 		);
-		timer = window.setTimeout(
-			() => rejectResponse?.(new Error(i18n.t("errors.piRpcTimeout"))),
-			timeoutMs,
-		);
+		timer = window.setTimeout(() => {
+			console.warn(
+				"Pi RPC timeout",
+				JSON.stringify({
+					id,
+					command: commandType,
+					sessionKey,
+					generation,
+					timeoutMs,
+					elapsedMs: Date.now() - startedAt,
+					sendCompleted,
+					responseReceived,
+					channelId: runtimeEventChannel?.id,
+					receivedEvents: runtimeEventCount - initialEventCount,
+					lastEventAgeMs:
+						lastRuntimeEventAt === null
+							? null
+							: Date.now() - lastRuntimeEventAt,
+					lastEventType: lastRuntimeEventType,
+					lastSessionEventType,
+				}),
+			);
+			rejectResponse?.(new Error(i18n.t("errors.piRpcTimeout")));
+		}, timeoutMs);
 		const [, result] = await Promise.all([
 			invoke(sessionKey ? "chat_session_send_rpc" : "runtime_send_rpc", {
 				sessionKey,
 				command: { ...command, id },
+			}).then(() => {
+				sendCompleted = true;
 			}),
 			response,
 		]);
@@ -289,6 +345,7 @@ export async function requestPiRpc<T>(
 			id,
 			command: commandType,
 			ok: true,
+			elapsedMs: Date.now() - startedAt,
 		});
 		return result.data as T;
 	} catch (error) {
@@ -297,6 +354,9 @@ export async function requestPiRpc<T>(
 			id,
 			command: commandType,
 			ok: false,
+			elapsedMs: Date.now() - startedAt,
+			sendCompleted,
+			responseReceived,
 			error: String(error),
 		});
 		throw error;

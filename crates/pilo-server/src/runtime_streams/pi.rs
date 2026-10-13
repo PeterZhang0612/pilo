@@ -67,33 +67,40 @@ pub(crate) struct PiStopParams {
     stream_id: String,
 }
 
-#[cfg(debug_assertions)]
 fn trace_pi(stage: &str, stream_id: &str, detail: Value) {
-    let ts_ms = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_millis())
-        .unwrap_or_default();
-    let record = json!({
-        "tsMs": ts_ms,
-        "pid": std::process::id(),
-        "source": "pilo-server",
-        "stage": stage,
-        "sessionKey": Value::Null,
-        "streamId": stream_id,
-        "detail": detail,
-    });
-    let path =
-        std::env::temp_dir().join(format!("pilo-runtime-trace-{}.jsonl", std::process::id()));
-    let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) else {
-        return;
-    };
-    let mut line = record.to_string();
-    line.push('\n');
-    let _ = file.write_all(line.as_bytes());
+    if matches!(stage, "pi.start" | "pi.stop" | "pi.stdout_closed") {
+        eprintln!(
+            "[runtime-diagnostics] {}",
+            json!({
+                "pid": std::process::id(), "stage": stage, "streamId": stream_id, "detail": detail,
+            })
+        );
+    }
+    #[cfg(debug_assertions)]
+    {
+        let ts_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|duration| duration.as_millis())
+            .unwrap_or_default();
+        let record = json!({
+            "tsMs": ts_ms,
+            "pid": std::process::id(),
+            "source": "pilo-server",
+            "stage": stage,
+            "sessionKey": Value::Null,
+            "streamId": stream_id,
+            "detail": detail,
+        });
+        let path =
+            std::env::temp_dir().join(format!("pilo-runtime-trace-{}.jsonl", std::process::id()));
+        let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) else {
+            return;
+        };
+        let mut line = record.to_string();
+        line.push('\n');
+        let _ = file.write_all(line.as_bytes());
+    }
 }
-
-#[cfg(not(debug_assertions))]
-fn trace_pi(_stage: &str, _stream_id: &str, _detail: Value) {}
 
 /// Write an inline extension source to a content-addressed temp file so it can
 /// be loaded with an explicit `--extension` flag. Pi runs in this environment,
@@ -264,9 +271,14 @@ pub(crate) async fn pi_start(state: &ServerState, params: PiStartParams) -> Resu
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
-    let mut child = command
-        .spawn()
-        .map_err(|error| format!("failed to start Pi RPC: {error}"))?;
+    let mut child = command.spawn().map_err(|error| {
+        eprintln!(
+            "[runtime-diagnostics] pi.start failed pid={} streamId={} error={error}",
+            std::process::id(),
+            params.stream_id
+        );
+        format!("failed to start Pi RPC: {error}")
+    })?;
     let stdin = Arc::new(Mutex::new(
         child
             .stdin
@@ -440,14 +452,22 @@ pub(crate) async fn pi_send(state: &ServerState, params: PiSendParams) -> Result
         ));
     }
     bytes.push(b'\n');
+    let started = std::time::Instant::now();
     let mut stdin = stdin.lock().await;
+    let lock_wait_ms = started.elapsed().as_millis();
     tokio::time::timeout(std::time::Duration::from_secs(5), async {
         stdin.write_all(&bytes).await?;
         stdin.flush().await
     })
     .await
-    .map_err(|_| format!("timed out while writing Pi stream '{}'", params.stream_id))?
-    .map_err(|error| error.to_string())?;
+    .map_err(|_| {
+        eprintln!("[runtime-diagnostics] pi.send timeout pid={} streamId={} command={} rpcId={} payloadBytes={} elapsedMs={} lockWaitMs={lock_wait_ms}", std::process::id(), params.stream_id, params.command.get("type").and_then(Value::as_str).unwrap_or("unknown"), params.command.get("id").and_then(Value::as_str).unwrap_or("none"), bytes.len(), started.elapsed().as_millis());
+        format!("timed out while writing Pi stream '{}'", params.stream_id)
+    })?
+    .map_err(|error| {
+        eprintln!("[runtime-diagnostics] pi.send failed pid={} streamId={} kind={:?} elapsedMs={}", std::process::id(), params.stream_id, error.kind(), started.elapsed().as_millis());
+        error.to_string()
+    })?;
     Ok(Value::Null)
 }
 

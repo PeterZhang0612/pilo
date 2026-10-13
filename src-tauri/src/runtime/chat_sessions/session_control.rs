@@ -3,6 +3,8 @@ use std::sync::{
     atomic::{AtomicU64, Ordering},
 };
 
+use std::time::Instant;
+
 use serde_json::{Value, json};
 
 use super::{
@@ -87,7 +89,15 @@ impl ChatSessions {
                 .store(registry.usage_sequence, Ordering::Release);
             process
         };
+        let started = Instant::now();
+        runtime_trace(
+            "chat.send.wait_lock",
+            Some(session_key),
+            None,
+            json!({ "command": command_type, "id": command_id }),
+        );
         let session = process.session.lock().await;
+        let lock_wait_ms = started.elapsed().as_millis();
         if process.closed.load(Ordering::Acquire) {
             return Err("project is closing".to_owned());
         }
@@ -95,7 +105,7 @@ impl ChatSessions {
             "chat.send.begin",
             Some(session_key),
             session.stream_id(),
-            json!({ "command": command_type, "id": command_id }),
+            json!({ "command": command_type, "id": command_id, "lockWaitMs": lock_wait_ms }),
         );
         // Protect the gap between accepting a prompt and its first Pi event.
         let work_flag = match command_type.as_str() {
@@ -138,6 +148,7 @@ impl ChatSessions {
                 "command": command_type,
                 "id": command_id,
                 "ok": result.is_ok(),
+                "elapsedMs": started.elapsed().as_millis(),
                 "error": result.as_ref().err(),
             }),
         );

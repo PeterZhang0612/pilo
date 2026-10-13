@@ -47,6 +47,7 @@ impl ServerClient {
         // mismatch, another Pilo version replaced the file between the deploy
         // check and spawn; one forced redeploy resolves that race.
         let mut force_redeploy = false;
+        log::info!(target: "pilo-server", "connect begin connectionId={}", connection.id);
         loop {
             let SpawnedServer {
                 child,
@@ -60,6 +61,8 @@ impl ServerClient {
             let pending = Arc::new(Mutex::new(HashMap::new()));
             let closed = Arc::new(AtomicBool::new(false));
 
+            let launcher_pid = child.id();
+            log::info!(target: "pilo-server", "spawned connectionId={} launcherPid={launcher_pid:?} reused={reused_deployment}", connection.id);
             let writer_task = tokio::spawn(writer_loop(
                 stdin,
                 writer_rx,
@@ -67,12 +70,14 @@ impl ServerClient {
                 Arc::clone(&events),
                 Arc::clone(&closed),
             ));
-            let reader_task = tokio::spawn(reader_loop(
-                stdout,
-                Arc::clone(&pending),
-                Arc::clone(&events),
-                Arc::clone(&closed),
-            ));
+            let read_pending = Arc::clone(&pending);
+            let read_events = Arc::clone(&events);
+            let read_closed = Arc::clone(&closed);
+            let connection_id = connection.id.clone();
+            let reader_task = tokio::spawn(async move {
+                reader_loop(stdout, read_pending, read_events, Arc::clone(&read_closed)).await;
+                log::info!(target: "pilo-server", "reader ended connectionId={connection_id} launcherPid={launcher_pid:?} closed={}", read_closed.load(Ordering::Acquire));
+            });
             let label = connection.name.clone();
             tokio::spawn(async move {
                 let mut buffer = vec![0_u8; 4096];
@@ -131,6 +136,7 @@ impl ServerClient {
                     missing_capabilities.join(", ")
                 ));
             }
+            log::info!(target: "pilo-server", "connected connectionId={} launcherPid={launcher_pid:?} version={} protocol={}", connection.id, ping.server_version, ping.protocol_version);
             return Ok(client);
         }
     }
@@ -169,7 +175,24 @@ impl ServerClient {
         if self.is_closed() {
             return Err("pilo-server connection is closed".to_owned());
         }
+        let started = std::time::Instant::now();
         let id = self.request_id.fetch_add(1, Ordering::Relaxed);
+        let stream_id = params
+            .get("streamId")
+            .and_then(Value::as_str)
+            .map(str::to_owned);
+        let command_type = params
+            .pointer("/command/type")
+            .and_then(Value::as_str)
+            .map(str::to_owned);
+        let command_id = params
+            .pointer("/command/id")
+            .and_then(Value::as_str)
+            .map(str::to_owned);
+        let trace_request = matches!(method, "pi.start" | "pi.send" | "pi.stop" | "server.ping");
+        if trace_request {
+            log::info!(target: "pilo-server", "request begin requestId={id} method={method} streamId={stream_id:?} command={command_type:?} rpcId={command_id:?} writerCapacity={}", self.writer.capacity());
+        }
         let (reply_tx, reply_rx) = oneshot::channel();
         self.pending
             .lock()
@@ -188,14 +211,30 @@ impl ServerClient {
             self.pending.lock().await.remove(&id);
             return Err("pilo-server connection is closed".to_owned());
         }
-        match tokio::time::timeout(timeout, reply_rx).await {
+        let enqueue_ms = started.elapsed().as_millis();
+        let result = match tokio::time::timeout(timeout, reply_rx).await {
             Ok(Ok(result)) => result,
             Ok(Err(_)) => Err("pilo-server response channel closed".to_owned()),
             Err(_) => {
-                self.pending.lock().await.remove(&id);
+                let pending_count = {
+                    let mut pending = self.pending.lock().await;
+                    pending.remove(&id);
+                    pending.len()
+                };
+                let launcher_pid = self
+                    .process
+                    .lock()
+                    .await
+                    .as_ref()
+                    .and_then(|process| process.child.id());
+                log::warn!(target: "pilo-server", "request timeout launcherPid={launcher_pid:?} requestId={id} method={method} streamId={stream_id:?} command={command_type:?} rpcId={command_id:?} elapsedMs={} timeoutMs={} pendingRequests={pending_count} writerCapacity={} closed={}", started.elapsed().as_millis(), timeout.as_millis(), self.writer.capacity(), self.is_closed());
                 Err(format!("pilo-server request '{method}' timed out"))
             }
+        };
+        if trace_request {
+            log::info!(target: "pilo-server", "request end requestId={id} method={method} streamId={stream_id:?} rpcId={command_id:?} ok={} elapsedMs={} enqueueMs={enqueue_ms}", result.is_ok(), started.elapsed().as_millis());
         }
+        result
     }
 
     async fn request_typed_with_timeout<T: DeserializeOwned>(
@@ -230,6 +269,8 @@ impl ServerClient {
         let Some(mut process) = self.process.lock().await.take() else {
             return;
         };
+        let launcher_pid = process.child.id();
+        log::info!(target: "pilo-server", "stop begin launcherPid={launcher_pid:?}");
         // Closing stdin lets pilo-server stop its Pi/PTY children on EOF. Killing
         // the server first bypasses that cleanup and can orphan those processes.
         process.writer_task.abort();
@@ -238,10 +279,12 @@ impl ServerClient {
             .await
             .is_err()
         {
+            log::warn!(target: "pilo-server", "graceful stop timed out launcherPid={launcher_pid:?}; killing server");
             let _ = process.child.start_kill();
             let _ =
                 tokio::time::timeout(std::time::Duration::from_secs(1), process.child.wait()).await;
         }
         process.reader_task.abort();
+        log::info!(target: "pilo-server", "stop end launcherPid={launcher_pid:?}");
     }
 }

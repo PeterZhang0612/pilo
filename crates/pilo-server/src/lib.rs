@@ -74,6 +74,10 @@ struct ServerState {
 }
 
 pub async fn serve_stdio() -> Result<(), Box<dyn std::error::Error>> {
+    eprintln!(
+        "[runtime-diagnostics] server started pid={} version={SERVER_VERSION} maxInFlight={MAX_IN_FLIGHT_REQUESTS}",
+        std::process::id()
+    );
     let (writer_tx, mut writer_rx) = mpsc::channel::<Envelope>(256);
     let state = ServerState {
         writer: writer_tx,
@@ -91,7 +95,12 @@ pub async fn serve_stdio() -> Result<(), Box<dyn std::error::Error>> {
         let stdout = tokio::io::stdout();
         let mut stdout = stdout;
         while let Some(message) = writer_rx.recv().await {
-            if write_frame(&mut stdout, message).await.is_err() {
+            if let Err(error) = write_frame(&mut stdout, message).await {
+                eprintln!(
+                    "[runtime-diagnostics] server stdout failed pid={} kind={:?} error={error}",
+                    std::process::id(),
+                    error.kind()
+                );
                 break;
             }
         }
@@ -101,7 +110,16 @@ pub async fn serve_stdio() -> Result<(), Box<dyn std::error::Error>> {
     let mut stdin = stdin;
     let mut requests = JoinSet::new();
     let read_result = loop {
-        while requests.try_join_next().is_some() {}
+        while let Some(result) = requests.try_join_next() {
+            if let Err(error) = result {
+                eprintln!(
+                    "[runtime-diagnostics] server request task failed pid={} panic={} cancelled={}",
+                    std::process::id(),
+                    error.is_panic(),
+                    error.is_cancelled()
+                );
+            }
+        }
         let message = match read_frame(&mut stdin).await {
             Ok(Some(message)) => message,
             Ok(None) => break Ok(()),
@@ -116,25 +134,59 @@ pub async fn serve_stdio() -> Result<(), Box<dyn std::error::Error>> {
         else {
             continue;
         };
+        let admission_started = Instant::now();
+        if state.request_slots.available_permits() == 0 {
+            eprintln!(
+                "[runtime-diagnostics] server request capacity exhausted pid={} requestId={id} method={method} maxInFlight={MAX_IN_FLIGHT_REQUESTS}",
+                std::process::id()
+            );
+        }
         let Ok(permit) = Arc::clone(&state.request_slots).acquire_owned().await else {
             break Ok(());
         };
+        if admission_started.elapsed().as_secs() >= 1 {
+            eprintln!(
+                "[runtime-diagnostics] server request admission delayed pid={} requestId={id} method={method} elapsedMs={}",
+                std::process::id(),
+                admission_started.elapsed().as_millis()
+            );
+        }
         let state = state.clone();
         requests.spawn(async move {
             let _permit = permit;
-            let response = match dispatch(&state, &method, params, binary).await {
+            let started = Instant::now();
+            let stream_id = params.get("streamId").and_then(Value::as_str).map(str::to_owned);
+            let rpc_id = params.pointer("/command/id").and_then(Value::as_str).map(str::to_owned);
+            let result = dispatch(&state, &method, params, binary).await;
+            if result.is_err() || started.elapsed().as_secs() >= 5 {
+                eprintln!("[runtime-diagnostics] server request pid={} requestId={id} method={method} streamId={stream_id:?} rpcId={rpc_id:?} ok={} elapsedMs={} activeRequests={}", std::process::id(), result.is_ok(), started.elapsed().as_millis(), MAX_IN_FLIGHT_REQUESTS.saturating_sub(state.request_slots.available_permits()));
+            }
+            let response = match result {
                 Ok(reply) => Envelope::response_with_binary(id, reply.value, reply.binary),
                 Err(error) => Envelope::error(id, "request_failed", error),
             };
-            let _ = state.writer.send(response).await;
+            if state.writer.send(response).await.is_err() {
+                eprintln!("[runtime-diagnostics] server response queue closed pid={} requestId={id} method={method}", std::process::id());
+            }
         });
     };
 
+    eprintln!(
+        "[runtime-diagnostics] server stdin ended pid={} reason={:?} activeRequests={}",
+        std::process::id(),
+        read_result.as_ref().err().map(std::io::Error::kind),
+        requests.len()
+    );
     // Cancel pending pi.start before draining the registry, so no request can
     // spawn a new child after shutdown cleanup has already passed it.
     requests.abort_all();
     while requests.join_next().await.is_some() {}
     let mut pi = state.pi.lock().await;
+    eprintln!(
+        "[runtime-diagnostics] server cleanup pid={} piProcesses={}",
+        std::process::id(),
+        pi.len()
+    );
     for (_, mut process) in pi.drain() {
         let _ = process.child.kill().await;
     }
@@ -150,6 +202,10 @@ pub async fn serve_stdio() -> Result<(), Box<dyn std::error::Error>> {
     }
     drop(state.writer);
     let _ = writer_task.await;
+    eprintln!(
+        "[runtime-diagnostics] server stopped pid={}",
+        std::process::id()
+    );
     read_result?;
     Ok(())
 }

@@ -56,6 +56,7 @@ async fn event_socket(
     let events = state.app.state::<RuntimeEventBus>().inner().clone();
     let mut receiver = events.subscribe_web();
     let snapshot_sequence = events.latest_sequence();
+    log::info!(target: "remote-webui", "event socket opened deviceId={} after={after:?} latestSequence={snapshot_sequence}", auth_session.device.id);
 
     if send_ws_json(
         &mut socket,
@@ -85,6 +86,7 @@ async fn event_socket(
                 }
             }
             None => {
+                log::warn!(target: "remote-webui", "event replay gap deviceId={} after={after} latestSequence={snapshot_sequence}", auth_session.device.id);
                 if send_ws_json(
                     &mut socket,
                     &json!({ "type": "resyncRequired", "latestSequence": snapshot_sequence }),
@@ -104,18 +106,18 @@ async fn event_socket(
     auth_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     auth_tick.tick().await;
 
-    loop {
+    let close_reason = loop {
         tokio::select! {
             changed = shutdown.changed() => {
                 if changed.is_ok() && *shutdown.borrow() {
                     let _ = socket.send(Message::Close(None)).await;
-                    break;
+                    break "shutdown";
                 }
             }
             _ = auth_tick.tick() => {
                 if !remote_token_is_valid(&state.paths, &auth_session.token).await {
                     let _ = socket.send(Message::Close(None)).await;
-                    break;
+                    break "authentication expired";
                 }
             }
             changed = auth_generation.changed() => {
@@ -123,15 +125,19 @@ async fn event_socket(
                     || !remote_token_is_valid(&state.paths, &auth_session.token).await
                 {
                     let _ = socket.send(Message::Close(None)).await;
-                    break;
+                    break "authentication changed";
                 }
             }
             incoming = socket.recv() => {
                 match incoming {
-                    Some(Ok(Message::Close(_))) | None | Some(Err(_)) => break,
+                    Some(Ok(Message::Close(_))) | None => break "peer closed",
+                    Some(Err(error)) => {
+                        log::warn!(target: "remote-webui", "event socket read failed deviceId={} error={error}", auth_session.device.id);
+                        break "socket read failed";
+                    }
                     Some(Ok(Message::Ping(data))) => {
                         if socket.send(Message::Pong(data)).await.is_err() {
-                            break;
+                            break "pong send failed";
                         }
                     }
                     _ => {}
@@ -146,10 +152,11 @@ async fn event_socket(
                         match collect_event_batch(first, &mut receiver).await {
                             EventBatchResult::Ready(batch) => {
                                 if send_event_batch(&mut socket, &batch).await.is_err() {
-                                    break;
+                                    break "event send failed";
                                 }
                             }
                             EventBatchResult::Lagged => {
+                                log::warn!(target: "remote-webui", "event batch lagged deviceId={} latestSequence={}", auth_session.device.id, events.latest_sequence());
                                 if send_ws_json(
                                     &mut socket,
                                     &json!({ "type": "resyncRequired", "latestSequence": events.latest_sequence() }),
@@ -157,13 +164,14 @@ async fn event_socket(
                                 .await
                                 .is_err()
                                 {
-                                    break;
+                                    break "resync send failed";
                                 }
                             }
-                            EventBatchResult::Closed => break,
+                            EventBatchResult::Closed => break "event receiver closed",
                         }
                     }
-                    Err(broadcast::error::RecvError::Lagged(_)) => {
+                    Err(broadcast::error::RecvError::Lagged(skipped)) => {
+                        log::warn!(target: "remote-webui", "event receiver lagged deviceId={} skipped={skipped} latestSequence={}", auth_session.device.id, events.latest_sequence());
                         if send_ws_json(
                             &mut socket,
                             &json!({ "type": "resyncRequired", "latestSequence": events.latest_sequence() }),
@@ -171,14 +179,15 @@ async fn event_socket(
                         .await
                         .is_err()
                         {
-                            break;
+                            break "resync send failed";
                         }
                     }
-                    Err(broadcast::error::RecvError::Closed) => break,
+                    Err(broadcast::error::RecvError::Closed) => break "event receiver closed",
                 }
             }
         }
-    }
+    };
+    log::info!(target: "remote-webui", "event socket closed deviceId={} reason={close_reason} latestSequence={}", auth_session.device.id, events.latest_sequence());
 }
 
 enum EventBatchResult {
@@ -217,7 +226,12 @@ async fn send_event_batch(
 
 async fn send_ws_json(socket: &mut WebSocket, value: &Value) -> Result<(), axum::Error> {
     let text = serde_json::to_string(value).unwrap_or_else(|_| "{}".to_owned());
-    socket.send(Message::Text(text.into())).await
+    socket
+        .send(Message::Text(text.into()))
+        .await
+        .inspect_err(|error| {
+            log::warn!(target: "remote-webui", "event socket send failed error={error}");
+        })
 }
 
 #[cfg(test)]
