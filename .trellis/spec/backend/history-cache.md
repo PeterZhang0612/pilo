@@ -22,6 +22,15 @@ Local/WSL/SSH; Pi JSONL in its original environment remains authoritative.
 - Cache keys include project ID and source path. Merge overlapping
   loads with a per-key lock, then recheck fingerprinted caches inside the lock.
   Release that lock before reading individual image payloads or history pages.
+- Cold loads share two global semaphore slots across projects/connections and
+  both full-history and image-index scans. Cache hits bypass these slots. Acquire
+  the per-key lock before the global slot; parsing, projection, serialization
+  and disk writes retain shared ownership of the permit, including blocking
+  tasks whose HTTP callers are cancelled.
+- Index user-image JSONL ranges before dropping their base64 `data` from parsed
+  entries. Keep image IDs, content positions and MIME types for projection;
+  lazy reads still decode the original source range. Tool-result image payloads
+  are unchanged.
 - Memory LRU: 16 entries, 192 MiB estimated using source size × 2. Histories
   exceeding this estimate use disposable projected-history files when eligible.
 - Disk LRU: 16 entries, 2 GiB total projected bytes and 64 MiB estimated indexes.
@@ -42,7 +51,10 @@ Local/WSL/SSH; Pi JSONL in its original environment remains authoritative.
 
 | Condition | Behavior |
 | --- | --- |
-| Matching fingerprint | Reuse memory or disk projection |
+| Matching fingerprint | Reuse memory or disk projection without cold-load admission |
+| Two other cold scans are running | Wait for a global slot; do not allocate another parser |
+| Cold-load HTTP caller cancels during blocking work | Keep its slot until that blocking work ends |
+| User image line is indexed | Release parsed base64 data; lazy source reads remain valid |
 | Different fingerprint | Read/project source again; replace cached entry |
 | Over disk/index budget | Return uncached history |
 | Temporary cache creation/write fails | Log warning without payload; return history |
@@ -58,8 +70,13 @@ Local/WSL/SSH; Pi JSONL in its original environment remains authoritative.
 
 ## 6. Tests Required
 
-Pending explicit test authorization; these are assertion points, not checks run:
+Existing WSL history tests have passed. These additional assertion points await
+targeted regression coverage; no new repository tests have been added:
 
+- Concurrent distinct-key cold loads stay within two slots; cached pages do not
+  wait behind them. Cancellation keeps a slot while blocking parse/serialize/write
+  continues. User-image data is not retained in parser entries and lazy image
+  bytes still match the original JSONL, including split lines and multiple images.
 - Memory/disk pages produce identical events, directory, stats and fingerprints,
   including empty windows and start/limit clamping.
 - Concurrent first loads share a cached projection; changed fingerprints rebuild.

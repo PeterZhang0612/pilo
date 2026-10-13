@@ -10,6 +10,7 @@ use super::types::{ImageLocation, SessionHistory};
 #[derive(Default)]
 pub(super) struct HistoryParser {
     entries: Vec<Value>,
+    _load_permit: Option<std::sync::Arc<tokio::sync::OwnedSemaphorePermit>>,
     partial_line: Vec<u8>,
     partial_line_offset: u64,
     consumed_bytes: u64,
@@ -17,6 +18,15 @@ pub(super) struct HistoryParser {
 }
 
 impl HistoryParser {
+    pub(super) fn with_load_permit(
+        permit: std::sync::Arc<tokio::sync::OwnedSemaphorePermit>,
+    ) -> Self {
+        Self {
+            _load_permit: Some(permit),
+            ..Self::default()
+        }
+    }
+
     pub(super) fn push(&mut self, mut bytes: &[u8]) {
         let total_bytes = bytes.len() as u64;
         let mut absolute = self.consumed_bytes;
@@ -94,8 +104,23 @@ fn push_entry(
     if line.is_empty() {
         return;
     }
-    if let Ok(value) = serde_json::from_slice::<Value>(line) {
+    if let Ok(mut value) = serde_json::from_slice::<Value>(line) {
         record_image_locations(&value, line_offset, line.len() as u64, image_locations);
+        // User images are fetched from their original JSONL range, not projected
+        // from this payload. Release base64 data as soon as the range is indexed.
+        if value.pointer("/message/role").and_then(Value::as_str) == Some("user")
+            && let Some(parts) = value
+                .pointer_mut("/message/content")
+                .and_then(Value::as_array_mut)
+        {
+            for part in parts {
+                if part.get("type").and_then(Value::as_str) == Some("image")
+                    && let Some(image) = part.as_object_mut()
+                {
+                    image.remove("data");
+                }
+            }
+        }
         entries.push(value);
     }
 }

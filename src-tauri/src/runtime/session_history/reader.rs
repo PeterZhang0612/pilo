@@ -21,6 +21,15 @@ use super::{
 const HISTORY_CHANGED_DURING_READ: &str = "session changed while history was being read";
 const HISTORY_CHANGED_READ_RETRIES: usize = 2;
 
+pub(super) async fn acquire_cold_load() -> Result<Arc<tokio::sync::OwnedSemaphorePermit>, String> {
+    static SLOTS: std::sync::OnceLock<Arc<tokio::sync::Semaphore>> = std::sync::OnceLock::new();
+    Arc::clone(SLOTS.get_or_init(|| Arc::new(tokio::sync::Semaphore::new(2))))
+        .acquire_owned()
+        .await
+        .map(Arc::new)
+        .map_err(|_| "session history loading is shutting down".to_owned())
+}
+
 pub(super) async fn read_fingerprint(
     servers: &ServerManager,
     project: &Project,
@@ -140,11 +149,17 @@ async fn load_history(
             return Ok((HistoryStorage::Disk(file), index, Some(fingerprint)));
         }
     }
-    let (history, fingerprint) = read_file(servers, project, path).await?;
-    let (serialized, index) =
-        tokio::task::spawn_blocking(move || serialize_windowed_history(history))
-            .await
-            .map_err(|error| format!("history serialization task failed: {error}"))??;
+    let load_permit = acquire_cold_load().await?;
+    let (history, fingerprint) =
+        read_file(servers, project, path, Arc::clone(&load_permit)).await?;
+    let serialization_permit = Arc::clone(&load_permit);
+    let (serialized, index) = tokio::task::spawn_blocking(move || {
+        // Blocking work keeps its reservation even if the HTTP caller leaves.
+        let _permit = serialization_permit;
+        serialize_windowed_history(history)
+    })
+    .await
+    .map_err(|error| format!("history serialization task failed: {error}"))??;
     if let Some(fingerprint) = fingerprint {
         if SessionHistoryCache::fits_memory(fingerprint) {
             cache.lock().await.insert_windowed(
@@ -155,9 +170,13 @@ async fn load_history(
             );
         } else if SessionHistoryCache::fits_disk(serialized.len(), &index) {
             let data = Arc::clone(&serialized);
-            match tokio::task::spawn_blocking(move || DiskHistory::create(&data))
-                .await
-                .map_err(|error| format!("history cache write task failed: {error}"))?
+            let disk_permit = Arc::clone(&load_permit);
+            match tokio::task::spawn_blocking(move || {
+                let _permit = disk_permit;
+                DiskHistory::create(&data)
+            })
+            .await
+            .map_err(|error| format!("history cache write task failed: {error}"))?
             {
                 Ok(file) => {
                     let file = Arc::new(file);
@@ -180,9 +199,10 @@ pub(super) async fn read_file(
     servers: &ServerManager,
     project: &Project,
     path: &str,
+    load_permit: Arc<tokio::sync::OwnedSemaphorePermit>,
 ) -> Result<(SessionHistory, Option<SessionFileFingerprint>), String> {
     for attempt in 0..=HISTORY_CHANGED_READ_RETRIES {
-        match read_file_once(servers, project, path).await {
+        match read_file_once(servers, project, path, Arc::clone(&load_permit)).await {
             Err(error)
                 if error == HISTORY_CHANGED_DURING_READ
                     && attempt < HISTORY_CHANGED_READ_RETRIES =>
@@ -199,10 +219,11 @@ async fn read_file_once(
     servers: &ServerManager,
     project: &Project,
     path: &str,
+    load_permit: Arc<tokio::sync::OwnedSemaphorePermit>,
 ) -> Result<(SessionHistory, Option<SessionFileFingerprint>), String> {
     const CHUNK_BYTES: usize = 16 * 1024 * 1024;
     let mut cursor = 0_u64;
-    let mut parser = HistoryParser::default();
+    let mut parser = HistoryParser::with_load_permit(load_permit);
     let mut fingerprint = None;
     let mut snapshot_size = None;
     loop {
