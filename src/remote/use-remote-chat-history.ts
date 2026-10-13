@@ -66,7 +66,8 @@ export function useRemoteChatHistory({
 		historyStore.getSnapshot,
 		historyStore.getSnapshot,
 	);
-	const historyPageRequestsRef = useRef(new Set<number>());
+	const historyPageRequestsRef = useRef(new Map<number, number>());
+	const historyGenerationRef = useRef(0);
 	const [historyFingerprint, setHistoryFingerprint] =
 		useState<SessionHistoryFingerprint | null>(null);
 	const [conversationLoad, setConversationLoad] = useState<{
@@ -135,6 +136,8 @@ export function useRemoteChatHistory({
 	]);
 
 	useEffect(() => {
+		const generation = ++historyGenerationRef.current;
+		historyPageRequestsRef.current.clear();
 		void resyncKey;
 		if (
 			!client ||
@@ -199,6 +202,9 @@ export function useRemoteChatHistory({
 			});
 		return () => {
 			cancelled = true;
+			if (historyGenerationRef.current === generation) {
+				historyGenerationRef.current += 1;
+			}
 		};
 	}, [
 		activeProjectId,
@@ -225,7 +231,9 @@ export function useRemoteChatHistory({
 				!client ||
 				!activeProjectId ||
 				!selectedSessionPath ||
-				!historyFingerprint
+				!historyFingerprint ||
+				conversationLoad.key !== selectedLoadKey ||
+				conversationLoad.status !== "ready"
 			) {
 				return;
 			}
@@ -259,7 +267,9 @@ export function useRemoteChatHistory({
 				) {
 					continue;
 				}
-				historyPageRequestsRef.current.add(pageStart);
+				const generation = historyGenerationRef.current;
+				const isCurrent = () => historyGenerationRef.current === generation;
+				historyPageRequestsRef.current.set(pageStart, generation);
 				void client
 					.loadHistory(activeProjectId, selectedSessionPath, {
 						startMessage: pageStart,
@@ -268,6 +278,7 @@ export function useRemoteChatHistory({
 						fingerprint: historyFingerprint,
 					})
 					.then((result) => {
+						if (!isCurrent()) return;
 						if (
 							!sameHistoryFingerprint(historyFingerprint, result.fingerprint)
 						) {
@@ -287,16 +298,23 @@ export function useRemoteChatHistory({
 						historyStore.hydrate(actualStart, state.messages);
 					})
 					.catch((error) => {
+						if (!isCurrent()) return;
 						if (!handleExpiredAuth(error)) {
 							console.warn("Failed to hydrate remote history window", error);
 						}
 					})
-					.finally(() => historyPageRequestsRef.current.delete(pageStart));
+					.finally(() => {
+						if (historyPageRequestsRef.current.get(pageStart) === generation) {
+							historyPageRequestsRef.current.delete(pageStart);
+						}
+					});
 			}
 		},
 		[
 			activeProjectId,
 			client,
+			conversationLoad,
+			selectedLoadKey,
 			handleExpiredAuth,
 			historyFingerprint,
 			historyStore,
