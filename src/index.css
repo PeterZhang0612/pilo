@@ -98,14 +98,9 @@
 	--font-mono: var(--pilo-code-font-family);
 }
 
-/*
- * 密集元信息字阶（11px）。刻意不放进上面的 `@theme inline`：inline 会把值直接
- * 写进工具类（`font-size: 11px`），而这级必须保留成变量，才能被
- * PreferencesProvider 随页面字号缩放，与其余字阶一致。无 line-height 配对，
- * 因此 `text-2xs` 只改字号，行高沿用所在地的 leading。
- */
+/* Dense metadata follows the UI scale, not the independent reading size. */
 @theme {
-	--text-2xs: 11px;
+	--text-2xs: 0.6875rem;
 }
 
 @layer base {
@@ -114,7 +109,6 @@
 			"Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
 			"Roboto", "Helvetica Neue", Arial, "Noto Sans SC", "PingFang SC",
 			"Microsoft YaHei", "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
-		--pilo-page-font-size: 16px;
 		--pilo-code-font-family:
 			"JetBrains Mono", ui-monospace, "SF Mono", "SFMono-Regular", "Monaco",
 			"Menlo", "Consolas", "Liberation Mono", "Courier New", monospace;
@@ -300,7 +294,7 @@
 	body {
 		margin: 0;
 		font-family: var(--pilo-page-font-family);
-		font-size: var(--pilo-page-font-size);
+		font-size: 1rem;
 		line-height: 1.45;
 		background-color: hsl(var(--background));
 		color: hsl(var(--foreground));
@@ -896,17 +890,37 @@
 	--conversation-max-width: min(94%, 56rem);
 }
 
-@media (max-width: 639px) {
-	/*
-	 * Remote WebUI 主要在手机上使用。iOS Safari 会在聚焦小于 16px 的
-	 * textarea 时自动缩放页面；同时桌面端 28px 控件对触摸偏小。
-	 * 只放大 Remote composer 的输入与触控目标，不改变桌面端密度。
-	 */
-	[data-remote-webui] [data-chat-composer-input] {
-		font-size: 16px;
-		line-height: 24px;
+/* Keep the previous mobile UI text scale without enlarging rem-based geometry. */
+@media (max-width: 1023px) {
+	:root[data-remote-webui] {
+		/* Override the preference's inline root scale only for mobile WebUI. */
+		font-size: 100% !important;
+		--text-2xs: calc(1rem * 11 / 14);
+		--text-xs: calc(1rem * 12 / 14);
+		--text-sm: 1rem;
+		--text-base: calc(1rem * 16 / 14);
+		--text-lg: calc(1rem * 18 / 14);
+		--text-xl: calc(1rem * 20 / 14);
+		--text-2xl: calc(1rem * 24 / 14);
+		--text-3xl: calc(1rem * 30 / 14);
+		--text-4xl: calc(1rem * 36 / 14);
 	}
 
+	:root[data-remote-webui] body {
+		--pilo-mobile-font-family: "Inter", system-ui, sans-serif;
+		--pilo-page-font-family: var(--pilo-mobile-font-family);
+		font-style: normal;
+	}
+
+	/* Keep the iOS focus-zoom floor in landscape and on tablets too. */
+	:root[data-remote-webui] [data-chat-composer-input] {
+		font-size: max(16px, var(--pilo-reading-font-size));
+		line-height: 1.6;
+	}
+}
+
+@media (max-width: 639px) {
+	/* Enlarge compact desktop composer controls for touch without changing desktop density. */
 	[data-remote-webui] [data-chat-composer-toolbar] {
 		gap: 0.25rem;
 	}

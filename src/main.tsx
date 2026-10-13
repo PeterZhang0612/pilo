@@ -150,6 +150,9 @@ class RootErrorBoundary extends React.Component<
 }
 
 async function bootstrap() {
+	if (!DESKTOP_RUNTIME) {
+		document.documentElement.setAttribute("data-remote-webui", "");
+	}
 	const locale = resolveInitialLocale(
 		readStoredLocale(),
 		typeof navigator === "undefined" ? undefined : navigator.language,

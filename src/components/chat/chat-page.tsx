@@ -476,7 +476,10 @@ function ChatPageImpl(props: ChatPageProps) {
 							sidebarCollapsed={sidebarCollapsed}
 							overlay={emptyTemporarySession}
 						/>
-						<div className="relative flex min-h-0 flex-1 flex-col">
+						<div
+							data-chat-panel=""
+							className="relative flex min-h-0 flex-1 flex-col"
+						>
 							<ChatMarkdownImageScopeProvider scope={projectImageScope}>
 								<ChatImageScopeProvider scope={historyImageScope}>
 									<ChatConversationViewport
@@ -530,6 +533,7 @@ function ChatPageImpl(props: ChatPageProps) {
 							{/* 滚动区 scrollbar-gutter 恒为 stable（.chat-scrollbar），paddingRight
 							    恒补偿 gutter 宽度，空会话 → 首条消息不再横跳 */}
 							<div
+								data-chat-composer-region=""
 								className="relative z-20 -mt-4 w-full shrink-0 pb-4"
 								style={{ paddingRight: scrollbarWidth }}
 							>

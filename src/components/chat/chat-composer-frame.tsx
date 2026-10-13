@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 export const CHAT_COMPOSER_TEXTAREA_CLASS_NAME = cn(
-	"input-scrollbar resize-none border-transparent bg-transparent text-sm leading-6 shadow-none",
+	"input-scrollbar resize-none border-transparent bg-transparent text-[length:var(--pilo-reading-font-size)] leading-[1.6] shadow-none",
 	"focus-visible:ring-0 focus-visible:ring-offset-0",
 	"text-input-foreground placeholder:text-input-placeholder",
 	"min-h-12 px-1 py-0",

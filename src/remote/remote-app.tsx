@@ -358,7 +358,10 @@ function RemoteWorkspace() {
 						overlay={chat.conversationUi.messageCount === 0}
 					/>
 
-					<div className="relative flex min-h-0 flex-1 flex-col">
+					<div
+						data-chat-panel=""
+						className="relative flex min-h-0 flex-1 flex-col"
+					>
 						<ChatMarkdownImageScopeProvider scope={chat.projectImageScope}>
 							<ChatImageScopeProvider scope={chat.historyImageScope}>
 								<RemoteConversationViewport
@@ -396,6 +399,7 @@ function RemoteWorkspace() {
 							</ChatImageScopeProvider>
 						</ChatMarkdownImageScopeProvider>
 						<div
+							data-chat-composer-region=""
 							className="relative z-20 -mt-4 w-full shrink-0 pb-[max(1rem,env(safe-area-inset-bottom))]"
 							style={{ paddingRight: scrollbarWidth }}
 						>

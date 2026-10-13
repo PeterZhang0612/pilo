@@ -7,6 +7,7 @@ import { ConversationColumn } from "@/components/chat/chat-conversation-column";
 import { ChatCopyButton } from "@/components/chat/chat-copy-button";
 import type { ChatMessage } from "@/lib/conversation-types";
 import { recordChatMessageRender } from "@/lib/chat-performance";
+import { getPageFontFamilyStack } from "@/lib/font-settings";
 import { usePreferences } from "@/lib/preferences-provider";
 import type { SkillInvocation } from "@/lib/skill-invocation";
 import { parseSkillInvocation } from "@/lib/skill-invocation";
@@ -90,7 +91,7 @@ export const UserMessage = memo(function UserMessage({
 }) {
 	if (recordRender) recordChatMessageRender("user");
 	const { t } = useTranslation();
-	const { pageFontSize } = usePreferences();
+	const { readingFontSize, readingFontFamily } = usePreferences();
 
 	return (
 		<ConversationColumn className="py-2 @min-[40rem]:py-3">
@@ -103,8 +104,11 @@ export const UserMessage = memo(function UserMessage({
 					) : null}
 					<div className="flex min-w-0 max-w-full justify-end">
 						<div
-							className="min-w-0 max-w-full rounded-2xl border border-foreground/[0.08] bg-foreground/[0.05] px-3.5 py-2 leading-6 text-foreground @min-[40rem]:px-4 @min-[40rem]:py-2.5"
-							style={{ fontSize: `${pageFontSize}px` }}
+							className="min-w-0 max-w-full rounded-2xl border border-foreground/[0.08] bg-foreground/[0.05] px-3.5 py-2 leading-[1.6] text-foreground @min-[40rem]:px-4 @min-[40rem]:py-2.5"
+							style={{
+								fontSize: `${readingFontSize}px`,
+								fontFamily: `var(--pilo-mobile-font-family, ${getPageFontFamilyStack(readingFontFamily)})`,
+							}}
 						>
 							{message.images && message.images.length > 0 ? (
 								<div

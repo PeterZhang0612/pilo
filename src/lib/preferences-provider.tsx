@@ -13,14 +13,16 @@ import {
 	DEFAULT_CODE_FONT_FAMILY,
 	DEFAULT_CODE_FONT_SIZE,
 	DEFAULT_PAGE_FONT_FAMILY,
-	DEFAULT_PAGE_FONT_SIZE,
+	DEFAULT_UI_FONT_SIZE,
+	DEFAULT_READING_FONT_SIZE,
 	DEFAULT_TERMINAL_FONT_FAMILY,
 	DEFAULT_TERMINAL_FONT_SIZE,
-	PAGE_FONT_SIZE_SCALE_BASE,
+	DEFAULT_READING_FONT_FAMILY,
 	getMonospaceFontFamilyStack,
 	getPageFontFamilyStack,
 	isCodeFontSize,
-	isPageFontSize,
+	isUiFontSize,
+	isReadingFontSize,
 	isTerminalFontSize,
 	legacyCustomFontFamilyValue,
 	normalizeMonospaceFontFamily,
@@ -28,8 +30,9 @@ import {
 	type CodeFontSize,
 	type MonospaceFontFamily,
 	type PageFontFamily,
-	type PageFontSize,
+	type ReadingFontSize,
 	type TerminalFontSize,
+	type UiFontSize,
 } from "@/lib/font-settings";
 import {
 	DEFAULT_KEYBOARD_SHORTCUTS,
@@ -49,7 +52,9 @@ export type PiloPreferences = {
 	showWorkDuration: boolean;
 	desktopNotifications: boolean;
 	pageFontFamily: PageFontFamily;
-	pageFontSize: PageFontSize;
+	uiFontSize: UiFontSize;
+	readingFontFamily: PageFontFamily;
+	readingFontSize: ReadingFontSize;
 	codeFontFamily: MonospaceFontFamily;
 	codeFontSize: CodeFontSize;
 	terminalFontFamily: MonospaceFontFamily;
@@ -66,7 +71,11 @@ type PreferencesContextValue = PiloPreferences & {
 	setShowWorkDuration: (value: boolean) => void;
 	setDesktopNotifications: (value: boolean) => void;
 	setPageFontFamily: (value: PageFontFamily) => void;
-	setPageFontSize: (value: PageFontSize) => void;
+	setUiFontSize: (value: UiFontSize) => void;
+	setReadingFontFamily: (value: PageFontFamily) => void;
+	setReadingFontSize: (value: ReadingFontSize) => void;
+	resetFontFamilies: () => void;
+	resetFontSizes: () => void;
 	setCodeFontFamily: (value: MonospaceFontFamily) => void;
 	setCodeFontSize: (value: CodeFontSize) => void;
 	setTerminalFontFamily: (value: MonospaceFontFamily) => void;
@@ -75,6 +84,7 @@ type PreferencesContextValue = PiloPreferences & {
 
 type StoredPreferences = Partial<Omit<PiloPreferences, "keyboardShortcuts">> & {
 	keyboardShortcuts?: unknown;
+	pageFontSize?: unknown;
 	conversationFontSize?: unknown;
 	/** 历史版本的“自定义字体列表”输入框值，仅用于迁移。 */
 	pageCustomFontFamily?: unknown;
@@ -92,7 +102,9 @@ const DEFAULT_PREFERENCES: PiloPreferences = {
 	showWorkDuration: true,
 	desktopNotifications: false,
 	pageFontFamily: DEFAULT_PAGE_FONT_FAMILY,
-	pageFontSize: DEFAULT_PAGE_FONT_SIZE,
+	uiFontSize: DEFAULT_UI_FONT_SIZE,
+	readingFontFamily: DEFAULT_READING_FONT_FAMILY,
+	readingFontSize: DEFAULT_READING_FONT_SIZE,
 	codeFontFamily: DEFAULT_CODE_FONT_FAMILY,
 	codeFontSize: DEFAULT_CODE_FONT_SIZE,
 	terminalFontFamily: DEFAULT_TERMINAL_FONT_FAMILY,
@@ -108,11 +120,18 @@ function readStoredPreferences(): PiloPreferences {
 		const raw = window.localStorage.getItem(STORAGE_KEY);
 		if (!raw) return DEFAULT_PREFERENCES;
 		const parsed = JSON.parse(raw) as StoredPreferences;
-		const legacyConversationFontSize = isPageFontSize(
-			parsed.conversationFontSize,
-		)
-			? parsed.conversationFontSize
-			: DEFAULT_PREFERENCES.pageFontSize;
+		const legacyReadingFontSize = isReadingFontSize(parsed.pageFontSize)
+			? parsed.pageFontSize
+			: isReadingFontSize(parsed.conversationFontSize)
+				? parsed.conversationFontSize
+				: DEFAULT_PREFERENCES.readingFontSize;
+		const pageFontFamily = normalizePageFontFamily(
+			legacyCustomFontFamilyValue(
+				parsed.pageCustomFontFamily,
+				parsed.pageFontFamily,
+			),
+			DEFAULT_PREFERENCES.pageFontFamily,
+		);
 		return {
 			sendMessageShortcut:
 				parsed.sendMessageShortcut === "mod-enter"
@@ -135,16 +154,17 @@ function readStoredPreferences(): PiloPreferences {
 				typeof parsed.desktopNotifications === "boolean"
 					? parsed.desktopNotifications
 					: DEFAULT_PREFERENCES.desktopNotifications,
-			pageFontFamily: normalizePageFontFamily(
-				legacyCustomFontFamilyValue(
-					parsed.pageCustomFontFamily,
-					parsed.pageFontFamily,
-				),
-				DEFAULT_PREFERENCES.pageFontFamily,
+			pageFontFamily,
+			uiFontSize: isUiFontSize(parsed.uiFontSize)
+				? parsed.uiFontSize
+				: DEFAULT_PREFERENCES.uiFontSize,
+			readingFontFamily: normalizePageFontFamily(
+				parsed.readingFontFamily,
+				pageFontFamily,
 			),
-			pageFontSize: isPageFontSize(parsed.pageFontSize)
-				? parsed.pageFontSize
-				: legacyConversationFontSize,
+			readingFontSize: isReadingFontSize(parsed.readingFontSize)
+				? parsed.readingFontSize
+				: legacyReadingFontSize,
 			codeFontFamily: normalizeMonospaceFontFamily(
 				legacyCustomFontFamilyValue(
 					parsed.codeCustomFontFamily,
@@ -176,28 +196,12 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
 
 	useLayoutEffect(() => {
 		const root = document.documentElement;
+		// Tailwind text-sm is 14px at 100%; keep this base independent of the default size.
+		root.style.fontSize = `${(preferences.uiFontSize / 14) * 100}%`;
 		root.style.setProperty(
 			"--pilo-page-font-family",
 			getPageFontFamilyStack(preferences.pageFontFamily),
 		);
-		root.style.setProperty(
-			"--pilo-page-font-size",
-			`${preferences.pageFontSize}px`,
-		);
-		const pageFontScale = preferences.pageFontSize / PAGE_FONT_SIZE_SCALE_BASE;
-		for (const [token, defaultSize] of [
-			["--text-2xs", 11],
-			["--text-xs", 12],
-			["--text-sm", 14],
-			["--text-base", 16],
-			["--text-lg", 18],
-			["--text-xl", 20],
-			["--text-2xl", 24],
-			["--text-3xl", 30],
-			["--text-4xl", 36],
-		] as const) {
-			root.style.setProperty(token, `${defaultSize * pageFontScale}px`);
-		}
 		root.style.setProperty(
 			"--pilo-code-font-family",
 			getMonospaceFontFamilyStack(preferences.codeFontFamily),
@@ -210,7 +214,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
 		preferences.codeFontFamily,
 		preferences.codeFontSize,
 		preferences.pageFontFamily,
-		preferences.pageFontSize,
+		preferences.uiFontSize,
 	]);
 
 	useEffect(() => {
@@ -267,19 +271,47 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
 	const setPageFontFamily = useCallback((value: PageFontFamily) => {
 		setPreferences((current) => ({ ...current, pageFontFamily: value }));
 	}, []);
-	const setPageFontSize = useCallback((value: PageFontSize) => {
-		setPreferences((current) => ({ ...current, pageFontSize: value }));
+	const setUiFontSize = useCallback((value: UiFontSize) => {
+		if (!isUiFontSize(value)) return;
+		setPreferences((current) => ({ ...current, uiFontSize: value }));
+	}, []);
+	const setReadingFontFamily = useCallback((value: PageFontFamily) => {
+		setPreferences((current) => ({ ...current, readingFontFamily: value }));
+	}, []);
+	const setReadingFontSize = useCallback((value: ReadingFontSize) => {
+		if (!isReadingFontSize(value)) return;
+		setPreferences((current) => ({ ...current, readingFontSize: value }));
+	}, []);
+	const resetFontFamilies = useCallback(() => {
+		setPreferences((current) => ({
+			...current,
+			pageFontFamily: DEFAULT_PAGE_FONT_FAMILY,
+			readingFontFamily: DEFAULT_READING_FONT_FAMILY,
+			codeFontFamily: DEFAULT_CODE_FONT_FAMILY,
+			terminalFontFamily: DEFAULT_TERMINAL_FONT_FAMILY,
+		}));
+	}, []);
+	const resetFontSizes = useCallback(() => {
+		setPreferences((current) => ({
+			...current,
+			uiFontSize: DEFAULT_UI_FONT_SIZE,
+			readingFontSize: DEFAULT_READING_FONT_SIZE,
+			codeFontSize: DEFAULT_CODE_FONT_SIZE,
+			terminalFontSize: DEFAULT_TERMINAL_FONT_SIZE,
+		}));
 	}, []);
 	const setCodeFontFamily = useCallback((value: MonospaceFontFamily) => {
 		setPreferences((current) => ({ ...current, codeFontFamily: value }));
 	}, []);
 	const setCodeFontSize = useCallback((value: CodeFontSize) => {
+		if (!isCodeFontSize(value)) return;
 		setPreferences((current) => ({ ...current, codeFontSize: value }));
 	}, []);
 	const setTerminalFontFamily = useCallback((value: MonospaceFontFamily) => {
 		setPreferences((current) => ({ ...current, terminalFontFamily: value }));
 	}, []);
 	const setTerminalFontSize = useCallback((value: TerminalFontSize) => {
+		if (!isTerminalFontSize(value)) return;
 		setPreferences((current) => ({ ...current, terminalFontSize: value }));
 	}, []);
 
@@ -295,7 +327,11 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
 			setShowWorkDuration,
 			setDesktopNotifications,
 			setPageFontFamily,
-			setPageFontSize,
+			setUiFontSize,
+			setReadingFontFamily,
+			setReadingFontSize,
+			resetFontFamilies,
+			resetFontSizes,
 			setCodeFontFamily,
 			setCodeFontSize,
 			setTerminalFontFamily,
@@ -311,7 +347,11 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
 			setCollapseLongMessages,
 			setDesktopNotifications,
 			setPageFontFamily,
-			setPageFontSize,
+			setUiFontSize,
+			setReadingFontFamily,
+			setReadingFontSize,
+			resetFontFamilies,
+			resetFontSizes,
 			setKeyboardShortcut,
 			setSendMessageShortcut,
 			setShowWorkDuration,

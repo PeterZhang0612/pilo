@@ -67,6 +67,30 @@ subscribing shell callbacks to every streaming message change.
   (`@tanstack/react-virtual`, `chat-history-window-store`) — keep it out of
   React state to avoid re-render storms.
 
+## Font Preferences
+
+- Font preferences are device-local (`pilo.preferences.v1` in `localStorage`),
+  not synchronized between desktop and WebUI. UI, reading, code and terminal
+  fonts/sizes are independent. Defaults are UI 15px, reading 16px, code 14px and
+  terminal 14px; accepted sizes are finite numbers within the ranges in
+  `src/lib/font-settings.ts`.
+- UI scaling uses a fixed 14px Tailwind `text-sm` baseline, not the configurable
+  default size. Reading/code/terminal sizes stay independent of rem geometry.
+  Legacy `pageFontSize` / `conversationFontSize` migrate to reading size;
+  a missing reading font family falls back to the stored page font family.
+- `resetFontFamilies()` resets only the four families; `resetFontSizes()` resets
+  only the four sizes. Neither action changes unrelated preferences.
+- `src/main.tsx` marks the HTML root with `data-remote-webui` before WebUI boot,
+  including pairing, error pages and portaled menus. At widths up to 1023px,
+  mobile UI text uses the former default scale (`text-sm` 16px with the normal
+  browser root size), without scaling rem geometry. UI/reading fonts use the
+  fixed Inter/system sans-serif stack; composer text has a 16px iOS focus-zoom
+  floor. Desktop preferences must not be overridden by these mobile rules.
+- Shared composer sizing uses actual line height, a 12-line cap and remaining
+  chat-panel space after surrounding controls/safe-area padding. Observe both
+  the panel and composer region; ignore region changes caused only by textarea
+  height, coalesce resize callbacks in animation frames and clean up on unmount.
+
 ## Forbidden
 
 - Introducing Zustand/TanStack Query for a new feature without an explicit

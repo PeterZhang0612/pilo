@@ -60,13 +60,12 @@ export type ToolCallActivity = {
 
 export type AssistantActivity = ThinkingActivity | ToolCallActivity;
 
-const PROCESS_TEXT_CLASS =
-	"text-sm font-medium leading-snug text-muted-foreground";
+const PROCESS_TEXT_CLASS = "font-medium leading-snug text-muted-foreground";
 const PROCESS_ICON_CLASS = "size-3.5 shrink-0 text-muted-foreground";
 
 function ToolDiff({ diff }: { diff: string }) {
 	return (
-		<pre className="scrollbar-pro max-h-64 overflow-auto py-1 font-mono text-xs leading-[1.4]">
+		<pre className="scrollbar-pro max-h-64 overflow-auto py-1 font-mono text-[length:var(--pilo-code-font-size)] leading-[1.4]">
 			{keyedDiffLines(diff).map(({ line, key }) => {
 				const style = diffLineStyle(line);
 				return (
@@ -194,9 +193,9 @@ function ThinkingActivityView({ activity }: { activity: ThinkingActivity }) {
 					text={activity.text}
 					isStreaming={running}
 					className={cn(
-						"!text-xs !leading-[1.5] !text-muted-foreground",
+						"!leading-[1.5] !text-muted-foreground",
 						"[&_p]:!mb-1 [&_li:not(:first-child)]:!mt-0.5",
-						"[&_:is(h1,h2,h3,h4,h5,h6)]:!my-1 [&_:is(h1,h2,h3,h4,h5,h6)]:!text-xs [&_:is(h1,h2,h3,h4,h5,h6)]:!font-medium",
+						"[&_:is(h1,h2,h3,h4,h5,h6)]:!my-1 [&_:is(h1,h2,h3,h4,h5,h6)]:!text-[1em] [&_:is(h1,h2,h3,h4,h5,h6)]:!font-medium",
 						"[&_[data-streamdown='code-block']]:!my-2",
 					)}
 				/>
@@ -238,9 +237,9 @@ function ToolDetail({ activity }: { activity: ToolCallActivity }) {
 		return null;
 
 	return (
-		<div className="w-full pb-1 pt-0.5 text-xs font-normal text-muted-foreground">
+		<div className="w-full pb-1 pt-0.5 font-normal text-muted-foreground">
 			{hasExecutionSummary ? (
-				<div className="flex flex-wrap items-center gap-x-3 gap-y-1 py-1 text-2xs tabular-nums">
+				<div className="flex flex-wrap items-center gap-x-3 gap-y-1 py-1 text-[0.8em] tabular-nums">
 					{exitCode != null ? (
 						<span className={cn(exitCode !== 0 && "text-destructive")}>
 							{t("chat.toolExitCode", { code: exitCode })}
@@ -263,7 +262,7 @@ function ToolDetail({ activity }: { activity: ToolCallActivity }) {
 			{diff ? (
 				<ToolDiff diff={diff} />
 			) : detailText ? (
-				<pre className="scrollbar-pro max-h-56 overflow-auto whitespace-pre-wrap py-0.5 pr-1 font-mono text-xs leading-[1.4] [overflow-wrap:anywhere]">
+				<pre className="scrollbar-pro max-h-56 overflow-auto whitespace-pre-wrap py-0.5 pr-1 font-mono text-[length:var(--pilo-code-font-size)] leading-[1.4] [overflow-wrap:anywhere]">
 					{detailText}
 				</pre>
 			) : null}
@@ -334,7 +333,7 @@ function ToolCallActivityView({
 					<span>{toolLabel(t, activity.toolName)}</span>
 					{previewLabel ? (
 						<Hint label={preview ?? undefined}>
-							<span className="ml-1.5 font-mono text-2xs font-normal text-muted-foreground">
+							<span className="ml-1.5 font-mono text-[length:var(--pilo-code-font-size)] font-normal text-muted-foreground">
 								{previewLabel}
 							</span>
 						</Hint>

@@ -1,4 +1,5 @@
 import {
+	useCallback,
 	useEffect,
 	useLayoutEffect,
 	useMemo,
@@ -39,7 +40,6 @@ import {
 } from "@/components/chat/chat-composer-suggestions";
 
 const MAX_ROWS = 12;
-const LINE_HEIGHT = 24;
 
 export type ChatComposerInputOptions = {
 	value: string;
@@ -80,6 +80,7 @@ export function useChatComposerInput({
 	const { t } = useTranslation();
 	const { sendMessageShortcut, keyboardShortcuts } = usePreferences();
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
+	const surroundingHeightRef = useRef<number | null>(null);
 	const [sendMode, setSendModeState] =
 		useState<ComposerSendMode>(readComposerSendMode);
 	const [sendingNow, setSendingNow] = useState(false);
@@ -137,16 +138,75 @@ export function useChatComposerInput({
 		return () => window.removeEventListener("focus", handleWindowFocus);
 	}, [desktopShortcuts, disabled]);
 
-	useLayoutEffect(() => {
+	const resizeTextarea = useCallback(() => {
 		const textarea = textareaRef.current;
 		if (!textarea) return;
+		const panel = textarea.closest<HTMLElement>("[data-chat-panel]");
+		const composerRegion = textarea.closest<HTMLElement>(
+			"[data-chat-composer-region]",
+		);
+		if (panel && panel.clientHeight === 0) return;
 		textarea.style.height = "auto";
-		const maxHeight = MAX_ROWS * LINE_HEIGHT + 16;
-		const nextHeight = Math.min(textarea.scrollHeight, maxHeight);
-		textarea.style.height = `${Math.max(48, nextHeight)}px`;
-		textarea.style.overflowY =
-			textarea.scrollHeight > maxHeight ? "auto" : "hidden";
+		const styles = window.getComputedStyle(textarea);
+		const lineHeight = Number.parseFloat(styles.lineHeight);
+		const padding =
+			Number.parseFloat(styles.paddingTop) +
+			Number.parseFloat(styles.paddingBottom);
+		const border =
+			Number.parseFloat(styles.borderTopWidth) +
+			Number.parseFloat(styles.borderBottomWidth);
+		const minHeight = Number.parseFloat(styles.minHeight);
+		let maxHeight = MAX_ROWS * lineHeight + padding + border;
+		if (panel && composerRegion) {
+			// Reserve the toolbar, attachments, notices and bottom safe-area padding.
+			const surroundingHeight =
+				composerRegion.getBoundingClientRect().height -
+				textarea.getBoundingClientRect().height;
+			surroundingHeightRef.current = surroundingHeight;
+			maxHeight = Math.max(
+				minHeight,
+				Math.min(maxHeight, panel.clientHeight - surroundingHeight),
+			);
+		}
+		const contentHeight = textarea.scrollHeight + border;
+		textarea.style.height = `${Math.max(minHeight, Math.min(contentHeight, maxHeight))}px`;
+		textarea.style.overflowY = contentHeight > maxHeight ? "auto" : "hidden";
+	}, []);
+
+	useLayoutEffect(() => {
+		resizeTextarea();
 	});
+
+	useLayoutEffect(() => {
+		const textarea = textareaRef.current;
+		const panel = textarea?.closest<HTMLElement>("[data-chat-panel]");
+		if (!textarea || !panel) return;
+		const composerRegion = textarea.closest<HTMLElement>(
+			"[data-chat-composer-region]",
+		);
+		let frame: number | null = null;
+		const observer = new ResizeObserver((entries) => {
+			const panelResized = entries.some((entry) => entry.target === panel);
+			const surroundingHeight = composerRegion
+				? composerRegion.getBoundingClientRect().height -
+					textarea.getBoundingClientRect().height
+				: null;
+			// Ignore region resizes caused only by changes to the textarea height.
+			if (!panelResized && surroundingHeight === surroundingHeightRef.current)
+				return;
+			if (frame !== null) return;
+			frame = requestAnimationFrame(() => {
+				frame = null;
+				resizeTextarea();
+			});
+		});
+		observer.observe(panel);
+		if (composerRegion) observer.observe(composerRegion);
+		return () => {
+			observer.disconnect();
+			if (frame !== null) cancelAnimationFrame(frame);
+		};
+	}, [resizeTextarea]);
 
 	const activeQuery = useMemo(
 		() => activeSuggestionQuery(value, Math.min(caret, value.length)),

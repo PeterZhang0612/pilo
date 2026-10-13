@@ -20,6 +20,7 @@ import {
 import type { ChatMessage } from "@/lib/conversation-types";
 import { recordChatMessageRender } from "@/lib/chat-performance";
 import { formatWorkDuration } from "@/lib/format-duration";
+import { getPageFontFamilyStack } from "@/lib/font-settings";
 import { usePreferences } from "@/lib/preferences-provider";
 import { Button, Spinner, Tooltip, TooltipContent, TooltipTrigger } from "@/ui";
 
@@ -71,7 +72,8 @@ export const AssistantMessage = memo(function AssistantMessage({
 }) {
 	recordChatMessageRender("assistant");
 	const { t } = useTranslation();
-	const { pageFontSize, showWorkDuration } = usePreferences();
+	const { readingFontSize, readingFontFamily, showWorkDuration } =
+		usePreferences();
 	const content = getAssistantMessageContent(message);
 	const activity = getAssistantActivities(content);
 	const isTurnFinished =
@@ -165,14 +167,11 @@ export const AssistantMessage = memo(function AssistantMessage({
 		<ConversationColumn className="group py-2 @min-[40rem]:py-3">
 			<div
 				className="w-full text-foreground"
-				style={
-					replyRunwayPx === undefined
-						? { fontSize: `${pageFontSize}px` }
-						: {
-								fontSize: `${pageFontSize}px`,
-								minHeight: `${replyRunwayPx}px`,
-							}
-				}
+				style={{
+					fontSize: `${readingFontSize}px`,
+					fontFamily: `var(--pilo-mobile-font-family, ${getPageFontFamilyStack(readingFontFamily)})`,
+					minHeight: replyRunwayPx,
+				}}
 			>
 				<div className="relative">
 					{contentNodes}

@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus, X } from "lucide-react";
 
@@ -7,6 +8,7 @@ import { formatKeyboardShortcut } from "@/lib/keyboard-shortcuts";
 import type { PiModel, PiThinkingLevel } from "@/lib/pi-runtime";
 import type { ModelScopeControls } from "@/lib/project-model-scope";
 import { cn } from "@/lib/utils";
+import { getPageFontFamilyStack } from "@/lib/font-settings";
 import { usePreferences } from "@/lib/preferences-provider";
 import {
 	CHAT_IMAGE_ACCEPT,
@@ -138,7 +140,12 @@ export function ChatComposer({
 }: ChatComposerProps) {
 	const { t } = useTranslation();
 	const composerPlaceholder = placeholder ?? t("chat.composerPlaceholder");
-	const { keyboardShortcuts, sendMessageShortcut } = usePreferences();
+	const {
+		keyboardShortcuts,
+		sendMessageShortcut,
+		readingFontSize,
+		readingFontFamily,
+	} = usePreferences();
 	const { fileInputRef, attachments, updateImages, handleFiles, handlePaste } =
 		useChatComposerImages({ images, onImagesChange });
 	const {
@@ -280,6 +287,12 @@ export function ChatComposer({
 					onPaste={handlePaste}
 					disabled={disabled || sendingNow}
 					rows={2}
+					style={
+						{
+							"--pilo-reading-font-size": `${readingFontSize}px`,
+							fontFamily: `var(--pilo-mobile-font-family, ${getPageFontFamilyStack(readingFontFamily)})`,
+						} as CSSProperties
+					}
 					placeholder={composerPlaceholder}
 					className={cn(
 						CHAT_COMPOSER_TEXTAREA_CLASS_NAME,

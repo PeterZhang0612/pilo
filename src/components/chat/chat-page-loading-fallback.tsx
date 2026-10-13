@@ -65,6 +65,7 @@ function LoadingComposer({
 
 	return (
 		<div
+			data-chat-composer-region=""
 			className="relative z-20 -mt-4 w-full shrink-0 pb-4"
 			style={{ paddingRight: scrollbarWidth }}
 		>
@@ -148,7 +149,7 @@ export function ChatPageLoadingFallback({
 					Boolean(session.temporary) && !session.sessionPath && !pendingMessage
 				}
 			/>
-			<div className="relative flex min-h-0 flex-1 flex-col">
+			<div data-chat-panel="" className="relative flex min-h-0 flex-1 flex-col">
 				<div
 					ref={scrollRef}
 					className="chat-scrollbar flex min-h-0 w-full flex-1 flex-col overflow-x-hidden overflow-y-auto"

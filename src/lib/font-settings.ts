@@ -36,17 +36,24 @@ export const MONOSPACE_FONT_BUILTIN_OPTIONS: ReadonlyArray<FontOption> = [
 /** 随应用打包的字体族名（小写）；全量枚举时跳过，避免与内置候选重复。 */
 const BUNDLED_FONT_FAMILIES = new Set(["inter", "jetbrains mono"]);
 
-export const PAGE_FONT_SIZES = [12, 14, 16, 18, 20, 22] as const;
-export const CODE_FONT_SIZES = [11, 12, 13, 14, 16, 18] as const;
-export const TERMINAL_FONT_SIZES = [11, 12, 13, 14, 16, 18] as const;
+export type FontSizeRange = { min: number; max: number };
 
-export type PageFontSize = (typeof PAGE_FONT_SIZES)[number];
-export type CodeFontSize = (typeof CODE_FONT_SIZES)[number];
-export type TerminalFontSize = (typeof TERMINAL_FONT_SIZES)[number];
+export const UI_FONT_SIZE_RANGE: FontSizeRange = { min: 12, max: 18 };
+export const READING_FONT_SIZE_RANGE: FontSizeRange = { min: 12, max: 32 };
+export const CODE_FONT_SIZE_RANGE: FontSizeRange = { min: 10, max: 24 };
+export const TERMINAL_FONT_SIZE_RANGE: FontSizeRange = { min: 10, max: 24 };
+
+export type UiFontSize = number;
+export type ReadingFontSize = number;
+export type CodeFontSize = number;
+export type TerminalFontSize = number;
+
+export const DEFAULT_UI_FONT_SIZE: UiFontSize = 15;
 
 export const DEFAULT_PAGE_FONT_FAMILY: PageFontFamily = "inter";
-export const DEFAULT_PAGE_FONT_SIZE: PageFontSize = 16;
-export const PAGE_FONT_SIZE_SCALE_BASE = 14;
+export const DEFAULT_READING_FONT_SIZE: ReadingFontSize = 16;
+export const DEFAULT_READING_FONT_FAMILY: PageFontFamily =
+	DEFAULT_PAGE_FONT_FAMILY;
 export const DEFAULT_CODE_FONT_FAMILY: MonospaceFontFamily = "jetbrains-mono";
 export const DEFAULT_CODE_FONT_SIZE: CodeFontSize = 14;
 export const DEFAULT_TERMINAL_FONT_FAMILY: MonospaceFontFamily =
@@ -184,16 +191,29 @@ export function normalizeMonospaceFontFamily(
 	return normalizeFontValue(value, LEGACY_MONOSPACE_FONT_FAMILIES, fallback);
 }
 
-export function isPageFontSize(value: unknown): value is PageFontSize {
-	return PAGE_FONT_SIZES.some((size) => size === value);
+function isFontSize(value: unknown, range: FontSizeRange): value is number {
+	return (
+		typeof value === "number" &&
+		Number.isFinite(value) &&
+		value >= range.min &&
+		value <= range.max
+	);
+}
+
+export function isUiFontSize(value: unknown): value is UiFontSize {
+	return isFontSize(value, UI_FONT_SIZE_RANGE);
+}
+
+export function isReadingFontSize(value: unknown): value is ReadingFontSize {
+	return isFontSize(value, READING_FONT_SIZE_RANGE);
 }
 
 export function isCodeFontSize(value: unknown): value is CodeFontSize {
-	return CODE_FONT_SIZES.some((size) => size === value);
+	return isFontSize(value, CODE_FONT_SIZE_RANGE);
 }
 
 export function isTerminalFontSize(value: unknown): value is TerminalFontSize {
-	return TERMINAL_FONT_SIZES.some((size) => size === value);
+	return isFontSize(value, TERMINAL_FONT_SIZE_RANGE);
 }
 
 /** 后端返回的系统字体族及其原生等宽判定。 */

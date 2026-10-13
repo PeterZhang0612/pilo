@@ -308,7 +308,7 @@ export function AssistantWorkedRegion({
 		>
 			<button
 				type="button"
-				className="group/work flex w-full items-center gap-1.5 rounded-md py-0.5 pr-1 text-left text-sm font-medium leading-snug text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+				className="group/work flex w-full items-center gap-1.5 rounded-md py-0.5 pr-1 text-left font-medium leading-snug text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
 				onClick={(event) =>
 					toggleChatExpansionWithAnchor(event.currentTarget, () =>
 						setOpen((value) => !value),
