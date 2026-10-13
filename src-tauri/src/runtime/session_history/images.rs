@@ -25,6 +25,8 @@ pub async fn read_history_image_bytes(
     expected_fingerprint: Option<(u64, u64)>,
 ) -> Result<Vec<u8>, String> {
     let key = cache_key(project, path);
+    let load_lock = cache.lock().await.load_lock(&key);
+    let load_guard = load_lock.lock().await;
     let fingerprint = match expected_fingerprint {
         Some((file_size, file_mtime_ns)) => SessionFileFingerprint {
             file_size,
@@ -52,6 +54,7 @@ pub async fn read_history_image_bytes(
         locations
     };
 
+    drop(load_guard);
     let location = locations
         .get(image_id)
         .ok_or_else(|| format!("session history image '{image_id}' was not found"))?;

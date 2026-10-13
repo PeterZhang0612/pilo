@@ -6,7 +6,11 @@ use crate::domain::Project;
 use crate::runtime::server_client::ServerManager;
 
 use super::{
-    cache::{SessionFileFingerprint, SessionHistoryCache, cache_key, fingerprint_from_metadata},
+    cache::{
+        SessionFileFingerprint, SessionHistoryCache, SessionHistoryWindowIndex, cache_key,
+        fingerprint_from_metadata,
+    },
+    disk::DiskHistory,
     parser::HistoryParser,
     serialize::{
         serialize_history_response, serialize_history_window_response, serialize_windowed_history,
@@ -48,36 +52,18 @@ pub async fn read_history_json(
     path: &str,
     expected_fingerprint: Option<(u64, u64)>,
 ) -> Result<Vec<u8>, String> {
-    let key = cache_key(project, path);
-    if let Some((file_size, file_mtime_ns)) = expected_fingerprint {
-        let fingerprint = SessionFileFingerprint {
-            file_size,
-            file_mtime_ns,
-        };
-        if let Some(serialized) = cache.lock().await.get_serialized(&key, fingerprint) {
-            return Ok(serialize_history_response(
-                serialized.as_ref(),
-                Some(fingerprint),
-            ));
+    let (storage, _, fingerprint) =
+        load_history(servers, cache, project, path, expected_fingerprint).await?;
+    match storage {
+        HistoryStorage::Memory(serialized) => {
+            Ok(serialize_history_response(&serialized, fingerprint))
         }
-    } else if let Some(fingerprint) = read_fingerprint(servers, project, path).await?
-        && let Some(serialized) = cache.lock().await.get_serialized(&key, fingerprint)
-    {
-        return Ok(serialize_history_response(
-            serialized.as_ref(),
-            Some(fingerprint),
-        ));
+        HistoryStorage::Disk(file) => {
+            tokio::task::spawn_blocking(move || file.read_full(fingerprint))
+                .await
+                .map_err(|error| format!("history cache read task failed: {error}"))?
+        }
     }
-
-    let (history, fingerprint) = read_file(servers, project, path).await?;
-    let (serialized, window_index) = serialize_windowed_history(history)?;
-    if let Some(fingerprint) = fingerprint {
-        cache
-            .lock()
-            .await
-            .insert_windowed(key, fingerprint, Arc::clone(&serialized), window_index);
-    }
-    Ok(serialize_history_response(serialized.as_ref(), fingerprint))
 }
 
 // Thin pass-through from Tauri commands: splitting the arguments would only move them around.
@@ -92,47 +78,102 @@ pub async fn read_history_window_json(
     message_limit: usize,
     include_message_index: bool,
 ) -> Result<Vec<u8>, String> {
-    let key = cache_key(project, path);
-    let cached_fingerprint = if let Some((file_size, file_mtime_ns)) = expected_fingerprint {
-        Some(SessionFileFingerprint {
-            file_size,
-            file_mtime_ns,
-        })
-    } else {
-        read_fingerprint(servers, project, path).await?
-    };
-
-    if let Some(fingerprint) = cached_fingerprint
-        && let Some((serialized, index)) = cache.lock().await.get_windowed(&key, fingerprint)
-    {
-        return Ok(serialize_history_window_response(
-            serialized.as_ref(),
-            index.as_ref(),
+    let (storage, index, fingerprint) =
+        load_history(servers, cache, project, path, expected_fingerprint).await?;
+    match storage {
+        HistoryStorage::Memory(serialized) => Ok(serialize_history_window_response(
+            &serialized,
+            &index,
             start_message,
             message_limit,
             include_message_index,
-            Some(fingerprint),
-        ));
-    }
-
-    let (history, fingerprint) = read_file(servers, project, path).await?;
-    let (serialized, index) = serialize_windowed_history(history)?;
-    if let Some(fingerprint) = fingerprint {
-        cache.lock().await.insert_windowed(
-            key,
             fingerprint,
-            Arc::clone(&serialized),
-            Arc::clone(&index),
-        );
+        )),
+        HistoryStorage::Disk(file) => {
+            file.read_window(
+                index,
+                start_message,
+                message_limit,
+                include_message_index,
+                fingerprint,
+            )
+            .await
+        }
     }
-    Ok(serialize_history_window_response(
-        serialized.as_ref(),
-        index.as_ref(),
-        start_message,
-        message_limit,
-        include_message_index,
-        fingerprint,
-    ))
+}
+
+enum HistoryStorage {
+    Memory(Arc<Vec<u8>>),
+    Disk(Arc<DiskHistory>),
+}
+
+async fn load_history(
+    servers: &ServerManager,
+    cache: &tokio::sync::Mutex<SessionHistoryCache>,
+    project: &Project,
+    path: &str,
+    expected_fingerprint: Option<(u64, u64)>,
+) -> Result<
+    (
+        HistoryStorage,
+        Arc<SessionHistoryWindowIndex>,
+        Option<SessionFileFingerprint>,
+    ),
+    String,
+> {
+    let key = cache_key(project, path);
+    let load_lock = cache.lock().await.load_lock(&key);
+    let _load_guard = load_lock.lock().await;
+    let fingerprint = match expected_fingerprint {
+        Some((file_size, file_mtime_ns)) => Some(SessionFileFingerprint {
+            file_size,
+            file_mtime_ns,
+        }),
+        None => read_fingerprint(servers, project, path).await?,
+    };
+    if let Some(fingerprint) = fingerprint {
+        let mut cache = cache.lock().await;
+        if let Some((serialized, index)) = cache.get_windowed(&key, fingerprint) {
+            return Ok((HistoryStorage::Memory(serialized), index, Some(fingerprint)));
+        }
+        if let Some((file, index)) = cache.get_disk(&key, fingerprint) {
+            return Ok((HistoryStorage::Disk(file), index, Some(fingerprint)));
+        }
+    }
+    let (history, fingerprint) = read_file(servers, project, path).await?;
+    let (serialized, index) =
+        tokio::task::spawn_blocking(move || serialize_windowed_history(history))
+            .await
+            .map_err(|error| format!("history serialization task failed: {error}"))??;
+    if let Some(fingerprint) = fingerprint {
+        if SessionHistoryCache::fits_memory(fingerprint) {
+            cache.lock().await.insert_windowed(
+                key,
+                fingerprint,
+                Arc::clone(&serialized),
+                Arc::clone(&index),
+            );
+        } else if SessionHistoryCache::fits_disk(serialized.len(), &index) {
+            let data = Arc::clone(&serialized);
+            match tokio::task::spawn_blocking(move || DiskHistory::create(&data))
+                .await
+                .map_err(|error| format!("history cache write task failed: {error}"))?
+            {
+                Ok(file) => {
+                    let file = Arc::new(file);
+                    cache.lock().await.insert_disk(
+                        key,
+                        fingerprint,
+                        Arc::clone(&file),
+                        Arc::clone(&index),
+                    );
+                    return Ok((HistoryStorage::Disk(file), index, Some(fingerprint)));
+                }
+                Err(error) => log::warn!(target: "session-history", "{error}"),
+            }
+        }
+    }
+    Ok((HistoryStorage::Memory(serialized), index, fingerprint))
 }
 
 pub(super) async fn read_file(
@@ -169,7 +210,7 @@ async fn read_file_once(
             .map(|size: u64| size.saturating_sub(cursor) as usize)
             .unwrap_or(CHUNK_BYTES);
         if snapshot_size.is_some() && remaining == 0 {
-            return Ok((parser.finish(), fingerprint));
+            return finish_file_read(parser, fingerprint).await;
         }
         let (metadata, binary) = servers
             .request_with_binary(
@@ -214,13 +255,28 @@ async fn read_file_once(
         if next_offset != cursor.saturating_add(chunk.len() as u64) {
             return Err("invalid pilo-server session chunk offset".to_owned());
         }
-        parser.push(&chunk);
+        let empty = chunk.is_empty();
+        parser = tokio::task::spawn_blocking(move || {
+            parser.push(&chunk);
+            parser
+        })
+        .await
+        .map_err(|error| format!("history parsing task failed: {error}"))?;
         if snapshot_size.is_some_and(|size| next_offset >= size) || eof {
-            return Ok((parser.finish(), fingerprint));
+            return finish_file_read(parser, fingerprint).await;
         }
-        if chunk.is_empty() {
+        if empty {
             return Err("pilo-server returned an empty non-terminal session chunk".to_owned());
         }
         cursor = next_offset;
     }
+}
+
+async fn finish_file_read(
+    parser: HistoryParser,
+    fingerprint: Option<SessionFileFingerprint>,
+) -> Result<(SessionHistory, Option<SessionFileFingerprint>), String> {
+    tokio::task::spawn_blocking(move || (parser.finish(), fingerprint))
+        .await
+        .map_err(|error| format!("history parsing task failed: {error}"))
 }

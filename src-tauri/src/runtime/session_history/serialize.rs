@@ -262,33 +262,66 @@ pub(super) fn serialize_history_window_response(
     include_message_index: bool,
     fingerprint: Option<SessionFileFingerprint>,
 ) -> Vec<u8> {
-    let total_messages = index.message_ranges.len();
-    let message_limit = message_limit.clamp(1, 256);
-    let start_message = start_message
-        .unwrap_or_else(|| total_messages.saturating_sub(message_limit))
-        .min(total_messages);
-    let end_message = start_message
-        .saturating_add(message_limit)
-        .min(total_messages);
-
-    let mut history = Vec::with_capacity(serialized_history.len().min(512 * 1024));
-    history.extend_from_slice(&serialized_history[..index.events_content_start]);
-    for (offset, range) in index.message_ranges[start_message..end_message]
-        .iter()
-        .enumerate()
-    {
-        if offset > 0 {
-            history.push(b',');
+    let window = history_window_range(index.message_ranges.len(), start_message, message_limit);
+    let events = match (
+        index.message_ranges.get(window.start),
+        window
+            .end
+            .checked_sub(1)
+            .and_then(|end| index.message_ranges.get(end)),
+    ) {
+        (Some(first), Some(last)) if !window.is_empty() => {
+            &serialized_history[first.start..last.end]
         }
-        history.extend_from_slice(&serialized_history[range.clone()]);
-    }
-    history.extend_from_slice(
+        _ => &[],
+    };
+    serialize_history_window_parts(
+        &serialized_history[..index.events_content_start],
+        events,
         &serialized_history[index.events_content_end..serialized_history.len() - 1],
+        index,
+        window,
+        include_message_index,
+        fingerprint,
+    )
+}
+
+pub(super) fn history_window_range(
+    total_messages: usize,
+    start_message: Option<usize>,
+    message_limit: usize,
+) -> std::ops::Range<usize> {
+    let limit = message_limit.clamp(1, 256);
+    let start = start_message
+        .unwrap_or_else(|| total_messages.saturating_sub(limit))
+        .min(total_messages);
+    start..start.saturating_add(limit).min(total_messages)
+}
+
+pub(super) fn serialize_history_window_parts(
+    prefix: &[u8],
+    events: &[u8],
+    suffix: &[u8],
+    index: &SessionHistoryWindowIndex,
+    window: std::ops::Range<usize>,
+    include_message_index: bool,
+    fingerprint: Option<SessionFileFingerprint>,
+) -> Vec<u8> {
+    let mut history = Vec::with_capacity(
+        events
+            .len()
+            .saturating_add(suffix.len())
+            .saturating_add(256),
     );
+    history.extend_from_slice(prefix);
+    history.extend_from_slice(events);
+    history.extend_from_slice(suffix);
     history.extend_from_slice(
         format!(
-            ",\"windowStartMessage\":{start_message},\"windowMessageCount\":{},\"totalMessages\":{total_messages}",
-            end_message.saturating_sub(start_message)
+            ",\"windowStartMessage\":{},\"windowMessageCount\":{},\"totalMessages\":{}",
+            window.start,
+            window.len(),
+            index.message_ranges.len()
         )
         .as_bytes(),
     );

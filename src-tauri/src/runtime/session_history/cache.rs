@@ -1,19 +1,21 @@
 use std::{
     collections::{HashMap, VecDeque},
     ops::Range,
-    sync::Arc,
+    sync::{Arc, Weak},
 };
 
 use serde_json::Value;
 
 use crate::domain::Project;
 
-use super::types::ImageLocation;
+use super::{disk::DiskHistory, types::ImageLocation};
 
 pub(super) const SESSION_HISTORY_CACHE_CAPACITY: usize = 16;
 pub(super) const SESSION_HISTORY_CACHE_MAX_ESTIMATED_BYTES: usize = 192 * 1024 * 1024;
 const SESSION_HISTORY_CACHE_ESTIMATE_MULTIPLIER: usize = 2;
 const IMAGE_LOCATION_CACHE_CAPACITY: usize = 16;
+const SESSION_HISTORY_DISK_CACHE_MAX_BYTES: usize = 2 * 1024 * 1024 * 1024;
+const SESSION_HISTORY_DISK_INDEX_MAX_BYTES: usize = 64 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct SessionFileFingerprint {
@@ -46,6 +48,14 @@ struct CachedImageLocations {
     locations: ImageLocations,
 }
 
+#[derive(Clone)]
+struct CachedDiskHistory {
+    fingerprint: SessionFileFingerprint,
+    file: Arc<DiskHistory>,
+    index: Arc<SessionHistoryWindowIndex>,
+    index_bytes: usize,
+}
+
 #[derive(Default)]
 pub(crate) struct SessionHistoryCache {
     pub(super) entries: HashMap<String, CachedSessionHistory>,
@@ -53,9 +63,93 @@ pub(crate) struct SessionHistoryCache {
     estimated_bytes: usize,
     image_location_entries: HashMap<String, CachedImageLocations>,
     image_location_order: VecDeque<String>,
+    disk_entries: HashMap<String, CachedDiskHistory>,
+    disk_order: VecDeque<String>,
+    disk_bytes: usize,
+    disk_index_bytes: usize,
+    load_locks: HashMap<String, Weak<tokio::sync::Mutex<()>>>,
 }
 
 impl SessionHistoryCache {
+    pub(super) fn load_lock(&mut self, key: &str) -> Arc<tokio::sync::Mutex<()>> {
+        self.load_locks.retain(|_, lock| lock.strong_count() > 0);
+        if let Some(lock) = self.load_locks.get(key).and_then(Weak::upgrade) {
+            return lock;
+        }
+        let lock = Arc::new(tokio::sync::Mutex::new(()));
+        self.load_locks
+            .insert(key.to_owned(), Arc::downgrade(&lock));
+        lock
+    }
+
+    pub(super) fn fits_memory(fingerprint: SessionFileFingerprint) -> bool {
+        estimated_history_bytes(fingerprint) <= SESSION_HISTORY_CACHE_MAX_ESTIMATED_BYTES
+    }
+
+    pub(super) fn fits_disk(bytes: usize, index: &SessionHistoryWindowIndex) -> bool {
+        bytes <= SESSION_HISTORY_DISK_CACHE_MAX_BYTES
+            && estimated_index_bytes(index) <= SESSION_HISTORY_DISK_INDEX_MAX_BYTES
+    }
+
+    pub(super) fn get_disk(
+        &mut self,
+        key: &str,
+        fingerprint: SessionFileFingerprint,
+    ) -> Option<(Arc<DiskHistory>, Arc<SessionHistoryWindowIndex>)> {
+        let entry = self
+            .disk_entries
+            .get(key)
+            .filter(|entry| entry.fingerprint == fingerprint)?;
+        let result = (Arc::clone(&entry.file), Arc::clone(&entry.index));
+        self.disk_order.retain(|candidate| candidate != key);
+        self.disk_order.push_back(key.to_owned());
+        Some(result)
+    }
+
+    pub(super) fn insert_disk(
+        &mut self,
+        key: String,
+        fingerprint: SessionFileFingerprint,
+        file: Arc<DiskHistory>,
+        index: Arc<SessionHistoryWindowIndex>,
+    ) {
+        self.remove(&key);
+        let index_bytes = estimated_index_bytes(&index);
+        if !Self::fits_disk(file.bytes, &index) {
+            return;
+        }
+        self.disk_bytes = self.disk_bytes.saturating_add(file.bytes);
+        self.disk_index_bytes = self.disk_index_bytes.saturating_add(index_bytes);
+        self.disk_order.push_back(key.clone());
+        self.disk_entries.insert(
+            key,
+            CachedDiskHistory {
+                fingerprint,
+                file,
+                index,
+                index_bytes,
+            },
+        );
+        while self.disk_order.len() > SESSION_HISTORY_CACHE_CAPACITY
+            || self.disk_bytes > SESSION_HISTORY_DISK_CACHE_MAX_BYTES
+            || self.disk_index_bytes > SESSION_HISTORY_DISK_INDEX_MAX_BYTES
+        {
+            let Some(key) = self.disk_order.front().cloned() else {
+                break;
+            };
+            self.remove_disk(&key);
+        }
+    }
+
+    fn remove_disk(&mut self, key: &str) {
+        if let Some(entry) = self.disk_entries.remove(key) {
+            self.disk_bytes = self.disk_bytes.saturating_sub(entry.file.bytes);
+            self.disk_index_bytes = self.disk_index_bytes.saturating_sub(entry.index_bytes);
+        }
+        self.disk_order.retain(|candidate| candidate != key);
+    }
+
+    #[cfg(test)]
     pub(super) fn get_serialized(
         &mut self,
         key: &str,
@@ -148,6 +242,13 @@ impl SessionHistoryCache {
         key: &str,
         fingerprint: SessionFileFingerprint,
     ) -> Option<ImageLocations> {
+        if let Some(entry) = self
+            .disk_entries
+            .get(key)
+            .filter(|entry| entry.fingerprint == fingerprint)
+        {
+            return Some(Arc::clone(&entry.index.image_locations));
+        }
         let locations = match self.image_location_entries.get(key) {
             Some(entry) if entry.fingerprint == fingerprint => Arc::clone(&entry.locations),
             Some(_) => return None,
@@ -213,9 +314,35 @@ impl SessionHistoryCache {
     }
 
     fn remove(&mut self, key: &str) {
+        self.remove_disk(key);
         self.remove_entry(key);
         self.order.retain(|candidate| candidate != key);
     }
+}
+
+fn estimated_index_bytes(index: &SessionHistoryWindowIndex) -> usize {
+    index
+        .message_index_json
+        .capacity()
+        .saturating_add(
+            index
+                .message_ranges
+                .capacity()
+                .saturating_mul(std::mem::size_of::<Range<usize>>()),
+        )
+        .saturating_add(
+            index
+                .image_locations
+                .capacity()
+                .saturating_mul(std::mem::size_of::<(String, ImageLocation)>() + 1),
+        )
+        .saturating_add(
+            index
+                .image_locations
+                .keys()
+                .map(String::capacity)
+                .fold(0_usize, usize::saturating_add),
+        )
 }
 
 fn estimated_history_bytes(fingerprint: SessionFileFingerprint) -> usize {
