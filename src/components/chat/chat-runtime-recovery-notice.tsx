@@ -18,7 +18,7 @@ export function ChatRuntimeRecoveryNotice({
 	onNewTemporaryChat,
 }: {
 	state: ChatRuntimeRecoveryState;
-	onReconnect: () => void;
+	onReconnect?: () => void;
 	onNewTemporaryChat?: () => void;
 }) {
 	const { t } = useTranslation();
@@ -29,14 +29,14 @@ export function ChatRuntimeRecoveryNotice({
 	const recovered = state.status === "recovered";
 	const error = state.status === "failed" ? state.error : undefined;
 	const action =
-		state.status === "failed" && state.recoverable
+		state.status === "failed" && state.recoverable && onReconnect
 			? {
 					label: error
 						? (appErrorActionLabel(error) ?? t("common.retry"))
 						: t("errors.reconnect"),
 					onClick: onReconnect,
 				}
-			: state.status === "failed" && onNewTemporaryChat
+			: state.status === "failed" && !state.recoverable && onNewTemporaryChat
 				? { label: t("chat.newTemporary"), onClick: onNewTemporaryChat }
 				: null;
 	const message = error

@@ -29,6 +29,7 @@ export type ChatRuntimeRecoveryMessageKey =
 	| ""
 	| "chat.temporaryNotRecoverable"
 	| "chat.reconnecting"
+	| "chat.runtimeReconnectRequired"
 	| "chat.reconnected"
 	| "chat.reconnectedActive"
 	| "chat.piProcessFailed"

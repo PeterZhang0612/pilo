@@ -419,6 +419,8 @@ const zhCN = {
 		reconnectingTitle: "正在恢复 Pi 会话",
 		runtimeRecovered: "Pi 会话已恢复",
 		runtimeInterrupted: "运行环境已中断",
+		runtimeReconnectRequired:
+			"此会话已中断，发送新消息时会重新连接；上一轮不会自动重放。",
 		piProcessFailed: "Pi 进程运行失败。",
 		piProcessStopped: "Pi 进程在回复完成前已停止。",
 		responseError: "Pi 返回了错误结果。",

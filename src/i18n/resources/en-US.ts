@@ -421,6 +421,8 @@ const enUS = {
 		reconnectingTitle: "Restoring Pi session",
 		runtimeRecovered: "Pi session recovered",
 		runtimeInterrupted: "Runtime interrupted",
+		runtimeReconnectRequired:
+			"This session was interrupted. Sending a new message will reconnect it; the previous turn will not be replayed.",
 		piProcessFailed: "Pi process failed.",
 		piProcessStopped: "The Pi process stopped before the reply was complete.",
 		responseError: "Pi returned an error result.",

@@ -150,13 +150,6 @@ function ChatPageImpl(props: ChatPageProps) {
 	useEffect(() => {
 		client.updateSessionPath(session.sessionPath);
 	}, [client, session.sessionPath]);
-	useEffect(() => {
-		if (!active || session.sessionPath) return;
-		void client.prepare().catch((error) => {
-			console.warn("Failed to prewarm active Pi session", error);
-		});
-	}, [active, client, session.sessionPath]);
-
 	const sessionConfig = useChatSessionConfig({
 		session,
 		client,
@@ -297,7 +290,6 @@ function ChatPageImpl(props: ChatPageProps) {
 		resumeProjectMcpTurn,
 		failProjectMcpTurn,
 		cancelProjectMcpTurn,
-		handleReconnect,
 		handleSubmit,
 		handleSteer,
 		handleFollowUp,
@@ -306,6 +298,15 @@ function ChatPageImpl(props: ChatPageProps) {
 		handleSendNow,
 		handleStop,
 	} = runtime;
+	useEffect(() => {
+		if (!active || session.sessionPath || recoveryState.status === "failed") {
+			return;
+		}
+		void client.prepare().catch((error) => {
+			console.warn("Failed to prewarm active Pi session", error);
+		});
+	}, [active, client, recoveryState.status, session.sessionPath]);
+
 	const { renderVisual, handleVisualReady } = useChatVisualRetention({
 		active,
 		retainBackgroundVisual,
@@ -555,7 +556,6 @@ function ChatPageImpl(props: ChatPageProps) {
 									) : null}
 									<ChatRuntimeRecoveryNotice
 										state={recoveryState}
-										onReconnect={() => void handleReconnect()}
 										onNewTemporaryChat={
 											session.temporary ? onNewTemporaryChat : undefined
 										}

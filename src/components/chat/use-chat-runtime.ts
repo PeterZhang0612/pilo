@@ -151,7 +151,6 @@ export function useChatRuntime({
 	const {
 		runtimeListenerRef,
 		recoveryState,
-		recoverRuntime,
 		clearRecoveryState,
 		failActiveTurn,
 	} = useChatRuntimeEvents({
@@ -513,7 +512,6 @@ export function useChatRuntime({
 		resumeProjectMcpTurn,
 		failProjectMcpTurn,
 		cancelProjectMcpTurn,
-		handleReconnect: recoverRuntime,
 		handleSubmit,
 		handleSteer,
 		handleFollowUp,

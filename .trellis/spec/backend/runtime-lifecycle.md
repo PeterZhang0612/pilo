@@ -78,9 +78,18 @@ Frontend controller eviction alone is not backend process cleanup.
   on a session lock. Under the registry lock, skip the old notification when a
   replacement occupies the key. This differs from silent idle-cache eviction.
 - A graceful `Stopped` is expected teardown, not a crash: the Desktop ends the
-  active turn without an error and without restarting Pi, and only an unexpected
-  `Failed` runs runtime recovery. `Stopped` still rejects that session's pending
-  RPCs and refreshes activity on both frontends.
+  active turn without an error and without restarting Pi. An unexpected `Failed`
+  shows a Desktop interruption warning without a reconnect button or automatic
+  runtime restart: every open controller receives server disconnect failures, so
+  auto-recovery restarts all interrupted Pi sessions. The next user-submitted
+  prompt ensures the original persisted runtime on demand. Desktop draft prewarm
+  in `ChatPage` must skip `recoveryState.status === "failed"`, even when
+  `ChatSession.sessionPath` is absent; switching back is not permission to restart.
+  Temporary sessions remain unrecoverable. Listener setup failures use the same
+  warning-only behavior.
+  WebUI network auto-reconnect and attachment to an already-running turn are unchanged.
+  `Stopped` still rejects that session's pending RPCs and refreshes activity on both
+  frontends.
 - A disappeared/stopped/failed Host runtime is not successful turn completion for
   unread markers. WebUI rechecks Host state before sending after failure, resumes
   the original persisted path, and keeps asynchronous sends/recovery session-scoped.
@@ -131,7 +140,7 @@ Frontend controller eviction alone is not backend process cleanup.
 | Correlated `remote-` command fails during a turn | Fail that RPC only; do not clear the running turn |
 | Explicit stop/detach | Remove immediately; notify asynchronously unless replaced; no completion unread dot |
 | Graceful `stopped` during a turn | Desktop ends the turn silently; no error, no runtime restart |
-| Unexpected `failed` during a turn | Desktop surfaces the error and attempts runtime recovery |
+| Unexpected `failed` during a turn | Desktop surfaces an interruption warning; reconnect on the next prompt, no reconnect button or automatic Pi restart |
 | WebUI runtime fails | Clear turn/compaction/retry; next send checks Host and resumes original path |
 | Confirmed external `--session` tail is older than 60 seconds | Infer activity from the final message, not age |
 | External probe fails | Keep last activity; unknown is not completion |
@@ -167,7 +176,13 @@ Frontend controller eviction alone is not backend process cleanup.
   stopped for the removed generation, and never notifies an existing replacement.
   Stopped/failed/disappeared Host runtimes do not create completion unread dots.
   Desktop must not show a runtime error or restart Pi for a graceful `stopped`,
-  while `failed` still recovers.
+  while `failed` shows an interruption warning without a reconnect button.
+  Disconnect a server with multiple open sessions, restore the connection, and
+  assert no controller calls `ensure()` automatically. Switch away from and back
+  to an interrupted draft with no `ChatSession.sessionPath`: `prepare()` must not
+  run either. Submitting a new prompt resumes only that session and does not
+  replay the interrupted prompt.
+  Temporary sessions expose no reconnect action.
 - WebUI command rejection with a `remote-` id does not end an unrelated active turn;
   terminal process events reject only that session's RPCs. MCP approval resumes
   the original session after switching away. Runtime recovery preserves its path.

@@ -9,7 +9,6 @@ import type {
 } from "@/components/chat/chat-runtime-types";
 import type { ChatSession } from "@/components/chat/chat-page-utils";
 import { isPresentationBatchedAction } from "@/components/chat/use-runtime-conversation-dispatch";
-import { toAppError } from "@/lib/app-error";
 import { recordChatRuntimeEvent } from "@/lib/chat-performance";
 import { recordChatRuntimeTraceEvent } from "@/lib/chat-runtime-trace";
 import { toConversationAction } from "@/lib/conversation-runtime-adapter";
@@ -130,7 +129,6 @@ export function useChatRuntimeEvents({
 		recoverable: !session.temporary,
 		messageKey: "",
 	});
-	const recoveryPromiseRef = useRef<Promise<boolean> | null>(null);
 	const contextStatsRefreshTimerRef = useRef<number | null>(null);
 
 	const cancelContextStatsRefresh = useCallback(() => {
@@ -218,77 +216,6 @@ export function useChatRuntimeEvents({
 			releaseActiveTurn,
 		],
 	);
-
-	const recoverRuntime = useCallback(async () => {
-		if (session.temporary) {
-			setRecoveryState({
-				status: "failed",
-				recoverable: false,
-				messageKey: "chat.temporaryNotRecoverable",
-			});
-			return false;
-		}
-		if (recoveryPromiseRef.current) return recoveryPromiseRef.current;
-
-		const recovery = (async () => {
-			setRecoveryState({
-				status: "reconnecting",
-				recoverable: true,
-				messageKey: "chat.reconnecting",
-			});
-			try {
-				const runtimeState = await client.state();
-				const resumePath = runtimeState?.sessionPath ?? session.sessionPath;
-				if (!resumePath) {
-					throw new Error(i18n.t("errors.sessionNotPersisted"));
-				}
-
-				const snapshot = await client.ensure();
-				runtimeGenerationRef.current = snapshot.generation;
-				if (snapshot.state !== "running") {
-					throw new Error(
-						i18n.t("errors.runtimeRecoveryState", { state: snapshot.state }),
-					);
-				}
-				const agentState = await client.getPiAgentState();
-				if (!agentState.sessionFile) {
-					throw new Error(i18n.t("errors.runtimeResumePathMissing"));
-				}
-				if (agentState.sessionId) identifiedRef.current?.(agentState.sessionId);
-				await refreshSessionState();
-				setRecoveryState({
-					status: "recovered",
-					recoverable: true,
-					messageKey: "chat.reconnected",
-				});
-				return true;
-			} catch (error) {
-				const appError = toAppError(error);
-				setRecoveryState({
-					status: "failed",
-					recoverable: appError.retryable,
-					messageKey: "",
-					error: appError,
-				});
-				return false;
-			}
-		})();
-		recoveryPromiseRef.current = recovery;
-		try {
-			return await recovery;
-		} finally {
-			if (recoveryPromiseRef.current === recovery) {
-				recoveryPromiseRef.current = null;
-			}
-		}
-	}, [
-		client,
-		identifiedRef,
-		refreshSessionState,
-		runtimeGenerationRef,
-		session.sessionPath,
-		session.temporary,
-	]);
 
 	useEffect(() => {
 		if (recoveryState.status !== "recovered") return;
@@ -419,15 +346,15 @@ export function useChatRuntimeEvents({
 					}
 				}
 				if (event.state === "stopped") return;
-				if (session.temporary) {
-					setRecoveryState({
-						status: "failed",
-						recoverable: false,
-						messageKey: "chat.temporaryNotRecoverable",
-					});
-				} else {
-					void recoverRuntime();
-				}
+				// Each open controller receives server failures; recovery must be opt-in
+				// so a reconnect does not restart every interrupted Pi session.
+				setRecoveryState({
+					status: "failed",
+					recoverable: !session.temporary,
+					messageKey: session.temporary
+						? "chat.temporaryNotRecoverable"
+						: "chat.runtimeReconnectRequired",
+				});
 				return;
 			}
 
@@ -524,7 +451,6 @@ export function useChatRuntimeEvents({
 			notifyTurnResult,
 			queueRuntimeAction,
 			projectMcpApprovalPendingRef,
-			recoverRuntime,
 			refreshSessionState,
 			releaseActiveTurn,
 			runtimeGenerationRef,
@@ -552,15 +478,13 @@ export function useChatRuntimeEvents({
 			if (disposed) return;
 			const turn = activeTurnRef.current;
 			if (turn) failActiveTurn(turn, runtimeErrorMessage(error));
-			if (session.temporary) {
-				setRecoveryState({
-					status: "failed",
-					recoverable: false,
-					messageKey: "chat.temporaryNotRecoverable",
-				});
-			} else {
-				void recoverRuntime();
-			}
+			setRecoveryState({
+				status: "failed",
+				recoverable: !session.temporary,
+				messageKey: session.temporary
+					? "chat.temporaryNotRecoverable"
+					: "chat.runtimeReconnectRequired",
+			});
 		});
 
 		return () => {
@@ -570,14 +494,7 @@ export function useChatRuntimeEvents({
 			}
 			void subscription.then((unlisten) => unlisten()).catch(() => undefined);
 		};
-	}, [
-		activeTurnRef,
-		client,
-		failActiveTurn,
-		recoverRuntime,
-		session.id,
-		session.temporary,
-	]);
+	}, [activeTurnRef, client, failActiveTurn, session.id, session.temporary]);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -633,7 +550,6 @@ export function useChatRuntimeEvents({
 	return {
 		runtimeListenerRef,
 		recoveryState,
-		recoverRuntime,
 		clearRecoveryState,
 		failActiveTurn,
 	};
