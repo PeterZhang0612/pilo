@@ -11,6 +11,14 @@
 - Engine: `rusqlite` (bundled SQLite), no ORM, no query builder.
 - DB file: `pilo.sqlite3` in Tauri `app_data_dir()`.
 - Opened through `storage::open(&app)` (`src-tauri/src/runtime/storage/schema.rs`).
+- `pnpm tauri dev` (also used by `pnpm dev`) automatically merges
+  `src-tauri/tauri.dev.conf.json` through `scripts/tauri.mjs`. Development uses
+  `app.hsingjui.pilo.dev`; release retains `app.hsingjui.pilo`. Keep their app
+  data, logs and WebView storage separate: a development schema migration can
+  make the shared database incompatible with an older installed release.
+  Direct `pnpm exec tauri dev` / `cargo tauri dev` bypass the wrapper and must
+  explicitly pass `--config src-tauri/tauri.dev.conf.json`. Pi JSONL remains
+  shared; never copy or delete the release database to initialize dev.
 - The Pi JSONL files are the single source of truth; SQLite only indexes/caches
   (`sessions`, `project_model_cache`, `session_ui_state`, …). Never copy full
   conversation data into the DB.
@@ -120,6 +128,13 @@ When verification is authorized, cover legacy migration and repeated init,
 colliding paths across projects, scoped delete/rename, ambiguous legacy IPC,
 and desktop/WebUI selection and unread isolation. Migration cannot reconstruct
 rows or preferences already overwritten by the old global path key.
+
+Installed and development builds share `app_data_dir()` when their Tauri
+identifier is the same. After the scoped-key migration, an older binary still
+using `ON CONFLICT(session_path)` fails with `ON CONFLICT clause does not match
+any PRIMARY KEY or UNIQUE constraint`. Check running executable paths and the
+actual table/index definitions before changing migrations. Do not restore global
+path uniqueness to accommodate an old process; stop using the incompatible build.
 
 ### Wrong vs Correct
 

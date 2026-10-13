@@ -6,7 +6,7 @@
 		"dev": "node scripts/dev.mjs",
 		"build": "tsc && vite build",
 		"preview": "vite preview",
-		"tauri": "tauri",
+		"tauri": "node scripts/tauri.mjs",
 		"server:build": "bash scripts/build-pilo-server.sh",
 		"server:build:win": "scripts\\build-pilo-server.cmd",
 		"server:build:linux-x64": "bash scripts/build-pilo-server.sh linux-x86_64",
