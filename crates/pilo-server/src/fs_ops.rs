@@ -57,7 +57,11 @@ fn relative_project_path(relative: &str, allow_root: bool) -> Result<PathBuf, St
     {
         return Err("path must stay inside the project".to_owned());
     }
-    if relative.as_os_str().is_empty() && !allow_root {
+    if !allow_root
+        && !relative
+            .components()
+            .any(|component| matches!(component, std::path::Component::Normal(_)))
+    {
         return Err("project root is not valid for this operation".to_owned());
     }
     Ok(relative.to_path_buf())
@@ -83,6 +87,9 @@ pub(crate) fn checked_existing_path(
         .canonicalize()
         .map_err(|error| format!("path '{}' is not accessible: {error}", relative.display()))?;
     ensure_inside_project(&root, &path)?;
+    if !allow_root && path == root {
+        return Err("project root is not valid for this operation".to_owned());
+    }
     Ok((root, path))
 }
 
@@ -95,7 +102,11 @@ fn checked_entry_path(
     let relative = relative_project_path(relative, allow_root)?;
     let candidate = root.join(relative);
     if candidate == root {
-        return Ok((root.clone(), root));
+        return if allow_root {
+            Ok((root.clone(), root))
+        } else {
+            Err("project root is not valid for this operation".to_owned())
+        };
     }
     let parent = candidate
         .parent()
@@ -129,6 +140,9 @@ pub(crate) fn checked_mutation_path(
         .canonicalize()
         .map_err(|error| format!("path parent is not accessible: {error}"))?;
     ensure_inside_project(&root, &canonical_ancestor)?;
+    if canonical_ancestor == root && ancestor == candidate {
+        return Err("project root is not valid for this operation".to_owned());
+    }
     let suffix = candidate
         .strip_prefix(ancestor)
         .map_err(|error| error.to_string())?;
