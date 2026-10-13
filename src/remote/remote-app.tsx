@@ -11,7 +11,7 @@ import { runtimeActivityFromStates } from "@/components/app/app-session-index-mo
 import { useSessionUnread } from "@/components/app/use-session-unread";
 import { ChatComposer } from "@/components/chat/chat-composer";
 import { ConversationColumn } from "@/components/chat/chat-conversation-column";
-import { ChatConversationViewport } from "@/components/chat/chat-conversation-viewport";
+import { RemoteConversationViewport } from "./remote-conversation-viewport";
 import { ChatInterruptedTurnNotice } from "@/components/chat/chat-interrupted-turn-notice";
 import { PiExtensionNotifications } from "@/components/chat/pi-extension-notifications";
 import { PiExtensionUiDialog } from "@/components/chat/pi-extension-ui-dialog";
@@ -144,7 +144,7 @@ function RemoteWorkspace() {
 		setFatalError,
 		token,
 	} = connection;
-	const active = chat.conversation.active !== null;
+	const active = chat.conversationUi.active;
 	const updateBlocked =
 		active || chat.sending || chat.compacting || chat.retryState !== null;
 
@@ -282,7 +282,7 @@ function RemoteWorkspace() {
 		);
 	}
 
-	const pendingFollowUps = chat.conversation.pendingUsers.filter(
+	const pendingFollowUps = chat.conversationUi.pendingUsers.filter(
 		(user) => user.queueKind === "follow_up",
 	).length;
 
@@ -381,33 +381,31 @@ function RemoteWorkspace() {
 							else setSidebarCollapsed(false);
 						}}
 						sidebarCollapsed={isNarrow ? true : sidebarCollapsed}
-						overlay={chat.conversation.messages.length === 0}
+						overlay={chat.conversationUi.messageCount === 0}
 					/>
 
 					<div className="relative flex min-h-0 flex-1 flex-col">
 						<ChatMarkdownImageScopeProvider scope={chat.projectImageScope}>
 							<ChatImageScopeProvider scope={chat.historyImageScope}>
-								<ChatConversationViewport
+								<RemoteConversationViewport
 									key={chat.routeKey ?? "remote-draft"}
 									active
 									visualLive
 									showSwitchSkeleton={chat.showSwitchSkeleton}
 									sessionId={chat.activeSessionKey ?? "remote-draft"}
 									sessionPath={chat.headerSession?.sessionPath}
-									messages={chat.visibleMessages}
+									conversationStore={chat.conversationStore}
+									historyPrefix={chat.historyPrefix}
 									onVisibleRangeChange={chat.requestHistoryRange}
-									activeAssistantMessageId={chat.activeAssistantMessageId}
 									compacting={chat.compacting}
 									effectiveLoadState={
 										chat.loadingConversation ? "loading" : "ready"
 									}
 									initialScrollTop={chat.initialScrollState.scrollTop}
 									initialSticky={chat.initialScrollState.sticky}
-									initialVirtualizerCache={
-										chat.initialUiState.virtualizerMessageCount ===
-										chat.visibleMessages.length
-											? chat.initialUiState.virtualizerCache
-											: undefined
+									initialVirtualizerCache={chat.initialUiState.virtualizerCache}
+									initialVirtualizerMessageCount={
+										chat.initialUiState.virtualizerMessageCount
 									}
 									onScrollStateChange={chat.persistScrollState}
 									onVirtualizerCacheChange={chat.persistVirtualizerCache}
@@ -429,7 +427,7 @@ function RemoteWorkspace() {
 						>
 							<ConversationColumn className="relative">
 								<ChatPendingQueue
-									items={chat.conversation.pendingUsers}
+									items={chat.conversationUi.pendingUsers}
 									onEdit={(item) =>
 										void chat.handleEditQueued(item.clientMessageId)
 									}

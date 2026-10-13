@@ -17,7 +17,7 @@ export function useRemoteChatFork({
 	activeProjectId,
 	activeSessionKey,
 	selectedSession,
-	messages,
+	getMessages,
 	busy,
 	rpcForSession,
 	refreshProjectSessions,
@@ -27,7 +27,7 @@ export function useRemoteChatFork({
 	activeProjectId: string;
 	activeSessionKey: string | null;
 	selectedSession: SessionIndexEntry | null;
-	messages: readonly ChatMessage[];
+	getMessages: () => readonly ChatMessage[];
 	busy: boolean;
 	rpcForSession: RemoteSessionRpc;
 	refreshProjectSessions: (
@@ -52,6 +52,7 @@ export function useRemoteChatFork({
 				return;
 			}
 
+			const messages = getMessages();
 			setForkingMessageId(messageId);
 			let forkSessionKey: string | null = null;
 			try {
@@ -121,7 +122,7 @@ export function useRemoteChatFork({
 			busy,
 			client,
 			forkingMessageId,
-			messages,
+			getMessages,
 			onForkSessionCreated,
 			refreshProjectSessions,
 			rpcForSession,

@@ -45,6 +45,19 @@ export function createChatConversationStore() {
 
 Consume it with `useSyncExternalStore(store.subscribe, store.getSnapshot)`.
 
+WebUI uses this same conversation store. `RemoteConversationViewport` subscribes
+to the full snapshot and renders the shared `ChatConversationViewport`; the
+workspace hook subscribes only to a cached projection of activity, message
+count, pending users and interruption status. Keep the projection reference
+stable on text/thinking/tool deltas, or the entire shell re-renders again.
+The setter updates the projection before publishing the store snapshot.
+
+Web event frames coalesce adjacent deltas and use `reduceConversationActions`.
+Flush at user/non-assistant boundaries and after `assistant_turn_end` before
+deciding whether the next action must adopt an external live turn. Fork actions
+obtain the latest messages on click, before their first await, rather than
+subscribing shell callbacks to every streaming message change.
+
 - Local state that must survive remounts is cached in module/state-cache files
   (`chat-ui-state-cache.ts`, `chat-history-window-store.ts`).
 - Locale is app-global low-frequency state owned by the i18n layer. Persist the

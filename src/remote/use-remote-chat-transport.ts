@@ -10,7 +10,10 @@ import { markExternalTurnLive } from "@/components/chat/chat-conversation-model"
 import { i18n } from "@/i18n";
 import type { ChatSubmission } from "@/lib/chat-submission";
 import { chatRpcChangesActivity } from "@/lib/chat-session-runtime-model";
-import { reduceConversationActions } from "@/lib/conversation-replay";
+import {
+	coalesceConversationActions,
+	reduceConversationActions,
+} from "@/lib/conversation-replay";
 import type {
 	ConversationAction,
 	ConversationState,
@@ -258,6 +261,16 @@ export function useRemoteChatTransport({
 			if (actions.length > 0) {
 				setConversation((current) => {
 					let next = current;
+					let batch: ConversationAction[] = [];
+					const flush = () => {
+						if (batch.length === 0) return;
+						next = reduceConversationActions(
+							next,
+							coalesceConversationActions(batch),
+							reducerContext,
+						);
+						batch = [];
+					};
 					for (const action of actions) {
 						// Live events can arrive before the bootstrap reports the open turn.
 						switch (action.type) {
@@ -271,7 +284,13 @@ export function useRemoteChatTransport({
 							case "tool_execution_update":
 							case "tool_execution_end":
 							case "assistant_turn_end":
-								next = markExternalTurnLive(next);
+								if (!next.active) {
+									flush();
+									next = markExternalTurnLive(next);
+								}
+								break;
+							default:
+								flush();
 								break;
 						}
 						if (action.type === "user_message_start") {
@@ -280,8 +299,10 @@ export function useRemoteChatTransport({
 								queuedSubmissionsRef.current.delete(pending.clientMessageId);
 							}
 						}
-						next = reduceConversationActions(next, [action], reducerContext);
+						batch.push(action);
+						if (action.type === "assistant_turn_end") flush();
 					}
+					flush();
 					return next;
 				});
 			}

@@ -6,6 +6,7 @@ import {
 	useMemo,
 	useRef,
 	useState,
+	useSyncExternalStore,
 } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -14,6 +15,7 @@ import {
 	createChatUiStateCache,
 	createProjectDraftCache,
 } from "@/components/app/chat-ui-state-cache";
+import { createChatConversationStore } from "@/components/chat/chat-conversation-store";
 import type { ChatSession } from "@/components/chat/chat-page-utils";
 import type { PiExtensionDialogRequest } from "@/components/chat/use-pi-session-features";
 import type { ChatImageAttachment } from "@/lib/chat-submission";
@@ -108,8 +110,55 @@ export function useRemoteChat({
 	const [identifiedDraftSessionId, setIdentifiedDraftSessionId] = useState<
 		string | null
 	>(null);
-	const [conversation, setConversation] = useState<ConversationState>(() =>
-		createConversationState(),
+	const [initialConversation] = useState(createConversationState);
+	const [conversationStore] = useState(() => {
+		const store = createChatConversationStore();
+		store.setSnapshot(initialConversation);
+		return store;
+	});
+	const conversationUiRef = useRef({
+		active: false,
+		messageCount: 0,
+		pendingUsers: initialConversation.pendingUsers,
+		latestTurnInterrupted: false,
+	});
+	const getConversationUi = useCallback(() => conversationUiRef.current, []);
+	const conversationUi = useSyncExternalStore(
+		conversationStore.subscribe,
+		getConversationUi,
+		getConversationUi,
+	);
+	const setConversation = useCallback<
+		Dispatch<SetStateAction<ConversationState>>
+	>(
+		(update) => {
+			const current = conversationStore.getSnapshot() ?? initialConversation;
+			const next = typeof update === "function" ? update(current) : update;
+			let interrupted = false;
+			for (let index = next.messages.length - 1; index >= 0; index -= 1) {
+				const message = next.messages[index];
+				if (message.role === "assistant" && !message.historyPlaceholder) {
+					interrupted = message.completion === "interrupted";
+					break;
+				}
+			}
+			const previous = conversationUiRef.current;
+			if (
+				previous.active !== (next.active !== null) ||
+				previous.messageCount !== next.messages.length ||
+				previous.pendingUsers !== next.pendingUsers ||
+				previous.latestTurnInterrupted !== interrupted
+			) {
+				conversationUiRef.current = {
+					active: next.active !== null,
+					messageCount: next.messages.length,
+					pendingUsers: next.pendingUsers,
+					latestTurnInterrupted: interrupted,
+				};
+			}
+			conversationStore.setSnapshot(next);
+		},
+		[conversationStore, initialConversation],
 	);
 	const [runtimeReady, setRuntimeReady] = useState(false);
 	const [readOnly, setReadOnly] = useState(false);
@@ -130,7 +179,6 @@ export function useRemoteChat({
 		ReadonlyMap<string, string>
 	>(() => new Map());
 	const activeSessionKeyRef = useRef<string | null>(null);
-	const activeTurnRef = useRef(false);
 	const queuedSubmissionsRef = useRef(new Map<string, QueuedSubmission>());
 	const autoTitleRequestedRef = useRef(false);
 	const pendingProjectMcpPromptsRef = useRef(
@@ -310,17 +358,6 @@ export function useRemoteChat({
 		t,
 	]);
 
-	const activeAssistantMessageId =
-		conversation.active?.assistantMessageId ?? null;
-	const latestTurnInterrupted = useMemo(() => {
-		for (let index = conversation.messages.length - 1; index >= 0; index -= 1) {
-			const message = conversation.messages[index];
-			if (message?.role === "assistant" && !message.historyPlaceholder) {
-				return message.completion === "interrupted";
-			}
-		}
-		return false;
-	}, [conversation.messages]);
 	const composerStatusText = retryState
 		? t("chat.statusRetry", {
 				kind:
@@ -338,9 +375,6 @@ export function useRemoteChat({
 	useEffect(() => {
 		activeSessionKeyRef.current = activeSessionKey;
 	}, [activeSessionKey]);
-	useEffect(() => {
-		activeTurnRef.current = conversation.active !== null;
-	}, [conversation.active]);
 
 	const routeKey = activeSessionKey ?? routeUiKey;
 	const initialScrollState = useMemo(
@@ -390,12 +424,12 @@ export function useRemoteChat({
 		requestHistoryRange,
 		retryHistory,
 	} = history;
-	const visibleMessages = useMemo(
-		() =>
-			historyPrefix.length > 0
-				? [...historyPrefix, ...conversation.messages]
-				: conversation.messages,
-		[conversation.messages, historyPrefix],
+	const getVisibleMessages = useCallback(
+		() => [
+			...historyPrefix,
+			...(conversationStore.getSnapshot() ?? initialConversation).messages,
+		],
+		[conversationStore, historyPrefix, initialConversation],
 	);
 
 	const handleComposerChange = useCallback(
@@ -732,9 +766,9 @@ export function useRemoteChat({
 		activeProjectId,
 		activeSessionKey,
 		selectedSession,
-		messages: visibleMessages,
+		getMessages: getVisibleMessages,
 		busy:
-			conversation.active !== null ||
+			conversationUi.active ||
 			loadingConversation ||
 			compacting ||
 			sending ||
@@ -791,10 +825,10 @@ export function useRemoteChat({
 		draftTemporary,
 		thinkingLevels,
 		// conversation
-		conversation,
-		visibleMessages,
-		activeAssistantMessageId,
-		latestTurnInterrupted,
+		conversationStore,
+		conversationUi,
+		historyPrefix,
+		latestTurnInterrupted: conversationUi.latestTurnInterrupted,
 		historyImageScope,
 		projectImageScope,
 		// view state
@@ -843,7 +877,7 @@ export function useRemoteChat({
 		loadingConversation,
 		forkingMessageId: fork.forkingMessageId,
 		forkDisabled:
-			conversation.active !== null ||
+			conversationUi.active ||
 			loadingConversation ||
 			compacting ||
 			sending ||
