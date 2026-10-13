@@ -173,7 +173,7 @@ export function ComposerActions({
 					</DropdownMenuRadioGroup>
 				</DropdownMenuContent>
 			</DropdownMenu>
-			<div className="flex shrink-0 items-center justify-center">
+			<div className="flex shrink-0 items-center justify-center pointer-coarse:size-11">
 				<Tooltip>
 					<TooltipTrigger asChild>
 						<Button
@@ -181,7 +181,8 @@ export function ComposerActions({
 							size="icon"
 							className={cn(
 								CHAT_COMPOSER_SEND_BUTTON_CLASS_NAME,
-								"motion-reduce:active:scale-100 pointer-coarse:size-11",
+								"motion-reduce:active:scale-100 pointer-coarse:relative pointer-coarse:size-8",
+								"pointer-coarse:after:absolute pointer-coarse:after:-inset-1.5 pointer-coarse:after:content-['']",
 							)}
 							aria-label={actionLabel}
 							disabled={
