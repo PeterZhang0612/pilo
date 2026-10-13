@@ -467,9 +467,25 @@ export function useRemoteChat({
 				sessionPath: selectedSession?.sessionPath,
 				noSession: draftTemporary,
 			};
+			const targetSessionKey = activeSessionKey;
 			await client.startChat(input).catch(() => undefined);
-			await client.startChat(input);
-			setRuntimeReady(true);
+			await client.startChat(input).finally(async () => {
+				if (
+					draftTemporary &&
+					activeSessionKeyRef.current !== targetSessionKey
+				) {
+					await client
+						.stopChat(targetSessionKey, "temporary_approval_abandoned")
+						.catch((error) => {
+							console.warn(
+								"Failed to stop abandoned temporary approval",
+								error,
+							);
+						});
+				}
+			});
+			if (activeSessionKeyRef.current === targetSessionKey)
+				setRuntimeReady(true);
 		},
 		[
 			activeProjectId,
@@ -532,6 +548,15 @@ export function useRemoteChat({
 		[activeProjectId, client, routeKey],
 	);
 
+	const releaseTemporaryRuntime = useCallback(() => {
+		if (!draftTemporary || !activeSessionKey || !client) return;
+		void client
+			.stopChat(activeSessionKey, "temporary_chat_left")
+			.catch((error) => {
+				console.warn("Failed to stop abandoned temporary chat", error);
+			});
+	}, [activeSessionKey, client, draftTemporary]);
+
 	const {
 		startDraft,
 		toggleTemporaryChat,
@@ -552,6 +577,7 @@ export function useRemoteChat({
 		projectDraftCache,
 		queuedSubmissionsRef,
 		autoTitleRequestedRef,
+		releaseTemporaryRuntime,
 		refreshProjectSessions,
 		setSelectedSessionPath,
 		setIdentifiedDraftSessionId,
@@ -593,6 +619,9 @@ export function useRemoteChat({
 			? await client.chatState(targetSessionKey)
 			: null;
 		if (runtime?.snapshot.state === "running" && runtime.initialized) {
+			if (draftTemporary && !isActiveSession()) {
+				throw new Error("temporary session is closing");
+			}
 			if (!selectedSession && !identifiedDraftSessionId) {
 				const state = await targetRpc<PiAgentState>({ type: "get_state" });
 				if (isActiveSession()) {
@@ -602,14 +631,28 @@ export function useRemoteChat({
 			}
 			return;
 		}
-		await client.startChat({
-			projectId: activeProjectId,
-			sessionKey: targetSessionKey,
-			sessionPath:
-				selectedSession?.sessionPath ??
-				(identifiedDraftSessionId ? agentState?.sessionFile : undefined),
-			noSession: draftTemporary,
-		});
+		await client
+			.startChat({
+				projectId: activeProjectId,
+				sessionKey: targetSessionKey,
+				sessionPath:
+					selectedSession?.sessionPath ??
+					(identifiedDraftSessionId ? agentState?.sessionFile : undefined),
+				noSession: draftTemporary,
+			})
+			.finally(async () => {
+				// Leaving while startup is pending can precede creation of the runtime.
+				if (draftTemporary && !isActiveSession()) {
+					await client
+						.stopChat(targetSessionKey, "temporary_start_abandoned")
+						.catch((error) => {
+							console.warn("Failed to stop abandoned temporary startup", error);
+						});
+				}
+			});
+		if (draftTemporary && !isActiveSession()) {
+			throw new Error("temporary session is closing");
+		}
 		if (isActiveSession()) setRuntimeReady(true);
 		// Carry the draft run-config onto the freshly started session, matching the
 		// Desktop `prepareRuntimeConfiguration` step for new chats. Selected sessions
@@ -640,7 +683,6 @@ export function useRemoteChat({
 	}, [
 		activeProjectId,
 		activeSessionKey,
-		activeSessionKeyRef,
 		agentState?.sessionFile,
 		client,
 		draftModel,

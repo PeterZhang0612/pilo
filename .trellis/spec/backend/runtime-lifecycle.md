@@ -55,6 +55,12 @@ Frontend controller eviction alone is not backend process cleanup.
 - Never evict an active turn, compaction, uninitialized process, `no_session`
   session, or a session without a resolved JSONL path. A cloned `ChatProcess` Arc
   or a locked session protects in-flight startup/RPC work from eviction.
+- WebUI explicit navigation away from a temporary chat (new draft, project
+  change or session selection) stops its old session key. A late temporary start
+  or MCP approval completion checks the active key and stops an abandoned runtime.
+  Do not use effect cleanup on network/auth changes to kill live work. Browser
+  disappearance still has no lease-based cleanup; temporary state cannot be
+  restored and must not be silently included in the persisted-session TTL.
 - Remove an evicted process under the registry lock, mark it closed, and stop it
   asynchronously. Late events from the old process must not reach a replacement.
   Persisted sessions are resumed by the existing prepare/ensure path. Eviction
@@ -192,6 +198,7 @@ Frontend controller eviction alone is not backend process cleanup.
 | WebUI model/thinking/fork/manual refresh after eviction | Ensure the target before RPC; background polling stays read-only |
 | Old stdout finishes after explicit stop | Joined before ACK; cannot cancel or emit into a same-stream restart |
 | Read-only state/model polling | Does not extend idle TTL |
+| WebUI explicitly leaves temporary chat | Stop the old key, including late startup/approval completion |
 | Title-generation HTTP timeout or unregistered worker error | Session drop schedules cleanup; no abandoned stream ownership |
 | Stop while Pi start is probing or waiting for the process registry | Cancel the pending dispatch; it cannot spawn a late child. Fresh starts after the stop ACK remain valid |
 | Ordinary server request saturation | Return server_busy; keep independent stop capacity |
@@ -253,6 +260,8 @@ The following targeted regressions remain to be added with explicit authorizatio
   server stdout failure, request saturation with stop/EOF still responsive,
   queued/in-flight byte permit release, oversized responses and unterminated
   oversized Pi stdout lines. Native Windows/macOS and Local/WSL/SSH remain pending.
+- Navigate away from a WebUI temporary chat during startup and MCP approval;
+  stop only the abandoned key. Network/auth changes must not stop running work.
 - `chat_sessions/idle_cache.rs`: LRU order, retained key, busy/compacting/initializing/
   temporary/unsaved/in-flight exclusions, busy-flag rollback on failed send.
 - `chat_sessions/event_sink.rs`: prompt rejection rolls back only the owning

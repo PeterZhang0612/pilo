@@ -34,6 +34,7 @@ type UseRemoteChatDraftActionsOptions = {
 	projectDraftCache: ProjectDraftCache;
 	queuedSubmissionsRef: MutableRefObject<Map<string, QueuedSubmission>>;
 	autoTitleRequestedRef: MutableRefObject<boolean>;
+	releaseTemporaryRuntime: () => void;
 	refreshProjectSessions: (
 		projectId: string,
 		showProgress?: boolean,
@@ -72,6 +73,7 @@ export function useRemoteChatDraftActions({
 	projectDraftCache,
 	queuedSubmissionsRef,
 	autoTitleRequestedRef,
+	releaseTemporaryRuntime,
 	refreshProjectSessions,
 	setSelectedSessionPath,
 	setIdentifiedDraftSessionId,
@@ -95,6 +97,7 @@ export function useRemoteChatDraftActions({
 	const startDraft = useCallback(
 		(projectId?: string, temporary = false) => {
 			const targetProjectId = projectId ?? activeProjectId ?? "";
+			releaseTemporaryRuntime();
 			queuedSubmissionsRef.current.clear();
 			setSelectedSessionPath(null);
 			setIdentifiedDraftSessionId(null);
@@ -127,6 +130,7 @@ export function useRemoteChatDraftActions({
 			isNarrow,
 			projectDraftCache,
 			queuedSubmissionsRef,
+			releaseTemporaryRuntime,
 			setAgentState,
 			setChatState,
 			setComposer,
@@ -162,6 +166,7 @@ export function useRemoteChatDraftActions({
 
 	const switchDraftProject = useCallback(
 		(projectId: string) => {
+			releaseTemporaryRuntime();
 			queuedSubmissionsRef.current.clear();
 			setDraftProjectId(projectId);
 			setDraftId(randomId());
@@ -184,6 +189,7 @@ export function useRemoteChatDraftActions({
 			autoTitleRequestedRef,
 			projectDraftCache,
 			queuedSubmissionsRef,
+			releaseTemporaryRuntime,
 			setAgentState,
 			setChatState,
 			setComposer,
@@ -218,6 +224,7 @@ export function useRemoteChatDraftActions({
 				if (isNarrow) closeMobileNavigation();
 				return;
 			}
+			releaseTemporaryRuntime();
 			queuedSubmissionsRef.current.clear();
 			setDraftTemporary(false);
 			setSelectedSessionPath(session.sessionPath);
@@ -240,6 +247,7 @@ export function useRemoteChatDraftActions({
 			queuedSubmissionsRef,
 			rawSessions,
 			selectedSessionPath,
+			releaseTemporaryRuntime,
 			setComposer,
 			setDraftProjectId,
 			setDraftTemporary,
