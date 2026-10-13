@@ -1,6 +1,6 @@
 import { type ComponentPropsWithoutRef, useEffect, useState } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { Check } from "lucide-react";
+import { Check, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { CHAT_COMPOSER_RUN_CONFIG_TRIGGER_CLASS_NAME } from "@/components/chat/chat-composer-frame";
@@ -93,12 +93,12 @@ export function ComposerRunConfig(props: ComposerRunConfigProps) {
 	const trigger = (
 		<RunConfigTrigger label={label} thinking={thinking} disabled={disabled} />
 	);
-	const panel = open ? (
+	const panel = (
 		<RunConfigPanel
 			key={`${props.modelScope?.projectId ?? ""}:${props.canEditScope}`}
 			{...props}
 		/>
-	) : null;
+	);
 
 	if (!isTouch)
 		return (
@@ -257,19 +257,20 @@ export function ComposerRunConfig(props: ComposerRunConfigProps) {
 					<DialogPrimitive.Description className="sr-only">
 						{t("chat.model")} · {t("chat.reasoning")}
 					</DialogPrimitive.Description>
-					<Button
-						type="button"
-						variant="ghost"
-						className="flex min-h-11 w-full justify-center"
-						aria-label={t("common.close")}
-						disabled={props.modelScope?.saving}
-						onClick={() => changeOpen(false)}
-					>
-						<span
-							aria-hidden="true"
-							className="h-1 w-10 rounded-full bg-muted-foreground/30"
-						/>
-					</Button>
+					<div className="flex items-center justify-between ps-4 pe-2 pt-2">
+						<span className="text-sm font-medium">{t("chat.model")}</span>
+						<Button
+							type="button"
+							variant="ghost"
+							size="icon"
+							className="size-11 rounded-full text-muted-foreground"
+							aria-label={t("common.close")}
+							disabled={props.modelScope?.saving}
+							onClick={() => changeOpen(false)}
+						>
+							<X className="size-4" aria-hidden="true" />
+						</Button>
+					</div>
 					{panel}
 				</DialogPrimitive.Content>
 			</DialogPrimitive.Portal>
@@ -330,12 +331,12 @@ function RunConfigPanel(props: ComposerRunConfigProps) {
 	return (
 		<>
 			<RunConfigModelPicker {...props} />
-			<div className="border-t border-border px-3 py-2">
-				<div className="mb-1 flex items-center gap-2 text-xs font-medium text-muted-foreground">
+			<div className="@container border-t border-border/60 px-3 pt-3 pb-1">
+				<div className="mb-2 flex items-center gap-2 text-sm font-medium text-muted-foreground">
 					{t("chat.reasoning")}
 					{props.thinkingLoading ? <Spinner className="size-3.5" /> : null}
 				</div>
-				<div className="flex flex-wrap gap-1.5">
+				<div className="grid grid-cols-2 gap-1 @min-[17rem]:grid-cols-4">
 					{props.thinkingLevels.map((level) => (
 						<Button
 							key={level}
@@ -344,7 +345,7 @@ function RunConfigPanel(props: ComposerRunConfigProps) {
 							variant={
 								props.selectedThinkingLevel === level ? "secondary" : "ghost"
 							}
-							className="min-h-11"
+							className="min-h-11 rounded-lg px-2 font-normal shadow-none"
 							disabled={props.thinkingDisabled || !props.onThinkingChange}
 							aria-pressed={props.selectedThinkingLevel === level}
 							onClick={() => props.onThinkingChange?.(level)}
@@ -353,7 +354,7 @@ function RunConfigPanel(props: ComposerRunConfigProps) {
 						</Button>
 					))}
 					{props.thinkingLevels.length === 0 ? (
-						<p className="py-2 text-sm text-muted-foreground">
+						<p className="col-span-full py-2 text-sm text-muted-foreground">
 							{props.thinkingLoading
 								? t("chat.readingReasoning")
 								: t("chat.noReasoning")}

@@ -216,7 +216,10 @@ export function ChatModelPicker({
 		<>
 			<div
 				role="presentation"
-				className="flex items-center gap-2 p-2"
+				className={cn(
+					"flex items-center gap-2",
+					compact ? "p-2" : "flex-wrap px-3 pt-2 pb-2",
+				)}
 				onKeyDown={(event) => {
 					// Toolbar keys must not select cmdk's active model.
 					if (event.key !== "Tab" && event.key !== "Escape")
@@ -236,7 +239,12 @@ export function ChatModelPicker({
 						</output>
 					</div>
 				) : (
-					<div className="flex flex-1 gap-0.5 rounded-md bg-muted p-0.5">
+					<div
+						className={cn(
+							"flex min-w-0 gap-0.5 p-0.5",
+							compact ? "flex-1 rounded-md bg-muted" : "rounded-xl bg-muted/60",
+						)}
+					>
 						{(["scope", "all"] as const).map((option) => (
 							<Button
 								key={option}
@@ -244,8 +252,10 @@ export function ChatModelPicker({
 								size="sm"
 								variant="ghost"
 								className={cn(
-									"flex-1 rounded-sm px-3 text-sm font-normal text-muted-foreground",
-									compact ? "h-7" : "min-h-11",
+									"flex-1 px-3 text-sm font-normal text-muted-foreground",
+									compact
+										? "h-7 rounded-sm"
+										: "min-h-11 w-20 min-w-0 rounded-lg whitespace-normal",
 									view === option &&
 										"bg-background text-foreground shadow-xs hover:bg-background",
 								)}
@@ -287,7 +297,7 @@ export function ChatModelPicker({
 					</Button>
 				</div>
 			</div>
-			<div className="px-2 pb-2">
+			<div className={compact ? "px-2 pb-2" : "px-3 pb-2"}>
 				{editing ? (
 					<div className="relative">
 						<Search
@@ -315,11 +325,13 @@ export function ChatModelPicker({
 						placeholder={t("chat.searchModels")}
 						className={cn(
 							"text-input-foreground placeholder:text-input-placeholder",
-							compact ? "text-sm" : "text-base md:text-sm",
+							compact ? "text-sm" : "text-base",
 						)}
 						wrapperClassName={cn(
-							"rounded-md border border-input-border bg-input-field px-3 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring",
-							compact ? "h-8" : "h-11",
+							"border px-3 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring",
+							compact
+								? "h-8 rounded-md border-input-border bg-input-field"
+								: "h-11 rounded-xl border-transparent bg-muted/60",
 						)}
 					/>
 				)}
@@ -431,7 +443,7 @@ export function ChatModelPicker({
 					containerClassName={listMaxHeight}
 					viewportClassName={listMaxHeight}
 				>
-					<div className="px-1 pb-1">
+					<div className={compact ? "px-1 pb-1" : "space-y-0.5 px-2 pb-2"}>
 						{showModels
 							? visibleModels.map((model) => (
 									<CommandItem
@@ -442,8 +454,10 @@ export function ChatModelPicker({
 										title={`${model.name || model.id} · ${model.provider} · ${model.id}`}
 										aria-label={`${model.name || model.id} · ${model.provider} · ${model.id}${piModelsMatch(model, selectedModel) ? ` · ${t("chat.currentModel")}` : ""}`}
 										className={cn(
-											"gap-2 rounded-md px-2",
-											compact ? "min-h-8 py-1.5" : "min-h-11",
+											"gap-2",
+											compact
+												? "min-h-8 rounded-md px-2 py-1.5"
+												: "min-h-12 rounded-xl px-3 py-2",
 										)}
 									>
 										{compact ? (
@@ -457,11 +471,20 @@ export function ChatModelPicker({
 											</>
 										) : (
 											<span className="min-w-0 flex-1">
-												<span className="block break-words">
+												<span className="block leading-snug font-medium wrap-anywhere">
 													{model.name || model.id}
 												</span>
-												<span className="block break-all text-xs text-muted-foreground">
-													{model.provider} · {model.id}
+												<span className="mt-0.5 block text-[0.8125rem] leading-snug text-muted-foreground wrap-anywhere">
+													{model.provider}
+													{availableModels.some(
+														(candidate) =>
+															candidate.provider === model.provider &&
+															candidate.id !== model.id &&
+															(candidate.name || candidate.id) ===
+																(model.name || model.id),
+													)
+														? ` · ${model.id}`
+														: ""}
 												</span>
 											</span>
 										)}
@@ -470,7 +493,9 @@ export function ChatModelPicker({
 											aria-hidden="true"
 										>
 											{piModelsMatch(model, selectedModel) ? (
-												<Check className="size-3.5" />
+												<Check
+													className={cn("size-3.5", !compact && "text-primary")}
+												/>
 											) : null}
 										</span>
 									</CommandItem>
@@ -492,7 +517,10 @@ export function ChatModelPicker({
 					</div>
 				</CommandList>
 			)}
-			{!editing && view === "scope" && modelScope ? (
+			{!editing &&
+			view === "scope" &&
+			modelScope &&
+			(compact || canEditScope) ? (
 				<div
 					role="presentation"
 					className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border px-2 py-1.5"
