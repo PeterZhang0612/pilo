@@ -1,4 +1,5 @@
 mod desktop_notifications;
+mod desktop_window;
 mod domain;
 mod runtime;
 
@@ -36,14 +37,9 @@ use runtime::{
     },
 };
 use std::{fs::OpenOptions, io::Write};
-use tauri_plugin_window_state::StateFlags;
 
 pub fn handle_ssh_askpass() -> bool {
     runtime::print_askpass_password_from_environment()
-}
-
-fn persisted_window_state_flags() -> StateFlags {
-    StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED
 }
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -103,10 +99,9 @@ pub fn run() {
     builder
         .plugin(
             tauri_plugin_window_state::Builder::default()
-                .with_state_flags(persisted_window_state_flags())
-                // Pilo removes native decorations on Windows in `setup` below.
-                // Restore after that change so the saved client size does not
-                // grow by the removed title-bar height on every launch.
+                .with_state_flags(desktop_window::persisted_state_flags())
+                // Restore manually after applying platform decorations, then
+                // validate bounds before showing the main window.
                 .skip_initial_state("main")
                 // 会话窗口（`session-*`）由前端每次居中创建，不参与状态持久化：
                 // 否则插件会在创建后恢复上次位置/尺寸，看起来像「先居中再跳走」。
@@ -228,27 +223,10 @@ pub fn run() {
         })
         .setup(|app| {
             use tauri::Manager;
-            use tauri_plugin_window_state::WindowExt;
 
             initialize_macos_notification_application(app);
             initialize_windows_notification_application(app);
-
-            let window = app
-                .get_webview_window("main")
-                .expect("main window not found");
-
-            // Windows 移除原生装饰、使用前端自绘标题栏；
-            // macOS 保留原生红绿灯：tauri.conf.json 的 hiddenTitle + Overlay 隐藏标题栏文本，
-            // 内容延伸至窗口顶部（侧边栏贴顶，标题行位于红绿灯右侧）。
-            #[cfg(target_os = "windows")]
-            {
-                window.set_decorations(false)?;
-                window.set_shadow(true)?;
-            }
-
-            if let Err(error) = window.restore_state(persisted_window_state_flags()) {
-                log::error!(target: "window-state", "failed to restore main window: {error}");
-            }
+            desktop_window::create_main_window(app)?;
 
             let remote_app = app.handle().clone();
             tauri::async_runtime::spawn(async move {
