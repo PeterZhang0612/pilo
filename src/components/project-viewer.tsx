@@ -26,6 +26,7 @@ type ViewerTab = {
 	path: string;
 	content: string;
 	loading: boolean;
+	html?: string | null;
 	error?: string;
 };
 
@@ -67,11 +68,6 @@ export function ProjectViewer({
 	const [tabs, setTabs] = useState<ViewerTab[]>([]);
 	const [activePath, setActivePath] = useState<string | null>(null);
 	const { t } = useTranslation();
-	const [highlighted, setHighlighted] = useState<{
-		path: string;
-		content: string;
-		html: string;
-	} | null>(null);
 	const openedPathsRef = useRef(new Set<string>());
 	const activeTab = useMemo(
 		() => tabs.find((tab) => tab.path === activePath) ?? null,
@@ -113,16 +109,23 @@ export function ProjectViewer({
 
 	useEffect(() => {
 		let cancelled = false;
-		if (!activeTab || activeTab.loading || activeTab.error) return;
+		if (
+			!activeTab ||
+			activeTab.loading ||
+			activeTab.error ||
+			activeTab.html !== undefined
+		)
+			return;
 		void highlightProjectFile(activeTab.path, activeTab.content)
 			.then((html) => {
-				if (!cancelled && html) {
-					setHighlighted({
-						path: activeTab.path,
-						content: activeTab.content,
-						html,
-					});
-				}
+				if (cancelled) return;
+				setTabs((current) =>
+					current.map((tab) =>
+						tab.path === activeTab.path && tab.content === activeTab.content
+							? { ...tab, html }
+							: tab,
+					),
+				);
 			})
 			.catch(() => undefined);
 		return () => {
@@ -130,12 +133,7 @@ export function ProjectViewer({
 		};
 	}, [activeTab]);
 
-	const highlightedHtml =
-		activeTab &&
-		highlighted?.path === activeTab.path &&
-		highlighted.content === activeTab.content
-			? highlighted.html
-			: null;
+	const highlightedHtml = activeTab?.html ?? null;
 
 	const closeTab = useCallback(
 		(path: string) => {

@@ -11,6 +11,8 @@ type TranslationShape<T> = {
 const zhCN = {
 	common: {
 		...enUS.common,
+		previousPage: "上一页",
+		nextPage: "下一页",
 		cancel: "取消",
 		confirm: "确定",
 		save: "保存",
@@ -664,6 +666,7 @@ const zhCN = {
 	},
 	file: {
 		...enUS.file,
+		diffLines: "第 {{start}}–{{end}} 行，共 {{total}} 行",
 		loading: "加载中…",
 		search: "搜索文件",
 		refresh: "刷新文件",

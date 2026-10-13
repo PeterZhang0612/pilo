@@ -111,7 +111,18 @@ async function getHighlighter() {
 
 export async function highlightProjectFile(path: string, code: string) {
 	const language = languageForPath(path);
-	if (!language) return null;
+	if (!language || code.length > 200_000) return null;
+	let lines = 1;
+	let lineLength = 0;
+	for (const char of code) {
+		if (char === "\n") {
+			lines += 1;
+			lineLength = 0;
+		} else {
+			lineLength += 1;
+		}
+		if (lines > 2_000 || lineLength > 2_000) return null;
+	}
 	const highlighter = await getHighlighter();
 	return highlighter.codeToHtml(code, {
 		lang: language,

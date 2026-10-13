@@ -1,5 +1,7 @@
 const enUS = {
 	common: {
+		previousPage: "Previous page",
+		nextPage: "Next page",
 		cancel: "Cancel",
 		confirm: "Confirm",
 		save: "Save",
@@ -663,6 +665,7 @@ const enUS = {
 		viewAll: "View all",
 	},
 	file: {
+		diffLines: "Lines {{start}}–{{end}} of {{total}}",
 		loading: "Loading…",
 		search: "Search files",
 		refresh: "Refresh files",

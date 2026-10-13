@@ -57,6 +57,17 @@ re-styling them.
   an already-started project scan still finishes. The server allows at most two
   concurrent content scans per connection server, separate from its 64-request
   overall limit. This is admission control, not cancellation of blocking scans.
+- Mobile project sessions render 50 rows per page. Keep selection/deletion
+  available on every page, localized controls with 44px touch targets and
+  announced page changes. Recent sessions retain their existing 50-row limit.
+- Desktop project preview caches highlighting per open tab, including plain-text
+  fallback. `highlightProjectFile` skips Shiki above 200,000 code units, 2,000
+  lines or 2,000 characters on a line; avoid repeated synchronous tokenization
+  when switching tabs. Close drops the tab's cached HTML.
+- Git diff parsing is memoized and renders at most 1,000 lines per page; changing
+  diff resets the displayed page. Paging limits DOM work, not fetched diff size.
+  Files/Git remain desktop-only; do not add generic WebUI filesystem endpoints
+  to duplicate these views.
 
 ## Styling
 

@@ -35,8 +35,28 @@ function fileStatusLabel(file: GitFileStatus, mode: DiffMode) {
 	return status.trim() || (file.staged ? file.indexStatus.trim() : "M") || "M";
 }
 
+const DIFF_PAGE_LINES = 1_000;
+
 function DiffViewer({ diff }: { diff: string }) {
 	const { t } = useTranslation();
+	const [pageSelection, setPageSelection] = useState({ diff, page: 0 });
+	const lines = useMemo(
+		() =>
+			Array.from(diff.matchAll(/[^\n]*(?:\n|$)/g))
+				.filter((match) => match[0] !== "")
+				.map((match) => {
+					const line = match[0].endsWith("\n")
+						? match[0].slice(0, -1)
+						: match[0];
+					return { key: `${match.index}:${line.slice(0, 24)}`, line };
+				}),
+		[diff],
+	);
+	const pageCount = Math.max(1, Math.ceil(lines.length / DIFF_PAGE_LINES));
+	const page =
+		pageSelection.diff === diff
+			? Math.min(pageSelection.page, pageCount - 1)
+			: 0;
 	if (!diff) {
 		return (
 			<EmptyState
@@ -47,33 +67,60 @@ function DiffViewer({ diff }: { diff: string }) {
 		);
 	}
 
-	const lines = Array.from(diff.matchAll(/[^\n]*(?:\n|$)/g))
-		.filter((match) => match[0] !== "")
-		.map((match) => {
-			const line = match[0].endsWith("\n") ? match[0].slice(0, -1) : match[0];
-			return { key: `${match.index}:${line.slice(0, 24)}`, line };
-		});
-
 	return (
-		<pre className="scrollbar-pro min-h-0 flex-1 overflow-auto whitespace-pre font-mono text-2xs leading-[1.55]">
-			{lines.map(({ key, line }) => (
-				<span
-					key={key}
-					className={cn(
-						"block min-w-max px-3",
-						line.startsWith("+") &&
-							!line.startsWith("+++") &&
-							"bg-status-success/12",
-						line.startsWith("-") &&
-							!line.startsWith("---") &&
-							"bg-status-danger/12",
-						line.startsWith("@@") && "bg-muted/70 text-muted-foreground",
-					)}
-				>
-					{line || " "}
-				</span>
-			))}
-		</pre>
+		<div className="flex min-h-0 flex-1 flex-col">
+			{pageCount > 1 ? (
+				<div className="flex shrink-0 items-center justify-between gap-2 border-b px-3 py-1">
+					<Button
+						variant="ghost"
+						size="sm"
+						disabled={page === 0}
+						onClick={() => setPageSelection({ diff, page: page - 1 })}
+					>
+						{t("common.previousPage")}
+					</Button>
+					<span className="text-xs text-muted-foreground" aria-live="polite">
+						{t("file.diffLines", {
+							start: page * DIFF_PAGE_LINES + 1,
+							end: Math.min((page + 1) * DIFF_PAGE_LINES, lines.length),
+							total: lines.length,
+						})}
+					</span>
+					<Button
+						variant="ghost"
+						size="sm"
+						disabled={page + 1 >= pageCount}
+						onClick={() => setPageSelection({ diff, page: page + 1 })}
+					>
+						{t("common.nextPage")}
+					</Button>
+				</div>
+			) : null}
+			<pre
+				key={page}
+				className="scrollbar-pro min-h-0 flex-1 overflow-auto whitespace-pre font-mono text-2xs leading-[1.55]"
+			>
+				{lines
+					.slice(page * DIFF_PAGE_LINES, (page + 1) * DIFF_PAGE_LINES)
+					.map(({ key, line }) => (
+						<span
+							key={key}
+							className={cn(
+								"block min-w-max px-3",
+								line.startsWith("+") &&
+									!line.startsWith("+++") &&
+									"bg-status-success/12",
+								line.startsWith("-") &&
+									!line.startsWith("---") &&
+									"bg-status-danger/12",
+								line.startsWith("@@") && "bg-muted/70 text-muted-foreground",
+							)}
+						>
+							{line || " "}
+						</span>
+					))}
+			</pre>
+		</div>
 	);
 }
 

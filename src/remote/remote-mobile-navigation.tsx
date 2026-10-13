@@ -41,6 +41,7 @@ import {
 
 /** “最近会话”视图最多展示的会话数，与桌面侧栏保持一致。 */
 const RECENT_SESSION_LIMIT = 50;
+const PROJECT_SESSION_PAGE_SIZE = 50;
 
 export function RemoteMobileNavigation({
 	client,
@@ -82,6 +83,11 @@ export function RemoteMobileNavigation({
 	const { t } = useTranslation();
 	const [mode, setMode] = useState<SidebarEnvView>("projects");
 	const [paletteOpen, setPaletteOpen] = useState(false);
+	const [projectPages, setProjectPages] = useState<Record<string, number>>({});
+	const [pageSelection, setPageSelection] = useState({
+		activeProjectId,
+		selectedSessionId,
+	});
 	const [confirmDeleteSessionId, setConfirmDeleteSessionId] = useState<
 		string | null
 	>(null);
@@ -89,6 +95,21 @@ export function RemoteMobileNavigation({
 	const [sectionOverrides, setSectionOverrides] = useState<
 		Record<string, boolean>
 	>({});
+
+	// Clear only the newly selected project's override before rendering its page.
+	if (
+		pageSelection.activeProjectId !== activeProjectId ||
+		pageSelection.selectedSessionId !== selectedSessionId
+	) {
+		setPageSelection({ activeProjectId, selectedSessionId });
+		if (activeProjectId) {
+			setProjectPages((current) => {
+				const next = { ...current };
+				delete next[activeProjectId];
+				return next;
+			});
+		}
+	}
 
 	const toggleSection = (key: string, defaultExpanded: boolean) =>
 		setSectionOverrides((current) => ({
@@ -289,6 +310,27 @@ export function RemoteMobileNavigation({
 														activeProjectId === project.id;
 													const projectSessions =
 														sessionsByProject.get(project.id) ?? [];
+													const pageCount = Math.max(
+														1,
+														Math.ceil(
+															projectSessions.length /
+																PROJECT_SESSION_PAGE_SIZE,
+														),
+													);
+													const selectedIndex =
+														project.id === activeProjectId
+															? projectSessions.findIndex(
+																	(session) => session.id === selectedSessionId,
+																)
+															: -1;
+													const page = Math.min(
+														projectPages[project.id] ??
+															Math.floor(
+																Math.max(0, selectedIndex) /
+																	PROJECT_SESSION_PAGE_SIZE,
+															),
+														pageCount - 1,
+													);
 													return (
 														<div key={project.id}>
 															<MobileProjectRow
@@ -317,35 +359,76 @@ export function RemoteMobileNavigation({
 																	</p>
 																) : (
 																	<div className="mt-0.5 space-y-0.5 pb-1">
-																		{projectSessions.map((session) => (
-																			<MobileSessionRow
-																				key={`${session.projectId}:${session.id}`}
-																				session={session}
-																				selected={
-																					activeProjectId ===
-																						session.projectId &&
-																					selectedSessionId === session.id
-																				}
-																				confirmingDelete={
-																					confirmDeleteSessionId ===
-																					`${session.projectId}:${session.id}`
-																				}
-																				onSelect={handleSelectSession}
-																				onRequestDelete={
-																					setConfirmDeleteSessionId
-																				}
-																				onCancelDelete={() =>
-																					setConfirmDeleteSessionId(null)
-																				}
-																				onConfirmDelete={() => {
-																					setConfirmDeleteSessionId(null);
-																					onDeleteSession(
-																						session.id,
-																						session.projectId,
-																					);
-																				}}
-																			/>
-																		))}
+																		{projectSessions
+																			.slice(
+																				page * PROJECT_SESSION_PAGE_SIZE,
+																				(page + 1) * PROJECT_SESSION_PAGE_SIZE,
+																			)
+																			.map((session) => (
+																				<MobileSessionRow
+																					key={`${session.projectId}:${session.id}`}
+																					session={session}
+																					selected={
+																						activeProjectId ===
+																							session.projectId &&
+																						selectedSessionId === session.id
+																					}
+																					confirmingDelete={
+																						confirmDeleteSessionId ===
+																						`${session.projectId}:${session.id}`
+																					}
+																					onSelect={handleSelectSession}
+																					onRequestDelete={
+																						setConfirmDeleteSessionId
+																					}
+																					onCancelDelete={() =>
+																						setConfirmDeleteSessionId(null)
+																					}
+																					onConfirmDelete={() => {
+																						setConfirmDeleteSessionId(null);
+																						onDeleteSession(
+																							session.id,
+																							session.projectId,
+																						);
+																					}}
+																				/>
+																			))}
+																		{pageCount > 1 ? (
+																			<div className="flex items-center justify-between gap-2 px-2">
+																				<button
+																					type="button"
+																					className="min-h-11 rounded-md px-2 text-xs disabled:opacity-40"
+																					disabled={page === 0}
+																					onClick={() =>
+																						setProjectPages((current) => ({
+																							...current,
+																							[project.id]: page - 1,
+																						}))
+																					}
+																				>
+																					{t("common.previousPage")}
+																				</button>
+																				<span
+																					className="text-xs text-sidebar-foreground-muted"
+																					aria-live="polite"
+																				>
+																					{page + 1} / {pageCount}
+																				</span>
+																				<button
+																					type="button"
+																					className="min-h-11 rounded-md px-2 text-xs disabled:opacity-40"
+																					disabled={page + 1 >= pageCount}
+																					onClick={() =>
+																						setProjectPages((current) => ({
+																							...current,
+																							[project.id]: page + 1,
+																						}))
+																					}
+																				>
+																					{t("common.nextPage")}
+																				</button>
+																			</div>
+																		) : null}
 																	</div>
 																)
 															) : null}
