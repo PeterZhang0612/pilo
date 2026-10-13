@@ -17,6 +17,8 @@ export type ChatSession = {
 };
 
 export type ChatSessionRuntimeState = {
+	sessionId?: string;
+	sessionPath?: string;
 	name?: string;
 	tokens?: {
 		input?: number;
@@ -41,6 +43,8 @@ export async function readCurrentPiSessionState(
 		client.getPiSessionStats(),
 	]);
 	return {
+		sessionId: state.sessionId,
+		sessionPath: state.sessionFile,
 		name: state.sessionName,
 		tokens: stats.tokens,
 		cost: stats.cost,

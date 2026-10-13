@@ -244,6 +244,7 @@ export function SessionHeader({
 					{session && !session.temporary ? (
 						<SessionHeaderMenu
 							session={session}
+							sessionState={sessionState}
 							onRenameSession={onRenameSession}
 							onFindInSession={onFindInSession}
 							onOpenInNewWindow={onOpenInNewWindow}

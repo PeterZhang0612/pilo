@@ -27,7 +27,7 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "@/ui";
-import type { ChatSession } from "./chat-page-utils";
+import type { ChatSession, ChatSessionRuntimeState } from "./chat-page-utils";
 
 const menuItemIconClassName = "size-3.5 shrink-0 text-muted-foreground";
 
@@ -37,11 +37,13 @@ function copyText(text: string) {
 
 export function SessionHeaderMenu({
 	session,
+	sessionState,
 	onRenameSession,
 	onFindInSession,
 	onOpenInNewWindow,
 }: {
 	session: ChatSession;
+	sessionState?: ChatSessionRuntimeState;
 	onRenameSession?: (title: string) => void;
 	onFindInSession?: () => void;
 	onOpenInNewWindow?: () => void;
@@ -55,6 +57,9 @@ export function SessionHeaderMenu({
 		if (renameOpen) renameInputRef.current?.focus();
 	}, [renameOpen]);
 
+	// Draft controller identity stays stable; copied metadata comes from Pi.
+	const sessionId = sessionState?.sessionId || session.id;
+	const sessionPath = sessionState?.sessionPath || session.sessionPath;
 	const canRename = Boolean(onRenameSession && session.sessionPath);
 	const canOpenInNewWindow = Boolean(onOpenInNewWindow && session.sessionPath);
 
@@ -95,21 +100,21 @@ export function SessionHeaderMenu({
 				>
 					<DropdownMenuItem
 						className="gap-2"
-						onSelect={() => handleCopy(session.id)}
+						onSelect={() => handleCopy(sessionId)}
 					>
 						<Copy className={menuItemIconClassName} />
 						<span className="shrink-0 text-muted-foreground">
 							{t("chat.sessionId")}
 						</span>
 						<span className="min-w-0 flex-1 truncate text-end font-mono text-xs">
-							{session.id}
+							{sessionId}
 						</span>
 					</DropdownMenuItem>
 					<DropdownMenuItem
 						className="gap-2"
-						disabled={!session.sessionPath}
+						disabled={!sessionPath}
 						onSelect={() => {
-							if (session.sessionPath) handleCopy(session.sessionPath);
+							if (sessionPath) handleCopy(sessionPath);
 						}}
 					>
 						<Copy className={menuItemIconClassName} />
@@ -117,7 +122,7 @@ export function SessionHeaderMenu({
 							{t("chat.sessionFilePath")}
 						</span>
 						<span className="min-w-0 flex-1 truncate text-end font-mono text-xs">
-							{session.sessionPath ?? t("chat.sessionPathUnavailable")}
+							{sessionPath || t("chat.sessionPathUnavailable")}
 						</span>
 					</DropdownMenuItem>
 					{onFindInSession || canRename || canOpenInNewWindow ? (

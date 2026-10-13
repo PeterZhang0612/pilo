@@ -76,6 +76,24 @@ actions go there and appear only for persisted sessions (`session && !session.te
   `ref.current` inside an effect would otherwise fail the `exhaustive-deps` lint.
 - Header components expose optional callbacks; they never wire runtime/Pi calls
   themselves. The parent supplies the handlers.
+- A newly started desktop chat keeps `ChatSession.id` as its draft controller
+  identity, even after Pi identifies the persisted session. Do not replace that
+  ID or attach the indexed path just to refresh the menu: runtime/history hooks
+  depend on those stable inputs. On desktop, carry `PiAgentState.sessionId` /
+  `sessionFile` into the header's `ChatSessionRuntimeState.sessionId` /
+  `sessionPath`. Menu display and copy use non-empty live fields, falling back
+  to `ChatSession` metadata via `||`; an empty path shows the unavailable label
+  and disables copying. WebUI already supplies the Pi identity through
+  `headerSession` (identified draft or indexed session); do not duplicate it in
+  `chatState`, which can still belong to the previous session during switching.
+  Check displayed and copied values after the first message on both clients,
+  and immediately after switching WebUI sessions before history/RPC completes.
+- Rename and open-in-new-window remain gated by `ChatSession.sessionPath` plus
+  their callbacks, not the live runtime path. Their desktop handlers use the
+  opened entry's identity/path; identifying a draft updates `piSessionId` but
+  does not attach `entry.session.sessionPath`. A new desktop chat can therefore
+  allow copying its live path while rename/open remain hidden. Do not make
+  these gates match the copy gate without updating the handlers' data flow.
 
 ## Multi-Window (Tauri)
 
