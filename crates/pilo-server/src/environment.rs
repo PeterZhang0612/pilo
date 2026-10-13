@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[cfg(windows)]
 use std::process::Stdio;
@@ -40,13 +40,47 @@ pub(crate) struct ToolchainInfo {
     pub(crate) git_version: String,
 }
 
+fn resolve_project_path(project: &str) -> Result<PathBuf, String> {
+    let project = project
+        .strip_prefix('"')
+        .and_then(|path| path.strip_suffix('"'))
+        .or_else(|| {
+            project
+                .strip_prefix('\'')
+                .and_then(|path| path.strip_suffix('\''))
+        })
+        .unwrap_or(project);
+    if project.is_empty() {
+        return Err("project path cannot be empty".to_owned());
+    }
+
+    let home_relative = if project == "~" {
+        Some("")
+    } else {
+        project.strip_prefix("~/").or_else(|| {
+            if cfg!(windows) {
+                project.strip_prefix("~\\")
+            } else {
+                None
+            }
+        })
+    };
+    if let Some(relative) = home_relative {
+        let home = std::env::home_dir()
+            .ok_or_else(|| "project home directory is not available".to_owned())?;
+        return Ok(home.join(relative.trim_start_matches(std::path::is_separator)));
+    }
+    Ok(PathBuf::from(project))
+}
+
 pub(crate) async fn environment_inspect(
     state: &ServerState,
     params: ProjectParams,
 ) -> Result<Value, String> {
     let probe_project = params.project;
     let cwd = tokio::task::spawn_blocking(move || {
-        let cwd = std::fs::canonicalize(&probe_project)
+        let project_path = resolve_project_path(&probe_project)?;
+        let cwd = std::fs::canonicalize(project_path)
             .map_err(|error| format!("project '{probe_project}' is not accessible: {error}"))?;
         if !cwd.is_dir() {
             return Err(format!("project '{probe_project}' is not a directory"));

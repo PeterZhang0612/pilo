@@ -345,6 +345,8 @@ const zhCN = {
 	project: {
 		...enUS.project,
 		addTitle: "添加项目",
+		localDirectory: "{{connection}} · 输入本地目录，或浏览选择。",
+		browseLocal: "浏览本地文件夹",
 		remoteDirectory: "{{connection}} · 输入远程目录，或从根目录浏览选择。",
 		projectDirectory: "项目目录",
 		browseRemote: "浏览远程文件夹",

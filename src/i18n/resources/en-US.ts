@@ -340,6 +340,9 @@ const enUS = {
 	},
 	project: {
 		addTitle: "Add project",
+		localDirectory:
+			"{{connection}} · Enter a directory, or browse to select one.",
+		browseLocal: "Browse local folder",
 		remoteDirectory:
 			"{{connection}} · Enter a remote directory, or browse from the root.",
 		projectDirectory: "Project directory",

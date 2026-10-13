@@ -5,11 +5,14 @@ import { toast } from "sonner";
 
 import { userErrorMessage } from "@/lib/app-error";
 import type { FsEntry } from "@/lib/files";
+import { isImeComposingKeyboardEvent } from "@/lib/ime";
 import { refreshProjectPiModels } from "@/lib/pi-models";
 import type { Connection } from "@/lib/pi-runtime";
 import {
 	addProject,
+	connectionLabel,
 	notifyProjectsChanged,
+	pickLocalProjectDirectory,
 	readConnectionDir,
 } from "@/lib/projects";
 import {
@@ -47,12 +50,14 @@ export function AddProjectDialog({
 }) {
 	const [path, setPath] = useState("");
 	const [busy, setBusy] = useState(false);
+	const [pickingDirectory, setPickingDirectory] = useState(false);
 	const [browserOpen, setBrowserOpen] = useState(false);
 	const [browserPath, setBrowserPath] = useState("/");
 	const [entries, setEntries] = useState<FsEntry[]>([]);
 	const [filter, setFilter] = useState("");
 	const [loadingEntries, setLoadingEntries] = useState(false);
 	const { t } = useTranslation();
+	const isLocal = connection?.kind.type === "local";
 
 	const directories = useMemo(() => {
 		const query = filter.trim().toLocaleLowerCase();
@@ -78,7 +83,7 @@ export function AddProjectDialog({
 				notifyProjectsChanged();
 				toast.success(t("project.added", { name: project.name }), {
 					description: t("project.addedDescription", {
-						connection: project.connection.name,
+						connection: connectionLabel(project.connection),
 						path: project.metadata.cwd,
 					}),
 				});
@@ -111,24 +116,40 @@ export function AddProjectDialog({
 		}
 	};
 
-	const openBrowser = () => {
+	const openBrowser = async () => {
+		if (isLocal) {
+			setPickingDirectory(true);
+			try {
+				const selectedPath = await pickLocalProjectDirectory();
+				if (selectedPath) setPath(selectedPath);
+			} catch (error) {
+				toast.error(t("project.addFailed"), {
+					description: userErrorMessage(error),
+				});
+			} finally {
+				setPickingDirectory(false);
+			}
+			return;
+		}
 		if (browserOpen) {
 			setBrowserOpen(false);
 			return;
 		}
 		setBrowserOpen(true);
-		void loadDirectory("/");
+		await loadDirectory("/");
 	};
 
-	if (!connection || connection.kind.type === "local") return null;
+	if (!connection) return null;
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-xl gap-5">
+			<DialogContent className="w-[calc(100vw-2rem)] max-w-xl gap-5 overflow-y-auto">
 				<DialogHeader>
 					<DialogTitle>{t("project.addTitle")}</DialogTitle>
 					<DialogDescription>
-						{t("project.remoteDirectory", { connection: connection.name })}
+						{t(isLocal ? "project.localDirectory" : "project.remoteDirectory", {
+							connection: connectionLabel(connection),
+						})}
 					</DialogDescription>
 				</DialogHeader>
 
@@ -145,9 +166,18 @@ export function AddProjectDialog({
 								id="project-path"
 								value={path}
 								onChange={(event) => setPath(event.target.value)}
-								placeholder="/root/code/project"
+								placeholder={
+									isLocal ? "C:\\code\\project" : "/root/code/project"
+								}
+								className="min-w-0 flex-1 pointer-coarse:h-11"
 								onKeyDown={(event) => {
-									if (event.key === "Enter" && path.trim() && !busy) {
+									if (
+										event.key === "Enter" &&
+										!isImeComposingKeyboardEvent(event) &&
+										path.trim() &&
+										!busy &&
+										!pickingDirectory
+									) {
 										void add(path);
 									}
 								}}
@@ -155,13 +185,18 @@ export function AddProjectDialog({
 							<Button
 								variant="outline"
 								size="icon"
-								aria-label={t("project.browseRemote")}
-								onClick={openBrowser}
+								className="shrink-0 pointer-coarse:size-11"
+								aria-label={t(
+									isLocal ? "project.browseLocal" : "project.browseRemote",
+								)}
+								disabled={busy || pickingDirectory}
+								onClick={() => void openBrowser()}
 							>
 								<FolderOpen className="h-4 w-4" />
 							</Button>
 							<Button
-								disabled={busy || !path.trim()}
+								className="shrink-0 pointer-coarse:h-11"
+								disabled={busy || pickingDirectory || !path.trim()}
 								onClick={() => void add(path)}
 							>
 								{busy ? t("common.adding") : t("common.add")}

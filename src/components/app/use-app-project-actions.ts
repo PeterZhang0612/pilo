@@ -1,6 +1,5 @@
 import {
 	useCallback,
-	useRef,
 	useState,
 	type Dispatch,
 	type SetStateAction,
@@ -10,14 +9,11 @@ import { toast } from "sonner";
 
 import { userErrorMessage } from "@/lib/app-error";
 import { removeWslConnection } from "@/lib/connections";
-import { refreshProjectPiModels } from "@/lib/pi-models";
 import type { Connection } from "@/lib/pi-runtime";
 import {
-	addProject,
 	connectionLabel,
 	listProjects,
 	notifyProjectsChanged,
-	pickLocalProjectDirectory,
 	removeProject,
 	reorderProjects,
 	type Project,
@@ -45,10 +41,8 @@ export function useAppProjectActions({
 	const [addProjectConnectionId, setAddProjectConnectionId] = useState<
 		string | null
 	>(null);
-	const localProjectPickerPendingRef = useRef(false);
-
 	const handleAddProject = useCallback(
-		async (connectionId?: string) => {
+		(connectionId?: string) => {
 			const connection =
 				connectionCatalog.find((item) => item.id === connectionId) ??
 				projects.find((project) => project.connection.id === connectionId)
@@ -56,40 +50,10 @@ export function useAppProjectActions({
 				null;
 			if (!connection) return;
 
-			if (connection.kind.type !== "local") {
-				setAddProjectConnectionId(connection.id);
-				setAddProjectOpen(true);
-				return;
-			}
-
-			if (localProjectPickerPendingRef.current) return;
-			localProjectPickerPendingRef.current = true;
-			try {
-				const selectedPath = await pickLocalProjectDirectory();
-				if (!selectedPath) return;
-				const project = await addProject(connection.id, selectedPath);
-				void refreshProjectPiModels(project.id).catch((error) => {
-					console.warn(
-						"Failed to refresh Pi models after adding project",
-						error,
-					);
-				});
-				notifyProjectsChanged();
-				toast.success(t("project.added", { name: project.name }), {
-					description: t("project.addedDescription", {
-						connection: connectionLabel(project.connection),
-						path: project.metadata.cwd,
-					}),
-				});
-			} catch (error) {
-				toast.error(t("project.addFailed"), {
-					description: userErrorMessage(error),
-				});
-			} finally {
-				localProjectPickerPendingRef.current = false;
-			}
+			setAddProjectConnectionId(connection.id);
+			setAddProjectOpen(true);
 		},
-		[connectionCatalog, projects, t],
+		[connectionCatalog, projects],
 	);
 
 	const handleReorderProjects = useCallback(
