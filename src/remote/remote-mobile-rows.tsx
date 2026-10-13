@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, Folder, Monitor, SquarePen } from "lucide-react";
+import { ChevronDown, Folder, Monitor, SquarePen, Trash2 } from "lucide-react";
 
 import type {
 	SidebarEnv,
@@ -36,6 +36,14 @@ export function MobileSessionRow({
 	const { t } = useTranslation();
 	const timerRef = useRef<number | null>(null);
 	const firedRef = useRef(false);
+	const deleteButtonRef = useRef<HTMLButtonElement>(null);
+	const cancelButtonRef = useRef<HTMLButtonElement>(null);
+	const wasConfirmingRef = useRef(false);
+	useEffect(() => {
+		if (confirmingDelete) cancelButtonRef.current?.focus();
+		else if (wasConfirmingRef.current) deleteButtonRef.current?.focus();
+		wasConfirmingRef.current = confirmingDelete;
+	}, [confirmingDelete]);
 	const startRef = useRef<{ x: number; y: number } | null>(null);
 
 	const clearTimer = () => {
@@ -60,6 +68,7 @@ export function MobileSessionRow({
 				<button
 					type="button"
 					className="shrink-0 rounded-md px-2.5 py-1.5 text-xs text-sidebar-foreground-muted active:bg-sidebar-hover"
+					ref={cancelButtonRef}
 					onClick={onCancelDelete}
 				>
 					{t("common.cancel")}
@@ -76,80 +85,99 @@ export function MobileSessionRow({
 	}
 
 	return (
-		<button
-			type="button"
-			data-session-row=""
-			aria-current={selected ? "page" : undefined}
-			className={cn(
-				// 长按删除与 iOS 的文字选择/长按弹窗冲突，一并关掉。
-				"flex min-h-11 w-full min-w-0 touch-manipulation select-none gap-2 rounded-lg px-3 py-2 text-left transition-colors [-webkit-touch-callout:none]",
-				projectName ? "items-start" : "items-center",
-				selected
-					? "bg-sidebar-foreground/10 text-sidebar-foreground"
-					: "text-sidebar-foreground/85 active:bg-sidebar-hover",
-			)}
-			onClick={() => {
-				if (firedRef.current) {
+		<div className="flex min-w-0 items-center gap-0.5">
+			<button
+				type="button"
+				data-session-row=""
+				aria-current={selected ? "page" : undefined}
+				className={cn(
+					// 长按删除与 iOS 的文字选择/长按弹窗冲突，一并关掉。
+					"flex min-h-11 min-w-0 flex-1 touch-manipulation select-none gap-2 rounded-lg px-3 py-2 text-left transition-colors [-webkit-touch-callout:none]",
+					projectName ? "items-start" : "items-center",
+					selected
+						? "bg-sidebar-foreground/10 text-sidebar-foreground"
+						: "text-sidebar-foreground/85 active:bg-sidebar-hover",
+				)}
+				onClick={() => {
+					if (firedRef.current) {
+						firedRef.current = false;
+						return;
+					}
+					onSelect(session.id, session.projectId);
+				}}
+				onContextMenu={(event) => event.preventDefault()}
+				onPointerDown={(event) => {
+					// 鼠标/触控板不做长按，避免桌面误触。
+					if (event.pointerType === "mouse") return;
 					firedRef.current = false;
-					return;
-				}
-				onSelect(session.id, session.projectId);
-			}}
-			onContextMenu={(event) => event.preventDefault()}
-			onPointerDown={(event) => {
-				// 鼠标/触控板不做长按，避免桌面误触。
-				if (event.pointerType === "mouse") return;
-				firedRef.current = false;
-				startRef.current = { x: event.clientX, y: event.clientY };
-				clearTimer();
-				timerRef.current = window.setTimeout(() => {
-					timerRef.current = null;
-					firedRef.current = true;
-					// Android 触觉得到长按已触发的反馈；iOS Safari 不支持，静默忽略。
-					navigator.vibrate?.(10);
-					onRequestDelete(`${session.projectId}:${session.id}`);
-				}, 500);
-			}}
-			onPointerMove={(event) => {
-				const start = startRef.current;
-				if (!start || timerRef.current === null) return;
-				if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 10) {
+					startRef.current = { x: event.clientX, y: event.clientY };
 					clearTimer();
-				}
-			}}
-			onPointerUp={clearTimer}
-			onPointerLeave={clearTimer}
-			onPointerCancel={() => {
-				clearTimer();
-				firedRef.current = false;
-			}}
-		>
-			{/* 左侧固定槽：未读标记，与桌面侧栏保持一致（左未读 / 右运行）。
+					timerRef.current = window.setTimeout(() => {
+						timerRef.current = null;
+						firedRef.current = true;
+						// Android 触觉得到长按已触发的反馈；iOS Safari 不支持，静默忽略。
+						navigator.vibrate?.(10);
+						onRequestDelete(`${session.projectId}:${session.id}`);
+					}, 500);
+				}}
+				onPointerMove={(event) => {
+					const start = startRef.current;
+					if (!start || timerRef.current === null) return;
+					if (
+						Math.hypot(event.clientX - start.x, event.clientY - start.y) > 10
+					) {
+						clearTimer();
+					}
+				}}
+				onPointerUp={clearTimer}
+				onPointerLeave={clearTimer}
+				onPointerCancel={() => {
+					clearTimer();
+					firedRef.current = false;
+				}}
+			>
+				{/* 左侧固定槽：未读标记，与桌面侧栏保持一致（左未读 / 右运行）。
 			    h-5 与标题行等高，单行居中，两行对齐标题首行。 */}
-			<span className="flex h-5 w-4 shrink-0 items-center justify-center">
-				{!session.active && session.unread ? (
-					<span
-						aria-hidden="true"
-						className="size-1.5 rounded-full bg-sidebar-primary -translate-y-px"
-					/>
-				) : null}
-			</span>
-			<span className="min-w-0 flex-1">
-				<span className="block truncate text-sm">{session.title}</span>
-				{projectName ? (
-					<span className="mt-0.5 flex items-center gap-1 text-2xs text-sidebar-foreground-muted">
-						<Folder className="size-3 shrink-0 opacity-80" aria-hidden="true" />
-						<span className="min-w-0 truncate">{projectName}</span>
-					</span>
-				) : null}
-			</span>
-			{/* 右侧固定槽：运行状态，与左侧未读槽共同预留宽度，标题不再占满整行。 */}
-			<span className="flex h-5 w-4 shrink-0 items-center justify-center">
-				{session.active ? (
-					<ActivityDot className="text-sidebar-primary -translate-y-px" />
-				) : null}
-			</span>
-		</button>
+				<span className="flex h-5 w-4 shrink-0 items-center justify-center">
+					{!session.active && session.unread ? (
+						<span
+							aria-hidden="true"
+							className="size-1.5 rounded-full bg-sidebar-primary -translate-y-px"
+						/>
+					) : null}
+				</span>
+				<span className="min-w-0 flex-1">
+					<span className="block truncate text-sm">{session.title}</span>
+					{projectName ? (
+						<span className="mt-0.5 flex items-center gap-1 text-2xs text-sidebar-foreground-muted">
+							<Folder
+								className="size-3 shrink-0 opacity-80"
+								aria-hidden="true"
+							/>
+							<span className="min-w-0 truncate">{projectName}</span>
+						</span>
+					) : null}
+				</span>
+				{/* 右侧固定槽：运行状态，与左侧未读槽共同预留宽度，标题不再占满整行。 */}
+				<span className="flex h-5 w-4 shrink-0 items-center justify-center">
+					{session.active ? (
+						<ActivityDot className="text-sidebar-primary -translate-y-px" />
+					) : null}
+				</span>
+			</button>
+			<button
+				type="button"
+				aria-label={`${t("common.delete")}: ${session.title}`}
+				ref={deleteButtonRef}
+				className={cn(
+					ROW_ACTION_CLASS,
+					"size-11 focus-visible:outline-2 focus-visible:outline-ring",
+				)}
+				onClick={() => onRequestDelete(`${session.projectId}:${session.id}`)}
+			>
+				<Trash2 className="size-4" aria-hidden="true" />
+			</button>
+		</div>
 	);
 }
 
