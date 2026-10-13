@@ -205,7 +205,8 @@ function ChatPageImpl(props: ChatPageProps) {
 		getConversationMessages,
 		requestHistoryRange,
 		historyLoadState,
-		historyProgress,
+		historyError,
+		historyIndexStale,
 		historyImageFingerprint,
 		historyPending,
 		retryHistory,
@@ -620,18 +621,17 @@ function ChatPageImpl(props: ChatPageProps) {
 										running={running}
 										onStop={handleStop}
 										pendingFollowUps={pendingFollowUps}
-										statusText={
-											session.externalRunning
-												? ""
-												: [
-														historyProgress ? t(historyProgress) : "",
-														piStatusText,
-													]
-														.filter(Boolean)
-														.join(" · ")
-										}
+										statusText={session.externalRunning ? "" : piStatusText}
 										statusError={
-											session.externalRunning ? null : retryState?.errorMessage
+											(session.externalRunning
+												? null
+												: retryState?.errorMessage) ??
+											historyError ??
+											(historyIndexStale &&
+											!running &&
+											!session.externalTurnOpen
+												? t("chat.historyIndexStale")
+												: null)
 										}
 										compacting={compacting}
 										retrying={retryState?.kind === "agent"}

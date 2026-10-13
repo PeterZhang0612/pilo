@@ -524,7 +524,8 @@ const enUS = {
 		cacheWrite: "Cache write",
 		cacheHitRate: "Cache hit rate",
 		historyLoading: "Reading history",
-		historyRestoring: "Restoring history",
+		historyIndexStale:
+			"The session index does not match the history file. Loaded messages are retained and automatic reloads have stopped. Refresh the session list; if this persists, update Pilo.",
 		forkCancelled: "Fork cancelled",
 		forkNewSession: "Fork new session",
 		forking: "Forking",

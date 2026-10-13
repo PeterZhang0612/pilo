@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { toAppError } from "@/lib/app-error";
 import { createConversationState } from "@/lib/conversation-reducer";
 import {
 	reduceConversationActions,
@@ -69,9 +70,7 @@ export function useChatConversation({
 		"ready" | "loading" | "error"
 	>(session.sessionPath ? "loading" : "ready");
 	const [historyRetry, setHistoryRetry] = useState(0);
-	const [historyProgress, setHistoryProgress] = useState<
-		"" | "chat.historyLoading" | "chat.historyRestoring"
-	>("");
+	const [historyError, setHistoryError] = useState<string | null>(null);
 	const [historyImageFingerprint, setHistoryImageFingerprint] =
 		useState<SessionHistoryFingerprint | null>(null);
 	const sessionHistoryFingerprint = getSessionHistoryFingerprint(session);
@@ -92,6 +91,9 @@ export function useChatConversation({
 		sessionHistoryFingerprint,
 	]);
 	const loadedHistoryFingerprintRef = useRef<string | null>(null);
+	const [loadedIndexFingerprint, setLoadedIndexFingerprint] = useState<
+		string | null
+	>(null);
 	const failedHistoryFingerprintRef = useRef<string | null | undefined>(
 		undefined,
 	);
@@ -145,7 +147,7 @@ export function useChatConversation({
 		const loadHistory = async (retryAttempt: number) => {
 			const startedAt = performance.now();
 			setHistoryLoadState("loading");
-			setHistoryProgress("chat.historyLoading");
+			setHistoryError(null);
 			try {
 				const result = await loadSessionHistoryWindow(
 					session.projectRecord.id,
@@ -180,7 +182,6 @@ export function useChatConversation({
 				});
 				onHistoryMetadata(history);
 				const replayStartedAt = performance.now();
-				setHistoryProgress("chat.historyRestoring");
 				let finalState = await replayConversationEventsBatched(
 					history.events,
 					conversationReducerContext,
@@ -217,8 +218,8 @@ export function useChatConversation({
 				loadedHistoryFingerprintRef.current = result.fingerprint
 					? `${result.fingerprint.fileSize}:${result.fingerprint.fileMtimeNs}`
 					: requestedFingerprint;
+				setLoadedIndexFingerprint(requestedFingerprint);
 				failedHistoryFingerprintRef.current = undefined;
-				setHistoryProgress("");
 				setHistoryLoadState("ready");
 			} catch (error) {
 				if (
@@ -229,7 +230,7 @@ export function useChatConversation({
 				}
 				console.error("Failed to read session history", error);
 				failedHistoryFingerprintRef.current = requestedFingerprint;
-				setHistoryProgress("");
+				setHistoryError(toAppError(error).detail ?? null);
 				setHistoryLoadState("error");
 			}
 		};
@@ -410,18 +411,22 @@ export function useChatConversation({
 			}
 			if (sessionHistoryFingerprint === null) return;
 			const loadedFingerprint = loadedHistoryFingerprintRef.current;
-			if (loadedFingerprint === sessionHistoryFingerprint) return;
+			// A stale index must not restart a successful read (or retry a failed one).
 			if (
-				loadedFingerprint === null &&
-				(historyLoadState !== "error" ||
-					failedHistoryFingerprintRef.current === sessionHistoryFingerprint)
+				loadedFingerprint === sessionHistoryFingerprint ||
+				loadedIndexFingerprint === sessionHistoryFingerprint ||
+				failedHistoryFingerprintRef.current === sessionHistoryFingerprint
 			) {
+				return;
+			}
+			if (loadedFingerprint === null && historyLoadState !== "error") {
 				return;
 			}
 			setHistoryRetry((value) => value + 1);
 		},
 		[
 			historyLoadState,
+			loadedIndexFingerprint,
 			session.id,
 			session.sessionPath,
 			sessionHistoryFingerprint,
@@ -440,7 +445,16 @@ export function useChatConversation({
 		getConversationMessages,
 		requestHistoryRange,
 		historyLoadState,
-		historyProgress,
+		historyError: session.sessionPath ? historyError : null,
+		historyIndexStale: Boolean(
+			session.sessionPath &&
+			historyLoadState === "ready" &&
+			historyImageFingerprint &&
+			sessionHistoryFingerprint !== null &&
+			sessionHistoryFingerprint === loadedIndexFingerprint &&
+			sessionHistoryFingerprint !==
+				`${historyImageFingerprint.fileSize}:${historyImageFingerprint.fileMtimeNs}`,
+		),
 		historyImageFingerprint,
 		historyPending:
 			session.sessionPath !== undefined && historyLoadState !== "ready",

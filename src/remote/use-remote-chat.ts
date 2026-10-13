@@ -421,6 +421,7 @@ export function useRemoteChat({
 	const {
 		historyPrefix,
 		loadingConversation,
+		historyIndexStale,
 		requestHistoryRange,
 		retryHistory,
 	} = history;
@@ -875,6 +876,7 @@ export function useRemoteChat({
 		readOnly,
 		runtimeReady,
 		loadingConversation,
+		historyIndexStale,
 		forkingMessageId: fork.forkingMessageId,
 		forkDisabled:
 			conversationUi.active ||

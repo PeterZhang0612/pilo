@@ -43,6 +43,24 @@ inside `useEffect` or event handlers, and store results in local state or a
 custom external store. (`AGENTS.md` lists TanStack Query as intended, but the
 codebase does not use it.)
 
+## History Reloads and Errors
+
+- `useChatConversation.refreshHistoryIfStale` compares the latest index
+  fingerprint with both the successful response and the index captured by that
+  request. An unchanged stale index must not restart a successful history read.
+  Remember failed request fingerprints even when an older snapshot exists; the
+  same failure waits for manual retry or a changed index instead of looping.
+- Preserve successfully replayed messages on index mismatch. Desktop and WebUI
+  show `chat.historyIndexStale` through the shared `ChatComposer.statusError`.
+  Warn only while idle and while the index still equals the one captured at
+  load time; normal live appends or a newly advanced index are not failures.
+  Desktop read failures expose the normalized backend detail alongside the
+  existing error view/retry button; WebUI retains its fatal-error notice.
+- When verification is authorized, cover stale index A returning history B
+  (one load, stable messages, visible notice), unchanged failure after a prior
+  success (no automatic retry), manual retry, index catch-up (notice clears),
+  later index changes (reload allowed), and live-turn notice suppression.
+
 ## Keep hooks focused
 
 If a hook grows past one responsibility, split it — the chat feature does this

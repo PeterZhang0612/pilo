@@ -70,11 +70,17 @@ export function useRemoteChatHistory({
 	const historyGenerationRef = useRef(0);
 	const [historyFingerprint, setHistoryFingerprint] =
 		useState<SessionHistoryFingerprint | null>(null);
+	const [loadedIndexFingerprint, setLoadedIndexFingerprint] =
+		useState<SessionHistoryFingerprint | null>(null);
 	const [conversationLoad, setConversationLoad] = useState<{
 		key: string | null;
 		status: "ready" | "loading" | "error";
 	}>({ key: null, status: "ready" });
 	const [historyRetryKey, setHistoryRetryKey] = useState(0);
+	const selectedSessionRef = useRef(selectedSession);
+	useEffect(() => {
+		selectedSessionRef.current = selectedSession;
+	}, [selectedSession]);
 	const selectedSessionPath = selectedSession?.sessionPath ?? null;
 	const selectedSessionId = selectedSession?.piSessionId ?? null;
 	const selectedLoadKey =
@@ -148,6 +154,13 @@ export function useRemoteChatHistory({
 		)
 			return;
 		let cancelled = false;
+		const requestedSession = selectedSessionRef.current;
+		const requestedIndexFingerprint = requestedSession
+			? {
+					fileSize: requestedSession.fileSize,
+					fileMtimeNs: requestedSession.fileMtimeNs,
+				}
+			: null;
 		setConversationLoad({ key: selectedLoadKey, status: "loading" });
 		setRuntimeReady(false);
 		void client
@@ -165,6 +178,7 @@ export function useRemoteChatHistory({
 					);
 				}
 				setHistoryFingerprint(result.fingerprint);
+				setLoadedIndexFingerprint(requestedIndexFingerprint);
 				historyPageRequestsRef.current.clear();
 				historyStore.initialize(directory, windowStart);
 				let state = replayConversationEvents(
@@ -330,6 +344,19 @@ export function useRemoteChatHistory({
 		historyPrefix,
 		fingerprint: historyFingerprint,
 		loadingConversation,
+		historyIndexStale: Boolean(
+			!liveTurnOpen &&
+			selectedSession &&
+			conversationLoad.key === selectedLoadKey &&
+			conversationLoad.status === "ready" &&
+			historyFingerprint &&
+			loadedIndexFingerprint &&
+			sameHistoryFingerprint(loadedIndexFingerprint, {
+				fileSize: selectedSession.fileSize,
+				fileMtimeNs: selectedSession.fileMtimeNs,
+			}) &&
+			!sameHistoryFingerprint(historyFingerprint, loadedIndexFingerprint),
+		),
 		requestHistoryRange,
 		retryHistory,
 	};

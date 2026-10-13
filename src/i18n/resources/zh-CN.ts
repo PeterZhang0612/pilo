@@ -521,7 +521,8 @@ const zhCN = {
 		cacheWrite: "缓存写入",
 		cacheHitRate: "缓存命中率",
 		historyLoading: "正在读取历史消息",
-		historyRestoring: "正在恢复历史消息",
+		historyIndexStale:
+			"会话索引与历史文件不一致，已保留读取到的消息并停止自动重载。请刷新会话列表；若持续出现，请更新 Pilo。",
 		forkCancelled: "Fork 已取消",
 		forkNewSession: "Fork 新会话",
 		forking: "正在 Fork",
