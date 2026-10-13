@@ -64,6 +64,7 @@ pub fn binary_fingerprint(path: &Path) -> io::Result<String> {
 struct ServerState {
     writer: mpsc::Sender<Envelope>,
     request_slots: Arc<Semaphore>,
+    search_slots: Arc<Semaphore>,
     started_at: Instant,
     pi: Arc<Mutex<HashMap<String, PiProcess>>>,
     session_watchers: Arc<Mutex<HashMap<String, JoinHandle<()>>>>,
@@ -77,6 +78,7 @@ pub async fn serve_stdio() -> Result<(), Box<dyn std::error::Error>> {
     let state = ServerState {
         writer: writer_tx,
         request_slots: Arc::new(Semaphore::new(MAX_IN_FLIGHT_REQUESTS)),
+        search_slots: Arc::new(Semaphore::new(2)),
         started_at: Instant::now(),
         pi: Arc::new(Mutex::new(HashMap::new())),
         session_watchers: Arc::new(Mutex::new(HashMap::new())),
@@ -251,9 +253,19 @@ async fn dispatch(
                 .await
                 .map(ServerReply::json)
         }
-        "session.search" => blocking(move || session_search(from_params(params)?))
+        "session.search" => {
+            let permit = Arc::clone(&state.search_slots)
+                .acquire_owned()
+                .await
+                .map_err(|_| "session search is shutting down".to_owned())?;
+            blocking(move || {
+                // Keep the slot until the blocking scan ends, even if its caller goes away.
+                let _permit = permit;
+                session_search(from_params(params)?)
+            })
             .await
-            .map(ServerReply::json),
+            .map(ServerReply::json)
+        }
         "session.read" => {
             let (metadata, data) =
                 tokio::task::spawn_blocking(move || session_read(from_params(params)?))

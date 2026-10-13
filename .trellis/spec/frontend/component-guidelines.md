@@ -50,6 +50,14 @@ re-styling them.
 - Heavy features are lazy-loaded with `React.lazy` + `Suspense` in `src/App.tsx`
   (`ChatPage`, `ProjectViewer`, `RightSidebar`, `TerminalDock`).
 
+## Large Content
+
+- Command palette recency sorting is memoized O(n log n), not repeated insertion.
+  Content search runs projects serially and skips superseded queued queries;
+  an already-started project scan still finishes. The server allows at most two
+  concurrent content scans per connection server, separate from its 64-request
+  overall limit. This is admission control, not cancellation of blocking scans.
+
 ## Styling
 
 - Tailwind utility classes only; design tokens via CSS variables

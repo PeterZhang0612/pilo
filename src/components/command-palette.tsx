@@ -42,18 +42,6 @@ function Kbd({ children }: { children: ReactNode }) {
 	);
 }
 
-function sessionsByRecent(sessions: readonly SidebarSession[]) {
-	return sessions.reduce<SidebarSession[]>((ordered, session) => {
-		const index = ordered.findIndex(
-			(candidate) =>
-				candidate.latestMessageAt.getTime() < session.latestMessageAt.getTime(),
-		);
-		if (index < 0) ordered.push(session);
-		else ordered.splice(index, 0, session);
-		return ordered;
-	}, []);
-}
-
 function indexedTitle(session: SessionIndexEntry) {
 	return (
 		session.titleOverride ??
@@ -80,6 +68,7 @@ export function CommandPalette({
 	const [searchingContent, setSearchingContent] = useState(false);
 	const { t } = useTranslation();
 	const requestRef = useRef(0);
+	const searchQueueRef = useRef<Promise<void>>(Promise.resolve());
 
 	useEffect(() => {
 		if (!open) return;
@@ -129,12 +118,8 @@ export function CommandPalette({
 		const request = requestRef.current;
 		if (normalized.length < 2) return;
 		const timer = window.setTimeout(() => {
-			void Promise.allSettled(
-				projects.map(async (project) => ({
-					project,
-					matches: await client.searchSessions(project.id, normalized, 12),
-				})),
-			).then((results) => {
+			// Finish the one in-flight project scan, then skip superseded queries.
+			searchQueueRef.current = searchQueueRef.current.then(async () => {
 				if (disposed || requestRef.current !== request) return;
 				const known = new Map(
 					catalog.map((session) => [
@@ -142,22 +127,35 @@ export function CommandPalette({
 						session,
 					]),
 				);
-				const next = results.flatMap((result) => {
-					if (result.status !== "fulfilled") return [];
-					return result.value.matches.map((match) => {
-						const session = known.get(
-							`${result.value.project.id}\0${match.sessionPath}`,
+				const next: Array<
+					SessionSearchTarget & { snippet: string; role: "user" | "assistant" }
+				> = [];
+				for (const project of projects) {
+					if (disposed || requestRef.current !== request) return;
+					try {
+						/* oxlint-disable-next-line no-await-in-loop -- Keep project scans serial to bound server load. */
+						const matches = await client.searchSessions(
+							project.id,
+							normalized,
+							12,
 						);
-						return {
-							sessionId: session?.id ?? match.sessionId,
-							projectId: result.value.project.id,
-							sessionPath: match.sessionPath,
-							title: session?.title ?? t("commandPalette.sessionFallback"),
-							snippet: match.snippet,
-							role: match.role,
-						};
-					});
-				});
+						for (const match of matches) {
+							const session = known.get(`${project.id}\0${match.sessionPath}`);
+							next.push({
+								sessionId: session?.id ?? match.sessionId,
+								projectId: project.id,
+								sessionPath: match.sessionPath,
+								title: session?.title ?? t("commandPalette.sessionFallback"),
+								snippet: match.snippet,
+								role: match.role,
+							});
+						}
+					} catch {
+						// Keep results from projects that remain reachable.
+					}
+					if (next.length >= 30) break;
+				}
+				if (disposed || requestRef.current !== request) return;
 				setContentResults(next.slice(0, 30));
 				setSearchingContent(false);
 			});
@@ -182,8 +180,17 @@ export function CommandPalette({
 				.includes(normalized),
 		);
 	}, [normalized, projects]);
+	const ordered = useMemo(
+		// Keep time-only ordering; the sidebar helper also prioritizes active chats.
+		() => {
+			/* oxlint-disable-next-line unicorn/no-array-sort -- sort a copy without changing the catalog. */
+			return [...catalog].sort(
+				(a, b) => b.latestMessageAt.getTime() - a.latestMessageAt.getTime(),
+			);
+		},
+		[catalog],
+	);
 	const sessionResults = useMemo(() => {
-		const ordered = sessionsByRecent(catalog);
 		if (!normalized) return ordered.slice(0, 18);
 		return ordered.filter((session) => {
 			const project = projectById.get(session.projectId);
@@ -197,7 +204,7 @@ export function CommandPalette({
 				.toLocaleLowerCase()
 				.includes(normalized);
 		});
-	}, [catalog, normalized, projectById]);
+	}, [ordered, normalized, projectById]);
 
 	const chooseSession = (target: SessionSearchTarget) => {
 		onSelectSession?.(target);
