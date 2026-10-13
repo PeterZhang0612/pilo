@@ -33,6 +33,8 @@ Frontend controller eviction alone is not backend process cleanup.
   if necessary. `serve_stdio()` handles EOF, framing errors and stdout failure
   through cleanup; accepted Pi starts are registered in `pi_starts` at admission,
   and accepted Pi stops are registered in `pi_stops` before awaiting.
+- `ServerWriter::send` / `blocking_send` share a 256-envelope / 64 MiB payload
+  budget, including binary data and the frame currently being written.
 - `ServerClient::stop()` closes stdin, waits for server cleanup, then force-kills
   only if necessary.
 
@@ -155,6 +157,18 @@ Frontend controller eviction alone is not backend process cleanup.
   `pi.start` must not create a process after cleanup passes the registry. Removal
   from the live registry and registration in the stopping JoinSet have no await
   between them. Drain accepted stops and live children concurrently before exit.
+- Ordinary server request admission is nonblocking and capped at 64. Pi/terminal/
+  watcher stop commands have a separate 64-slot allowance. Overload returns
+  `server_busy`; if the rejection cannot be queued within one second, clean up
+  the connection rather than indefinitely stop reading stdin. Client Pi stop
+  retries capacity rejection within its five-second cleanup deadline.
+- Count server output bytes without making another serialized buffer. Oversized
+  responses return `output_too_large`; Pi stdout is bounded while reading, not
+  after allocating a complete line. An over-limit line terminates that stream.
+  Queue budgets exclude waiting producers and object-allocation overhead.
+- Event coalescing ticks only while a Pi stream has buffered events. Reset the
+  16 ms window when an empty buffer first receives a delta; idle streams do not
+  continuously wake their tasks.
 - Abort and join the client writer to drop server stdin. Keep the reader alive while
   waiting for EOF cleanup (5 seconds); fallback kill/wait has another 1-second bound.
   Stop connection servers concurrently and do this even if earlier app teardown
@@ -167,6 +181,7 @@ Frontend controller eviction alone is not backend process cleanup.
 | Eligible idle cache exceeds budget | Stop oldest eligible processes; keep requested chat |
 | Old stdout finishes after explicit stop | Joined before ACK; cannot cancel or emit into a same-stream restart |
 | Title-generation HTTP timeout or unregistered worker error | Session drop schedules cleanup; no abandoned stream ownership |
+| Ordinary server request saturation | Return server_busy; keep independent stop capacity |
 | Idle session evicted | No stop event; `states()` drops it; next `ensure` respawns and resets the generation |
 | Live/temporary/unsaved/in-flight session | Keep it, even above budget |
 | Extension resumes after compaction | Desktop adopts the live turn; queue and stop remain available |
@@ -214,6 +229,10 @@ The following targeted regressions remain to be added with explicit authorizatio
   stream; the new start and process must survive without old terminal/log events.
   Also replace a stream during natural EOF cleanup and cancel an accepted stop
   while it owns reader handles.
+- Verify EOF hooks precede force-kill, forced Unix group/Windows tree cleanup,
+  server stdout failure, request saturation with stop/EOF still responsive,
+  queued/in-flight byte permit release, oversized responses and unterminated
+  oversized Pi stdout lines. Native Windows/macOS and Local/WSL/SSH remain pending.
 - `chat_sessions/idle_cache.rs`: LRU order, retained key, busy/compacting/initializing/
   temporary/unsaved/in-flight exclusions, busy-flag rollback on failed send.
 - `chat_sessions/event_sink.rs`: prompt rejection rolls back only the owning

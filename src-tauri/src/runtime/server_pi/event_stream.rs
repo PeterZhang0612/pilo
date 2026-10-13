@@ -37,7 +37,7 @@ pub(super) fn spawn_event_task<S: RuntimeEventSink>(
         flush_tick.tick().await;
         loop {
             let received = tokio::select! {
-                _ = flush_tick.tick() => {
+                _ = flush_tick.tick(), if !buffered_runtime_events.is_empty() => {
                     flush_runtime_events(&sink, &mut buffered_runtime_events);
                     continue;
                 }
@@ -94,6 +94,7 @@ pub(super) fn spawn_event_task<S: RuntimeEventSink>(
             if event.stream_id != stream_id {
                 continue;
             }
+            let was_empty = buffered_runtime_events.is_empty();
             match event.event.as_str() {
                 "pi.rpc" => {
                     let data = event.data.clone();
@@ -193,6 +194,9 @@ pub(super) fn spawn_event_task<S: RuntimeEventSink>(
                     break;
                 }
                 _ => {}
+            }
+            if was_empty && !buffered_runtime_events.is_empty() {
+                flush_tick.reset();
             }
         }
         flush_runtime_events(&sink, &mut buffered_runtime_events);

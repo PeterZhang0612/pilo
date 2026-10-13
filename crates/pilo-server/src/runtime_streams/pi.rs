@@ -14,7 +14,7 @@ use pilo_protocol::{Envelope, MAX_BINARY_PAYLOAD_BYTES};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::{
-    io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
+    io::{AsyncBufRead, AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
     process::{Child, ChildStdin},
     sync::Mutex,
 };
@@ -140,6 +140,30 @@ async fn stop_registered_pi(
         .map_err(|_| "Pi stop task ended unexpectedly".to_owned())?
 }
 
+async fn read_rpc_line<R: AsyncBufRead + Unpin>(
+    reader: &mut R,
+) -> std::io::Result<Option<Vec<u8>>> {
+    let mut line = Vec::new();
+    loop {
+        let buffer = reader.fill_buf().await?;
+        if buffer.is_empty() {
+            return Ok((!line.is_empty()).then_some(line));
+        }
+        let newline = buffer.iter().position(|byte| *byte == b'\n');
+        let bytes = newline.unwrap_or(buffer.len());
+        if line.len().saturating_add(bytes) > MAX_BINARY_PAYLOAD_BYTES {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Pi stdout RPC line exceeds the byte limit",
+            ));
+        }
+        line.extend_from_slice(&buffer[..bytes]);
+        reader.consume(bytes + usize::from(newline.is_some()));
+        if newline.is_some() {
+            return Ok(Some(line));
+        }
+    }
+}
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PiStartParams {
@@ -443,31 +467,10 @@ pub(crate) async fn pi_start(state: &ServerState, params: PiStartParams) -> Resu
     let outputs = Arc::clone(&state.pi_output_tasks);
     let stdout_identity = stdin_identity.clone();
     let stdout_task = tokio::spawn(async move {
-        let mut lines = BufReader::new(stdout).lines();
+        let mut reader = BufReader::new(stdout);
         loop {
-            match lines.next_line().await {
-                Ok(Some(line)) => {
-                    let bytes = line.into_bytes();
-                    if bytes.len() > MAX_BINARY_PAYLOAD_BYTES {
-                        if writer
-                            .send(Envelope::event(
-                                stream_id.clone(),
-                                "pi.error",
-                                json!({
-                                    "message": format!(
-                                        "Pi stdout RPC line is {} bytes; pilo-server limit is {} bytes",
-                                        bytes.len(),
-                                        MAX_BINARY_PAYLOAD_BYTES
-                                    ),
-                                }),
-                            ))
-                            .await
-                            .is_err()
-                        {
-                            break;
-                        }
-                        continue;
-                    }
+            match read_rpc_line(&mut reader).await {
+                Ok(Some(bytes)) => {
                     trace_pi_rpc_line(&stream_id, &bytes);
                     if writer
                         .send(Envelope::event_with_binary(

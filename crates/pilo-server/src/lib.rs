@@ -1,6 +1,7 @@
 mod command;
 mod environment;
 mod fs_ops;
+mod output;
 mod runtime_streams;
 mod session;
 
@@ -18,6 +19,7 @@ use fs_ops::{
     fs_mkdir, fs_mkdir_absolute, fs_read_dir, fs_read_file, fs_remove, fs_rename, fs_search,
     fs_stat, fs_write_file,
 };
+use output::ServerWriter;
 use pilo_protocol::{
     Envelope, MAX_BINARY_PAYLOAD_BYTES, PROTOCOL_VERSION, SERVER_CAPABILITIES, ServerPing,
     ServerStatus, read_frame, write_frame,
@@ -71,8 +73,9 @@ type PiOutputTasks = HashMap<
 
 #[derive(Clone)]
 struct ServerState {
-    writer: mpsc::Sender<Envelope>,
+    writer: ServerWriter,
     request_slots: Arc<Semaphore>,
+    control_slots: Arc<Semaphore>,
     search_slots: Arc<Semaphore>,
     started_at: Instant,
     pi: Arc<Mutex<HashMap<String, PiProcess>>>,
@@ -90,10 +93,11 @@ pub async fn serve_stdio() -> Result<(), Box<dyn std::error::Error>> {
         "[runtime-diagnostics] server started pid={} version={SERVER_VERSION} maxInFlight={MAX_IN_FLIGHT_REQUESTS}",
         std::process::id()
     );
-    let (writer_tx, mut writer_rx) = mpsc::channel::<Envelope>(256);
+    let (writer_tx, mut writer_rx) = mpsc::channel::<output::QueuedOutput>(256);
     let state = ServerState {
-        writer: writer_tx,
+        writer: ServerWriter::new(writer_tx),
         request_slots: Arc::new(Semaphore::new(MAX_IN_FLIGHT_REQUESTS)),
+        control_slots: Arc::new(Semaphore::new(MAX_IN_FLIGHT_REQUESTS)),
         search_slots: Arc::new(Semaphore::new(2)),
         started_at: Instant::now(),
         pi: Arc::new(Mutex::new(HashMap::new())),
@@ -106,11 +110,13 @@ pub async fn serve_stdio() -> Result<(), Box<dyn std::error::Error>> {
         toolchain: Arc::new(OnceCell::new()),
     };
 
-    let writer_task = tokio::spawn(async move {
+    let (writer_done_tx, mut writer_done_rx) = tokio::sync::oneshot::channel();
+    let mut writer_task = tokio::spawn(async move {
         let stdout = tokio::io::stdout();
         let mut stdout = stdout;
-        while let Some(message) = writer_rx.recv().await {
-            if let Err(error) = write_frame(&mut stdout, message).await {
+        while let Some(queued) = writer_rx.recv().await {
+            // Keep the byte reservation until the frame has actually been written.
+            if let Err(error) = write_frame(&mut stdout, queued.message).await {
                 eprintln!(
                     "[runtime-diagnostics] server stdout failed pid={} kind={:?} error={error}",
                     std::process::id(),
@@ -119,6 +125,7 @@ pub async fn serve_stdio() -> Result<(), Box<dyn std::error::Error>> {
                 break;
             }
         }
+        let _ = writer_done_tx.send(());
     });
 
     let stdin = tokio::io::stdin();
@@ -135,7 +142,11 @@ pub async fn serve_stdio() -> Result<(), Box<dyn std::error::Error>> {
                 );
             }
         }
-        let message = match read_frame(&mut stdin).await {
+        let frame = tokio::select! {
+            frame = read_frame(&mut stdin) => frame,
+            _ = &mut writer_done_rx => break Ok(()),
+        };
+        let message = match frame {
             Ok(Some(message)) => message,
             Ok(None) => break Ok(()),
             Err(error) => break Err(error),
@@ -149,15 +160,31 @@ pub async fn serve_stdio() -> Result<(), Box<dyn std::error::Error>> {
         else {
             continue;
         };
-        let admission_started = Instant::now();
-        if state.request_slots.available_permits() == 0 {
-            eprintln!(
-                "[runtime-diagnostics] server request capacity exhausted pid={} requestId={id} method={method} maxInFlight={MAX_IN_FLIGHT_REQUESTS}",
-                std::process::id()
-            );
-        }
-        let Ok(permit) = Arc::clone(&state.request_slots).acquire_owned().await else {
-            break Ok(());
+        let slots = if matches!(
+            method.as_str(),
+            "pi.stop" | "terminal.close" | "session.watch_stop"
+        ) {
+            &state.control_slots
+        } else {
+            &state.request_slots
+        };
+        // Never stop reading stdin while waiting for admission: EOF and stop
+        // requests must still reach cleanup when ordinary requests are saturated.
+        let permit = match Arc::clone(slots).try_acquire_owned() {
+            Ok(permit) => permit,
+            Err(_) => {
+                let response =
+                    Envelope::error(id, "server_busy", "pilo-server request capacity exhausted");
+                match tokio::time::timeout(
+                    std::time::Duration::from_secs(1),
+                    state.writer.send(response),
+                )
+                .await
+                {
+                    Ok(Ok(())) => continue,
+                    _ => break Ok(()),
+                }
+            }
         };
         // Register starts in input order, before their tasks can await probing.
         let start_cancel = if method == "pi.start"
@@ -173,13 +200,6 @@ pub async fn serve_stdio() -> Result<(), Box<dyn std::error::Error>> {
         } else {
             None
         };
-        if admission_started.elapsed().as_secs() >= 1 {
-            eprintln!(
-                "[runtime-diagnostics] server request admission delayed pid={} requestId={id} method={method} elapsedMs={}",
-                std::process::id(),
-                admission_started.elapsed().as_millis()
-            );
-        }
         let state = state.clone();
         requests.spawn(async move {
             let _permit = permit;
@@ -269,7 +289,13 @@ pub async fn serve_stdio() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     drop(state.writer);
-    let _ = writer_task.await;
+    if tokio::time::timeout(std::time::Duration::from_secs(1), &mut writer_task)
+        .await
+        .is_err()
+    {
+        writer_task.abort();
+        let _ = writer_task.await;
+    }
     eprintln!(
         "[runtime-diagnostics] server stopped pid={}",
         std::process::id()
