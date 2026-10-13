@@ -6,6 +6,10 @@ import { useIsTouchDevice } from "@/components/chat/chat-composer-run-config";
 import type { PiExtensionDialogRequest } from "@/components/chat/use-pi-session-features";
 import { cn } from "@/lib/utils";
 import {
+	isImeComposingKeyboardEvent,
+	isImeComposingNativeKeyboardEvent,
+} from "@/lib/ime";
+import {
 	menuItemClassName,
 	menuSurfaceClassName,
 	menuSurfaceStyle,
@@ -53,7 +57,8 @@ function PiExtensionUiDialogContent({
 
 	useEffect(() => {
 		const handleKeyDown = (event: KeyboardEvent) => {
-			if (event.key !== "Escape") return;
+			if (event.key !== "Escape" || isImeComposingNativeKeyboardEvent(event))
+				return;
 			event.preventDefault();
 			cancel();
 		};
@@ -162,7 +167,13 @@ function PiExtensionUiDialogContent({
 						placeholder={request.placeholder ?? undefined}
 						onChange={(event) => setValue(event.target.value)}
 						onKeyDown={(event) => {
-							if (event.key === "Enter") onRespond({ value });
+							if (
+								event.key === "Enter" &&
+								!isImeComposingKeyboardEvent(event)
+							) {
+								event.preventDefault();
+								onRespond({ value });
+							}
 						}}
 					/>
 				</div>
@@ -175,7 +186,7 @@ function PiExtensionUiDialogContent({
 						rows={8}
 						value={value}
 						onChange={(event) => setValue(event.target.value)}
-						className="min-h-36 resize-y font-mono text-xs"
+						className="min-h-36 resize-y font-mono text-base md:text-xs"
 					/>
 				</div>
 			) : null}
