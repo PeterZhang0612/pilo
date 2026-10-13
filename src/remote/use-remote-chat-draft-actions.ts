@@ -203,12 +203,15 @@ export function useRemoteChatDraftActions({
 	);
 
 	const handleSelectSession = useCallback(
-		(sessionId: string) => {
+		(sessionId: string, projectId: string) => {
 			const session = rawSessions.find(
-				(candidate) => candidate.piSessionId === sessionId,
+				(candidate) =>
+					candidate.projectId === projectId &&
+					candidate.piSessionId === sessionId,
 			);
 			if (!session) return;
 			if (
+				session.projectId === activeProjectId &&
 				session.piSessionId === identifiedDraftSessionId &&
 				selectedSessionPath === null
 			) {
@@ -229,6 +232,7 @@ export function useRemoteChatDraftActions({
 			if (isNarrow) closeMobileNavigation();
 		},
 		[
+			activeProjectId,
 			chatUiStateCache,
 			closeMobileNavigation,
 			identifiedDraftSessionId,
@@ -253,9 +257,13 @@ export function useRemoteChatDraftActions({
 			chatUiStateCache.rekey(previousKey, nextKey);
 			setRuntimeSessionKeys((current) => {
 				const next = new Map(current);
-				next.set(state.sessionId!, sessionKey(activeProjectId, draftId));
+				next.set(
+					sessionKey(activeProjectId, state.sessionId!),
+					sessionKey(activeProjectId, draftId),
+				);
 				return next;
 			});
+			setDraftProjectId(activeProjectId);
 			setIdentifiedDraftSessionId(state.sessionId);
 			void refreshProjectSessions(activeProjectId, true);
 		},
@@ -265,6 +273,7 @@ export function useRemoteChatDraftActions({
 			draftId,
 			refreshProjectSessions,
 			selectedSession,
+			setDraftProjectId,
 			setIdentifiedDraftSessionId,
 			setRuntimeSessionKeys,
 		],

@@ -209,9 +209,9 @@ export const SessionRow = memo(function SessionRow({
 }: {
 	session: SidebarSession;
 	selected: boolean;
-	onSelect: (sessionId: string) => void;
-	onDelete?: (sessionId: string) => void;
-	onRename?: (sessionId: string, title: string) => void;
+	onSelect: (sessionId: string, projectId: string) => void;
+	onDelete?: (sessionId: string, projectId: string) => void;
+	onRename?: (sessionId: string, title: string, projectId: string) => void;
 	/** 所属项目名；仅在“最近会话”且开启「展示项目」时传入（两行式展示）。 */
 	projectName?: string;
 }) {
@@ -244,7 +244,8 @@ export const SessionRow = memo(function SessionRow({
 	}, [renaming]);
 	const submitRename = () => {
 		const title = renameValue.trim();
-		if (title && title !== session.title) onRename?.(session.id, title);
+		if (title && title !== session.title)
+			onRename?.(session.id, title, session.projectId);
 		setRenaming(false);
 	};
 	return (
@@ -259,7 +260,8 @@ export const SessionRow = memo(function SessionRow({
 					data-menu-open={menuOpen || undefined}
 					data-session-row=""
 					onClick={() => {
-						if (!renaming && !suppressSelectRef.current) onSelect(session.id);
+						if (!renaming && !suppressSelectRef.current)
+							onSelect(session.id, session.projectId);
 					}}
 					onPointerEnter={schedulePrefetch}
 					onPointerLeave={clearPrefetchTimer}
@@ -267,7 +269,7 @@ export const SessionRow = memo(function SessionRow({
 						if (renaming || event.target !== event.currentTarget) return;
 						if (event.key !== "Enter" && event.key !== " ") return;
 						event.preventDefault();
-						onSelect(session.id);
+						onSelect(session.id, session.projectId);
 					}}
 					className={cn(
 						"group relative w-full min-w-0 cursor-pointer select-none rounded-md border border-transparent bg-transparent px-2 text-left transition-colors",
@@ -343,7 +345,7 @@ export const SessionRow = memo(function SessionRow({
 													setConfirmingDeleteMenu(true);
 													return;
 												}
-												onDelete(session.id);
+												onDelete(session.id, session.projectId);
 											}}
 										>
 											<Trash2 className={menuItemIconClassName} />
@@ -427,7 +429,7 @@ export const SessionRow = memo(function SessionRow({
 										"group-data-[menu-open]:pointer-events-auto group-data-[menu-open]:opacity-100",
 										"focus-visible:pointer-events-auto focus-visible:opacity-100",
 									)}
-									onConfirm={() => onDelete(session.id)}
+									onConfirm={() => onDelete(session.id, session.projectId)}
 								/>
 							) : null}
 						</div>

@@ -201,7 +201,7 @@ pub async fn session_delete(
 ) -> Result<SessionDeleteResult, String> {
     let project = session_runtime_project(&app, &project_id)?;
     let db = storage::open(&app)?;
-    let indexed = storage::get_session(&db, &session_path)?
+    let indexed = storage::get_session(&db, &session_path, Some(&project.id))?
         .ok_or_else(|| format!("session '{session_path}' is not indexed"))?;
     if indexed.project_id != project.id {
         return Err("session belongs to a different project".to_owned());
@@ -234,6 +234,12 @@ pub fn session_update_ui_state(
     app: AppHandle,
     session_path: String,
     update: SessionUiStateUpdate,
+    project_id: Option<String>,
 ) -> Result<SessionIndexEntry, String> {
-    storage::update_session_ui_state(&storage::open(&app)?, &session_path, &update)
+    storage::update_session_ui_state(
+        &storage::open(&app)?,
+        &session_path,
+        &update,
+        project_id.as_deref(),
+    )
 }

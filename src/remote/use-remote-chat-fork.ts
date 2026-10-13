@@ -34,7 +34,7 @@ export function useRemoteChatFork({
 		projectId: string,
 		showProgress?: boolean,
 	) => Promise<void>;
-	onForkSessionCreated: (sessionId: string) => void;
+	onForkSessionCreated: (sessionId: string, projectId: string) => void;
 }) {
 	const { t } = useTranslation();
 	const [forkingMessageId, setForkingMessageId] = useState<string | null>(null);
@@ -101,7 +101,7 @@ export function useRemoteChatFork({
 					throw new Error(t("chat.forkNoInfo"));
 				}
 				await refreshProjectSessions(activeProjectId, true);
-				onForkSessionCreated(state.sessionId);
+				onForkSessionCreated(state.sessionId, activeProjectId);
 			} catch (error) {
 				toast.error(t("chat.forkFailed"), {
 					description: userErrorMessage(error),

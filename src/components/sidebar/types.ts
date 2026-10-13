@@ -35,8 +35,12 @@ export type AppSidebarProps = {
 	/** 由 App 控制的整体收起（宽度过渡动画）。 */
 	collapsed?: boolean;
 	onCollapse?: () => void;
-	onUpdateSession?: (sessionId: string, update: { title?: string }) => void;
-	onDeleteSession?: (sessionId: string) => void;
+	onUpdateSession?: (
+		sessionId: string,
+		update: { title?: string },
+		projectId: string,
+	) => void;
+	onDeleteSession?: (sessionId: string, projectId: string) => void;
 	onRefreshProjectSessions?: (projectId: string) => void;
 	refreshingProjectIds?: ReadonlySet<string>;
 	/** 重新获取连接、项目与会话。 */
@@ -51,7 +55,7 @@ export type AppSidebarProps = {
 	/** “最近会话”模式下会话行是否显示所属项目名。 */
 	showProjectsInRecents?: boolean;
 	onShowProjectsInRecentsChange?: (showProjects: boolean) => void;
-	onSelectSession?: (sessionId: string) => void;
+	onSelectSession?: (sessionId: string, projectId: string) => void;
 	onOpenSearchSession?: (target: {
 		sessionId: string;
 		projectId: string;

@@ -70,6 +70,62 @@ fn ensure_connection_columns(db: &SqliteConnection) -> Result<(), String> {
 - `upsert_project` deliberately does **not** overwrite the connection
   configuration — a project row references the live connection. Keep that invariant.
 
+## Project-Scoped Session Identity
+
+### Scope / Trigger
+
+Local, WSL and SSH connections can contain identical session paths and Pi IDs.
+Project identity must survive storage, IPC, sidebar actions and unread tracking.
+
+### Signatures
+
+- `sessions` and `session_ui_state`: `PRIMARY KEY(project_id, session_path)`.
+- `session_update_ui_state`: `{ sessionPath, update, projectId?: string }`
+  returns `SessionIndexEntry`.
+- Sidebar select/delete callbacks take `(sessionId, projectId)`; rename also
+  carries `projectId`. Do not change the Pi session ID itself.
+
+### Contracts
+
+`ensure_session_project_keys` rebuilds legacy path-only tables in an immediate
+transaction. It copies indexed rows and joins UI preferences to their indexed
+owner before replacing tables and indexes. Legacy UI rows without an indexed
+owner cannot be assigned safely and are not migrated. Pi JSONL is unchanged.
+All joins, upserts and deletions use project plus path. UI lookup, selection,
+React keys and unread state use project plus Pi ID.
+
+`get_session` resolves an omitted project only for legacy callers, rejecting
+multiple owners before reading the row. Scoped reads use direct equality on
+both `project_id` and `session_path`; do not hide the project predicate behind
+`? IS NULL OR ...`, which prevents direct use of the composite primary key.
+
+### Validation & Errors
+
+- Explicit project and indexed path: update only that project's row.
+- Omitted project, unique indexed path: accept for old IPC callers.
+- Omitted project, multiple owners: reject with
+  `session path is ambiguous; projectId is required`.
+- Missing indexed row: reject as not indexed; never create unowned preferences.
+- Failed migration: transaction rolls back; schema initialization fails.
+
+### Good / Base / Bad Cases
+
+- Good: two projects share a path; renaming or deleting one leaves the other intact.
+- Base: a legacy database upgrades and preserves preferences of indexed sessions.
+- Bad: selecting the first row matching only `sessionPath` or `piSessionId`.
+
+### Required Regression Checks
+
+When verification is authorized, cover legacy migration and repeated init,
+colliding paths across projects, scoped delete/rename, ambiguous legacy IPC,
+and desktop/WebUI selection and unread isolation. Migration cannot reconstruct
+rows or preferences already overwritten by the old global path key.
+
+### Wrong vs Correct
+
+Wrong: `DELETE FROM sessions WHERE session_path=?1`.
+Correct: `DELETE FROM sessions WHERE project_id=?1 AND session_path=?2`.
+
 ## Testing
 
 Storage unit tests live in `src-tauri/src/runtime/storage.rs` under `#[cfg(test)]`

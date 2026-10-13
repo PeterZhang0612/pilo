@@ -217,9 +217,9 @@ function App() {
 		return mounted;
 	}, [renderedOpenedChats]);
 	const monitoredSelectSession = useCallback(
-		(sessionId: string) => {
+		(sessionId: string, projectId: string) => {
 			recordChatSessionSwitchStart(selectedSessionId ?? null, sessionId);
-			selectSession(sessionId);
+			selectSession(sessionId, projectId);
 		},
 		[selectSession, selectedSessionId],
 	);
@@ -309,11 +309,11 @@ function App() {
 						selectedSessionId={selectedSessionId}
 						onSelectSession={monitoredSelectSession}
 						onOpenSearchSession={monitoredOpenSearchSession}
-						onUpdateSession={(sessionId, update) => {
-							void updateSession(sessionId, update);
+						onUpdateSession={(sessionId, update, projectId) => {
+							void updateSession(sessionId, update, projectId);
 						}}
-						onDeleteSession={(sessionId) => {
-							void deleteSession(sessionId);
+						onDeleteSession={(sessionId, projectId) => {
+							void deleteSession(sessionId, projectId);
 						}}
 						onDeleteProject={(projectId) => void handleDeleteProject(projectId)}
 						onDeleteConnection={(connectionId) =>
@@ -439,6 +439,7 @@ function App() {
 													void updateSession(
 														entry.piSessionId ?? entry.session.id,
 														{ title },
+														entry.session.projectRecord.id,
 													);
 												}}
 												onOpenInNewWindow={

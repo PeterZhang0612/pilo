@@ -3,7 +3,10 @@ import { useTranslation } from "react-i18next";
 import { RefreshCw, Wifi, WifiOff, X } from "lucide-react";
 import { toast } from "sonner";
 
-import { toSidebarSession } from "@/components/app/app-chat-state";
+import {
+	chatUiStateKey,
+	toSidebarSession,
+} from "@/components/app/app-chat-state";
 import { runtimeActivityFromStates } from "@/components/app/app-session-index-model";
 import { useSessionUnread } from "@/components/app/use-session-unread";
 import { ChatComposer } from "@/components/chat/chat-composer";
@@ -218,7 +221,9 @@ function RemoteWorkspace() {
 
 	const unreadSessionIds = useSessionUnread(
 		sessionsWithActivity,
-		chat.identifiedSessionId ?? null,
+		chat.identifiedSessionId
+			? chatUiStateKey(chat.activeProjectId, chat.identifiedSessionId)
+			: null,
 		chatSessions,
 	);
 
@@ -227,7 +232,7 @@ function RemoteWorkspace() {
 			unreadSessionIds.size === 0
 				? sessionsWithActivity
 				: sessionsWithActivity.map((session) =>
-						unreadSessionIds.has(session.id)
+						unreadSessionIds.has(chatUiStateKey(session.projectId, session.id))
 							? { ...session, unread: true }
 							: session,
 					),
@@ -237,20 +242,22 @@ function RemoteWorkspace() {
 	// 移动端侧栏长按删除：删除后从本地索引移除，避免整个侧栏重刷。
 	const { client, handleExpiredAuth } = connection;
 	const { setRawSessions } = sessions;
-	const { startDraft, selectedSessionPath } = chat;
 	const handleDeleteMobileSession = useCallback(
-		(sessionId: string) => {
-			const session = sidebarSessions.find((item) => item.id === sessionId);
+		(sessionId: string, projectId: string) => {
+			const session = sidebarSessions.find(
+				(item) => item.projectId === projectId && item.id === sessionId,
+			);
 			if (!session || !client) return;
 			void client
 				.deleteSession(session.projectId, session.sessionPath)
 				.then(() => {
 					setRawSessions((current) =>
-						current.filter((item) => item.sessionPath !== session.sessionPath),
+						current.filter(
+							(item) =>
+								item.projectId !== projectId ||
+								item.sessionPath !== session.sessionPath,
+						),
 					);
-					if (selectedSessionPath === session.sessionPath) {
-						startDraft(session.projectId);
-					}
 				})
 				.catch((error) => {
 					if (!handleExpiredAuth(error)) {
@@ -258,14 +265,7 @@ function RemoteWorkspace() {
 					}
 				});
 		},
-		[
-			client,
-			handleExpiredAuth,
-			selectedSessionPath,
-			setRawSessions,
-			sidebarSessions,
-			startDraft,
-		],
+		[client, handleExpiredAuth, setRawSessions, sidebarSessions],
 	);
 
 	if (!token) {

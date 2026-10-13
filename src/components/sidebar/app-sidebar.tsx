@@ -265,20 +265,22 @@ export function AppSidebar({
 	}, [resetSidebarScroll]);
 
 	const handleSelectSession = useCallback(
-		(sessionId: string) => {
+		(sessionId: string, projectId: string) => {
 			if (selectedSessionId === undefined) {
 				setInternalSelectedSessionId(sessionId);
 			}
-			onSelectSessionRef.current?.(sessionId);
+			onSelectSessionRef.current?.(sessionId, projectId);
 		},
 		[selectedSessionId],
 	);
 	const handleRenameSession = useCallback(
-		(id: string, title: string) => onUpdateSessionRef.current?.(id, { title }),
+		(id: string, title: string, projectId: string) =>
+			onUpdateSessionRef.current?.(id, { title }, projectId),
 		[],
 	);
 	const handleDeleteSession = useCallback(
-		(id: string) => onDeleteSessionRef.current?.(id),
+		(id: string, projectId: string) =>
+			onDeleteSessionRef.current?.(id, projectId),
 		[],
 	);
 
@@ -444,7 +446,7 @@ export function AppSidebar({
 					onSelectSession={(target) =>
 						onOpenSearchSession
 							? onOpenSearchSession(target)
-							: handleSelectSession(target.sessionId)
+							: handleSelectSession(target.sessionId, target.projectId)
 					}
 				/>
 			) : null}

@@ -117,7 +117,10 @@ export function useRemoteChat({
 	const [retryState, setRetryState] = useState<RetryState | null>(null);
 	const [composer, setComposer] = useState("");
 	const [images, setImages] = useState<ChatImageAttachment[]>([]);
-	const pendingForkSessionIdRef = useRef<string | null>(null);
+	const pendingForkSessionIdRef = useRef<{
+		sessionId: string;
+		projectId: string;
+	} | null>(null);
 	const [chatUiStateCache] = useState(createChatUiStateCache);
 	const [projectDraftCache] = useState(createProjectDraftCache);
 	const [visualReadyRouteKey, setVisualReadyRouteKey] = useState<string | null>(
@@ -151,16 +154,20 @@ export function useRemoteChat({
 	const selectedSession = useMemo(
 		() =>
 			rawSessions.find(
-				(session) => session.sessionPath === selectedSessionPath,
+				(session) =>
+					session.projectId === draftProjectId &&
+					session.sessionPath === selectedSessionPath,
 			) ?? null,
-		[rawSessions, selectedSessionPath],
+		[draftProjectId, rawSessions, selectedSessionPath],
 	);
 	const identifiedDraftSession = useMemo(
 		() =>
 			rawSessions.find(
-				(session) => session.piSessionId === identifiedDraftSessionId,
+				(session) =>
+					session.projectId === draftProjectId &&
+					session.piSessionId === identifiedDraftSessionId,
 			) ?? null,
-		[identifiedDraftSessionId, rawSessions],
+		[draftProjectId, identifiedDraftSessionId, rawSessions],
 	);
 	const resolvedDraftProjectId = useMemo(() => {
 		if (
@@ -194,7 +201,9 @@ export function useRemoteChat({
 	const runtimeTurnOpen = chatRuntimeHasOpenTurn(reusableRuntime);
 	const activeSessionKey = activeProjectId
 		? selectedSession
-			? (runtimeSessionKeys.get(selectedSession.piSessionId) ??
+			? (runtimeSessionKeys.get(
+					sessionKey(activeProjectId, selectedSession.piSessionId),
+				) ??
 				reusableRuntime?.sessionKey ??
 				sessionKey(activeProjectId, selectedSession.piSessionId))
 			: sessionKey(activeProjectId, draftId)
@@ -732,8 +741,8 @@ export function useRemoteChat({
 			readOnly,
 		rpcForSession,
 		refreshProjectSessions,
-		onForkSessionCreated: (sessionId) => {
-			pendingForkSessionIdRef.current = sessionId;
+		onForkSessionCreated: (sessionId, projectId) => {
+			pendingForkSessionIdRef.current = { sessionId, projectId };
 		},
 	});
 
@@ -742,13 +751,18 @@ export function useRemoteChat({
 		if (!pendingForkSessionId) return;
 		if (
 			!rawSessions.some(
-				(session) => session.piSessionId === pendingForkSessionId,
+				(session) =>
+					session.projectId === pendingForkSessionId.projectId &&
+					session.piSessionId === pendingForkSessionId.sessionId,
 			)
 		) {
 			return;
 		}
 		pendingForkSessionIdRef.current = null;
-		handleSelectSession(pendingForkSessionId);
+		handleSelectSession(
+			pendingForkSessionId.sessionId,
+			pendingForkSessionId.projectId,
+		);
 	}, [handleSelectSession, rawSessions]);
 
 	const selectedModel = useMemo(() => {

@@ -28,7 +28,7 @@ export function MobileSessionRow({
 	selected: boolean;
 	projectName?: string;
 	confirmingDelete: boolean;
-	onSelect: (sessionId: string) => void;
+	onSelect: (sessionId: string, projectId: string) => void;
 	onRequestDelete: (sessionId: string) => void;
 	onCancelDelete: () => void;
 	onConfirmDelete: () => void;
@@ -93,7 +93,7 @@ export function MobileSessionRow({
 					firedRef.current = false;
 					return;
 				}
-				onSelect(session.id);
+				onSelect(session.id, session.projectId);
 			}}
 			onContextMenu={(event) => event.preventDefault()}
 			onPointerDown={(event) => {
@@ -107,7 +107,7 @@ export function MobileSessionRow({
 					firedRef.current = true;
 					// Android 触觉得到长按已触发的反馈；iOS Safari 不支持，静默忽略。
 					navigator.vibrate?.(10);
-					onRequestDelete(session.id);
+					onRequestDelete(`${session.projectId}:${session.id}`);
 				}, 500);
 			}}
 			onPointerMove={(event) => {

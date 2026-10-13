@@ -61,9 +61,13 @@ type SidebarTreeProps = {
 	onDeleteConnection?: (connectionId: string) => void;
 	onRefreshProjectSessions?: (projectId: string) => void;
 	onReorderProjects?: (connectionId: string, projectIds: string[]) => void;
-	onSelectSession: (sessionId: string) => void;
-	onRenameSession: (sessionId: string, title: string) => void;
-	onDeleteSession: (sessionId: string) => void;
+	onSelectSession: (sessionId: string, projectId: string) => void;
+	onRenameSession: (
+		sessionId: string,
+		title: string,
+		projectId: string,
+	) => void;
+	onDeleteSession: (sessionId: string, projectId: string) => void;
 };
 
 /**
@@ -132,9 +136,12 @@ export function SidebarTree({
 				organizeMode === "recent" && showProjectsInRecents;
 			return (
 				<SessionRow
-					key={session.id}
+					key={`${session.projectId}:${session.id}`}
 					session={session}
-					selected={activeSessionId === session.id}
+					selected={
+						activeSessionId === session.id &&
+						(!selectedProjectId || selectedProjectId === session.projectId)
+					}
 					onSelect={onSelectSession}
 					onDelete={onDeleteSession}
 					onRename={onRenameSession}
@@ -146,6 +153,7 @@ export function SidebarTree({
 		},
 		[
 			activeSessionId,
+			selectedProjectId,
 			organizeMode,
 			showProjectsInRecents,
 			projectById,
@@ -267,7 +275,9 @@ export function SidebarTree({
 														? null
 														: summarizeProjectSessions(
 																projectSessions,
-																activeSessionId,
+																selectedProjectId === project.id
+																	? activeSessionId
+																	: null,
 															);
 													return (
 														<SortableProjectBlock

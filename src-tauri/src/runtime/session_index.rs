@@ -226,7 +226,7 @@ pub async fn reconcile_paths(
         if file.header.get("cwd").and_then(Value::as_str) != Some(session_project.path.as_str()) {
             continue;
         }
-        let previous = storage::get_session(&transaction, &file.path)?;
+        let previous = storage::get_session(&transaction, &file.path, Some(&project.id))?;
         let entry = build_index_entry(project, file, previous.as_ref())?;
         storage::upsert_session(&transaction, &entry)?;
         changed += 1;

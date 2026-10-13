@@ -377,8 +377,10 @@ export function listenSessionWatchEvents(
 export function updateSessionUiState(
 	sessionPath: string,
 	update: SessionUiStateUpdate,
+	projectId?: string,
 ): Promise<SessionIndexEntry> {
 	return invoke<SessionIndexEntry>("session_update_ui_state", {
+		projectId,
 		sessionPath,
 		update,
 	});

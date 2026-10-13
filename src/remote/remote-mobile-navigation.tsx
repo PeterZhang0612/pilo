@@ -72,12 +72,12 @@ export function RemoteMobileNavigation({
 	connectionState: RemoteConnectionState;
 	refreshingProjectIds: ReadonlySet<string>;
 	refreshing: boolean;
-	onSelectSession: (sessionId: string) => void;
+	onSelectSession: (sessionId: string, projectId: string) => void;
 	onNewChat: (projectId?: string) => void;
 	onRefreshProjectSessions: (projectId: string) => void;
 	onRefresh: () => void;
 	onReload: () => void;
-	onDeleteSession: (sessionId: string) => void;
+	onDeleteSession: (sessionId: string, projectId: string) => void;
 }) {
 	const { t } = useTranslation();
 	const [mode, setMode] = useState<SidebarEnvView>("projects");
@@ -132,8 +132,8 @@ export function RemoteMobileNavigation({
 
 	const close = () => onOpenChange(false);
 
-	const handleSelectSession = (sessionId: string) => {
-		onSelectSession(sessionId);
+	const handleSelectSession = (sessionId: string, projectId: string) => {
+		onSelectSession(sessionId, projectId);
 		close();
 	};
 
@@ -248,17 +248,23 @@ export function RemoteMobileNavigation({
 								<div className="space-y-0.5">
 									{recentSessions.map((session) => (
 										<MobileSessionRow
-											key={session.id}
+											key={`${session.projectId}:${session.id}`}
 											session={session}
-											selected={selectedSessionId === session.id}
+											selected={
+												activeProjectId === session.projectId &&
+												selectedSessionId === session.id
+											}
 											projectName={projectNameById.get(session.projectId)}
 											onSelect={handleSelectSession}
-											confirmingDelete={confirmDeleteSessionId === session.id}
+											confirmingDelete={
+												confirmDeleteSessionId ===
+												`${session.projectId}:${session.id}`
+											}
 											onRequestDelete={setConfirmDeleteSessionId}
 											onCancelDelete={() => setConfirmDeleteSessionId(null)}
 											onConfirmDelete={() => {
 												setConfirmDeleteSessionId(null);
-												onDeleteSession(session.id);
+												onDeleteSession(session.id, session.projectId);
 											}}
 										/>
 									))}
@@ -313,13 +319,16 @@ export function RemoteMobileNavigation({
 																	<div className="mt-0.5 space-y-0.5 pb-1">
 																		{projectSessions.map((session) => (
 																			<MobileSessionRow
-																				key={session.id}
+																				key={`${session.projectId}:${session.id}`}
 																				session={session}
 																				selected={
+																					activeProjectId ===
+																						session.projectId &&
 																					selectedSessionId === session.id
 																				}
 																				confirmingDelete={
-																					confirmDeleteSessionId === session.id
+																					confirmDeleteSessionId ===
+																					`${session.projectId}:${session.id}`
 																				}
 																				onSelect={handleSelectSession}
 																				onRequestDelete={
@@ -330,7 +339,10 @@ export function RemoteMobileNavigation({
 																				}
 																				onConfirmDelete={() => {
 																					setConfirmDeleteSessionId(null);
-																					onDeleteSession(session.id);
+																					onDeleteSession(
+																						session.id,
+																						session.projectId,
+																					);
 																				}}
 																			/>
 																		))}
@@ -388,7 +400,7 @@ export function RemoteMobileNavigation({
 					}}
 					onSelectSession={(target: SessionSearchTarget) => {
 						setPaletteOpen(false);
-						handleSelectSession(target.sessionId);
+						handleSelectSession(target.sessionId, target.projectId);
 					}}
 				/>
 			) : null}

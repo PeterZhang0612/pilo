@@ -146,21 +146,25 @@ export function useAppChatNavigation({
 	);
 
 	const selectSession = useCallback(
-		(sessionId: string) => {
+		(sessionId: string, projectId: string) => {
 			setOpenedChats((current) =>
 				current.filter(
 					(entry) =>
 						!entry.session.temporary ||
-						entry.session.id === sessionId ||
-						entry.piSessionId === sessionId,
+						(entry.session.projectRecord.id === projectId &&
+							(entry.session.id === sessionId ||
+								entry.piSessionId === sessionId)),
 				),
 			);
 			const opened = openedChats.find(
 				(entry) =>
-					entry.session.id === sessionId || entry.piSessionId === sessionId,
+					entry.session.projectRecord.id === projectId &&
+					(entry.session.id === sessionId || entry.piSessionId === sessionId),
 			);
 			const session = indexedSessions.find(
-				(candidate) => candidate.piSessionId === sessionId,
+				(candidate) =>
+					candidate.projectId === projectId &&
+					candidate.piSessionId === sessionId,
 			);
 			const runtimeState = session
 				? findReusableChatRuntime(
@@ -174,7 +178,6 @@ export function useAppChatNavigation({
 					Boolean(runtimeState)
 				: false;
 			if (opened && (openedIsBusy || !session)) {
-				const projectId = opened.session.projectRecord.id;
 				setOpenedChats((current) =>
 					trimOpenedChats(
 						touchOpenedChat(current, opened.session, opened.initialMessage),

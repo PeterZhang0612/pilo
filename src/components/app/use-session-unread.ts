@@ -1,5 +1,7 @@
 import { useState } from "react";
 
+import { chatUiStateKey } from "@/components/app/app-chat-state";
+
 import type { SidebarSession } from "@/components/sidebar/types";
 import type { ChatSessionRuntimeState } from "@/lib/chat-session-client";
 import {
@@ -15,7 +17,7 @@ import {
  */
 export function useSessionUnread(
 	sessions: readonly SidebarSession[],
-	selectedSessionId: string | null,
+	selectedSessionKey: string | null,
 	runtimeStates: readonly ChatSessionRuntimeState[],
 ): ReadonlySet<string> {
 	const [sessionUnreadState, setSessionUnreadState] = useState<{
@@ -39,6 +41,7 @@ export function useSessionUnread(
 		let activeChanged = false;
 		let runtimeChanged = false;
 		for (const session of sessions) {
+			const key = chatUiStateKey(session.projectId, session.id);
 			const runtime = runtimeStates.find(
 				(state) =>
 					state.projectId === session.projectId &&
@@ -46,31 +49,29 @@ export function useSessionUnread(
 						runtimeSessionIdFromKey(state.sessionKey, state.projectId) ===
 							session.id),
 			);
-			if (runtime) nextRuntimeIds.add(session.id);
-			if (prevRuntimeIds.has(session.id) !== Boolean(runtime))
-				runtimeChanged = true;
-			const wasActive = prevActive.get(session.id) === true;
+			if (runtime) nextRuntimeIds.add(key);
+			if (prevRuntimeIds.has(key) !== Boolean(runtime)) runtimeChanged = true;
+			const wasActive = prevActive.get(key) === true;
 			// Controller busy flags can clear before the runtime snapshot refreshes.
 			const active = Boolean(session.active) || chatRuntimeHasOpenTurn(runtime);
-			nextActive.set(session.id, active);
-			if (!prevActive.has(session.id) || wasActive !== active)
-				activeChanged = true;
+			nextActive.set(key, active);
+			if (!prevActive.has(key) || wasActive !== active) activeChanged = true;
 			if (
 				wasActive &&
 				!active &&
 				// A removed Host runtime was stopped, not successfully settled.
 				(runtime
 					? runtime.snapshot.state === "running"
-					: !prevRuntimeIds.has(session.id)) &&
-				session.id !== selectedSessionId &&
-				!unread.has(session.id)
+					: !prevRuntimeIds.has(key)) &&
+				key !== selectedSessionKey &&
+				!unread.has(key)
 			) {
-				unread = new Set(unread).add(session.id);
+				unread = new Set(unread).add(key);
 			}
 		}
-		if (selectedSessionId && unread.has(selectedSessionId)) {
+		if (selectedSessionKey && unread.has(selectedSessionKey)) {
 			const cleared = new Set(unread);
-			cleared.delete(selectedSessionId);
+			cleared.delete(selectedSessionKey);
 			unread = cleared;
 		}
 		for (const id of unread) {

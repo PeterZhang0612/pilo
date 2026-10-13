@@ -5,7 +5,7 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use rusqlite::{Connection as SqliteConnection, params};
+use rusqlite::{Connection as SqliteConnection, Transaction, TransactionBehavior, params};
 use tauri::AppHandle;
 
 use super::super::host_paths::HostPaths;
@@ -143,12 +143,72 @@ pub(super) fn initialize_schema(db: &SqliteConnection) -> Result<(), String> {
            ON remote_devices(last_seen_at_ms DESC);",
     )
     .map_err(|error| format!("failed to initialize Pilo SQLite schema: {error}"))?;
+    ensure_session_project_keys(db)?;
     ensure_connection_columns(db)?;
     ensure_project_columns(db)?;
     ensure_project_model_cache_columns(db)?;
     ensure_remote_device_columns(db)?;
     ensure_remote_host_config_columns(db)?;
     Ok(())
+}
+
+// Paths are local to a connection, not globally unique. Keep indexed UI preferences
+// attached to their owning project when upgrading the legacy path-only tables.
+fn ensure_session_project_keys(db: &SqliteConnection) -> Result<(), String> {
+    let transaction = Transaction::new_unchecked(db, TransactionBehavior::Immediate)
+        .map_err(|error| error.to_string())?;
+    let scoped = transaction
+        .query_row(
+            "SELECT pk FROM pragma_table_info('sessions') WHERE name='project_id'",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .map_err(|error| error.to_string())?
+        != 0;
+    if !scoped {
+        transaction
+            .execute_batch(
+                "CREATE TABLE sessions_scoped (
+               session_path TEXT NOT NULL,
+               connection_id TEXT NOT NULL REFERENCES connections(id) ON DELETE CASCADE,
+               project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+               pi_session_id TEXT NOT NULL,
+               name TEXT,
+               cwd TEXT NOT NULL,
+               created_at TEXT NOT NULL,
+               updated_at TEXT NOT NULL,
+               message_count INTEGER NOT NULL,
+               last_message_at TEXT,
+               first_user_message_preview TEXT,
+               file_size INTEGER NOT NULL,
+               file_mtime_ns INTEGER NOT NULL,
+               last_offset INTEGER NOT NULL,
+               indexed_at_ms INTEGER NOT NULL,
+               PRIMARY KEY(project_id,session_path)
+             );
+             INSERT INTO sessions_scoped(session_path,connection_id,project_id,pi_session_id,name,cwd,created_at,updated_at,message_count,last_message_at,first_user_message_preview,file_size,file_mtime_ns,last_offset,indexed_at_ms)
+               SELECT session_path,connection_id,project_id,pi_session_id,name,cwd,created_at,updated_at,message_count,last_message_at,first_user_message_preview,file_size,file_mtime_ns,last_offset,indexed_at_ms FROM sessions;
+             CREATE TABLE session_ui_state_scoped (
+               project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+               session_path TEXT NOT NULL,
+               pinned INTEGER NOT NULL DEFAULT 0,
+               title_override TEXT,
+               updated_at_ms INTEGER NOT NULL,
+               PRIMARY KEY(project_id,session_path)
+             );
+             INSERT INTO session_ui_state_scoped
+               SELECT s.project_id,u.session_path,u.pinned,u.title_override,u.updated_at_ms
+               FROM session_ui_state u JOIN sessions s ON s.session_path=u.session_path;
+             DROP TABLE session_ui_state;
+             DROP TABLE sessions;
+             ALTER TABLE sessions_scoped RENAME TO sessions;
+             ALTER TABLE session_ui_state_scoped RENAME TO session_ui_state;
+             CREATE INDEX idx_sessions_project_mtime ON sessions(project_id,file_mtime_ns DESC);
+             CREATE UNIQUE INDEX idx_sessions_project_pi_id ON sessions(project_id,pi_session_id);",
+            )
+            .map_err(|error| format!("failed to migrate project-scoped sessions: {error}"))?;
+    }
+    transaction.commit().map_err(|error| error.to_string())
 }
 
 fn ensure_remote_host_config_columns(db: &SqliteConnection) -> Result<(), String> {

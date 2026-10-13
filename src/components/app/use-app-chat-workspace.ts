@@ -11,6 +11,7 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
 import {
+	chatUiStateKey,
 	createDraftSessionId,
 	mergeSidebarSessionsWithOpenChats,
 	resolveChatSession,
@@ -176,7 +177,9 @@ export function useAppChatWorkspace({
 	// 未读标记：agent 从运行中转为空闲时置为未读，打开会话即清除。
 	const unreadSessionIds = useSessionUnread(
 		sidebarSessionsBase,
-		selectedSessionId,
+		activeProjectId && selectedSessionId
+			? chatUiStateKey(activeProjectId, selectedSessionId)
+			: null,
 		runtimeStates,
 	);
 
@@ -185,7 +188,7 @@ export function useAppChatWorkspace({
 			unreadSessionIds.size === 0
 				? sidebarSessionsBase
 				: sidebarSessionsBase.map((session) =>
-						unreadSessionIds.has(session.id)
+						unreadSessionIds.has(chatUiStateKey(session.projectId, session.id))
 							? { ...session, unread: true }
 							: session,
 					),
@@ -194,13 +197,16 @@ export function useAppChatWorkspace({
 
 	const selectedIndexedSession =
 		indexedSessions.find(
-			(session) => session.piSessionId === selectedSessionId,
+			(session) =>
+				session.projectId === activeProjectId &&
+				session.piSessionId === selectedSessionId,
 		) ?? null;
 	const selectedOpenedChat = selectedSessionId
 		? (openedChats.find(
 				(entry) =>
-					entry.session.id === selectedSessionId ||
-					entry.piSessionId === selectedSessionId,
+					entry.session.projectRecord.id === activeProjectId &&
+					(entry.session.id === selectedSessionId ||
+						entry.piSessionId === selectedSessionId),
 			) ?? null)
 		: null;
 	const selectedRuntimeState = selectedIndexedSession
@@ -376,6 +382,7 @@ export function useAppChatWorkspace({
 		handleSessionIdentified,
 		handleForkSessionCreated,
 	} = useAppChatSessionActions({
+		activeProjectId,
 		indexedSessions,
 		openedChats,
 		updateIndexedSession,

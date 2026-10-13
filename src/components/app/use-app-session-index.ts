@@ -517,20 +517,29 @@ export function useAppSessionIndex(projectIds: readonly string[]) {
 	);
 
 	const updateSession = useCallback(
-		async (sessionId: string, update: SessionUiUpdate) => {
+		async (sessionId: string, update: SessionUiUpdate, projectId: string) => {
 			const session = indexedSessions.find(
-				(candidate) => candidate.piSessionId === sessionId,
+				(candidate) =>
+					candidate.projectId === projectId &&
+					candidate.piSessionId === sessionId,
 			);
 			if (!session) return null;
 			try {
-				const next = await updateSessionUiState(session.sessionPath, {
-					pinned: session.pinned,
-					titleOverride:
-						update.title === undefined ? session.titleOverride : update.title,
-				});
+				const next = await updateSessionUiState(
+					session.sessionPath,
+					{
+						pinned: session.pinned,
+						titleOverride:
+							update.title === undefined ? session.titleOverride : update.title,
+					},
+					projectId,
+				);
 				setIndexedSessions((current) =>
 					current.map((candidate) =>
-						candidate.sessionPath === next.sessionPath ? next : candidate,
+						candidate.projectId === projectId &&
+						candidate.sessionPath === next.sessionPath
+							? next
+							: candidate,
 					),
 				);
 				return next;
@@ -543,9 +552,11 @@ export function useAppSessionIndex(projectIds: readonly string[]) {
 	);
 
 	const removeSession = useCallback(
-		async (sessionId: string) => {
+		async (sessionId: string, projectId: string) => {
 			const session = indexedSessions.find(
-				(candidate) => candidate.piSessionId === sessionId,
+				(candidate) =>
+					candidate.projectId === projectId &&
+					candidate.piSessionId === sessionId,
 			);
 			if (!session) return null;
 			const result = await deleteSession(
@@ -554,7 +565,9 @@ export function useAppSessionIndex(projectIds: readonly string[]) {
 			);
 			setIndexedSessions((current) =>
 				current.filter(
-					(candidate) => candidate.sessionPath !== session.sessionPath,
+					(candidate) =>
+						candidate.projectId !== projectId ||
+						candidate.sessionPath !== session.sessionPath,
 				),
 			);
 			return { session, result };

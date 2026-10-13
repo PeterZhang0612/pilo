@@ -43,7 +43,10 @@ export const VirtualSessionRows = memo(function VirtualSessionRows({
 		estimateSize: () => SESSION_ROW_ESTIMATE,
 		overscan: 8,
 		scrollMargin,
-		getItemKey: (index) => sessions[index]?.id ?? index,
+		getItemKey: (index) => {
+			const session = sessions[index];
+			return session ? `${session.projectId}:${session.id}` : index;
+		},
 		useAnimationFrameWithResizeObserver: true,
 		// Keep scroll-offset updates out of React when the visible range has not
 		// changed. The virtualizer writes transforms/size directly to the DOM.

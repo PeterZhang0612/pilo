@@ -3,6 +3,8 @@ import {
 	type MutableRefObject,
 	type SetStateAction,
 	useCallback,
+	useEffect,
+	useRef,
 } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -34,14 +36,17 @@ type RemoveIndexedSessionResult = {
 };
 
 type UseAppChatSessionActionsOptions = {
+	activeProjectId: string | null;
 	indexedSessions: SessionIndexEntry[];
 	openedChats: OpenChat[];
 	updateIndexedSession: (
 		sessionId: string,
 		update: { title?: string },
+		projectId: string,
 	) => Promise<SessionIndexEntry | null>;
 	removeIndexedSession: (
 		sessionId: string,
+		projectId: string,
 	) => Promise<RemoveIndexedSessionResult | null>;
 	setOpenedChats: Dispatch<SetStateAction<OpenChat[]>>;
 	setSelectedSessionId: Dispatch<SetStateAction<string | null>>;
@@ -58,6 +63,7 @@ type UseAppChatSessionActionsOptions = {
 };
 
 export function useAppChatSessionActions({
+	activeProjectId,
 	indexedSessions,
 	openedChats,
 	updateIndexedSession,
@@ -73,25 +79,36 @@ export function useAppChatSessionActions({
 	refreshProjectSessions,
 }: UseAppChatSessionActionsOptions) {
 	const { t } = useTranslation();
+	const activeProjectIdRef = useRef(activeProjectId);
+	useEffect(() => {
+		activeProjectIdRef.current = activeProjectId;
+	}, [activeProjectId]);
 
 	const updateSession = useCallback(
-		async (sessionId: string, update: { title?: string }) => {
-			await updateIndexedSession(sessionId, update);
+		async (
+			sessionId: string,
+			update: { title?: string },
+			projectId: string,
+		) => {
+			await updateIndexedSession(sessionId, update, projectId);
 		},
 		[updateIndexedSession],
 	);
 
 	const deleteSession = useCallback(
-		async (sessionId: string) => {
+		async (sessionId: string, projectId: string) => {
 			const session = indexedSessions.find(
-				(candidate) => candidate.piSessionId === sessionId,
+				(candidate) =>
+					candidate.projectId === projectId &&
+					candidate.piSessionId === sessionId,
 			);
 			if (!session) {
 				// 未进入索引的会话（例如启动即报错、从未生成 Pi 会话文件）不会持久化到磁盘，
 				// 只挂在打开的聊天列表里；把它移除即可，否则会永远卡在侧栏且删除无效。
 				const pending = openedChats.find(
 					(entry) =>
-						entry.session.id === sessionId || entry.piSessionId === sessionId,
+						entry.session.projectRecord.id === projectId &&
+						(entry.session.id === sessionId || entry.piSessionId === sessionId),
 				);
 				if (!pending) return;
 				try {
@@ -106,27 +123,35 @@ export function useAppChatSessionActions({
 				setOpenedChats((current) =>
 					current.filter(
 						(entry) =>
-							entry.session.id !== sessionId && entry.piSessionId !== sessionId,
+							entry.session.projectRecord.id !== projectId ||
+							(entry.session.id !== sessionId &&
+								entry.piSessionId !== sessionId),
 					),
 				);
 				setSelectedSessionId((current) =>
-					current === sessionId ? null : current,
+					activeProjectIdRef.current === projectId && current === sessionId
+						? null
+						: current,
 				);
 				if (pending.session.id === draftSessionId) clearDraftSession();
 				return;
 			}
 			try {
 				await stopChatSession(session.projectId, sessionId, "session_delete");
-				const deleted = await removeIndexedSession(sessionId);
+				const deleted = await removeIndexedSession(sessionId, projectId);
 				if (!deleted) return;
 				setOpenedChats((current) =>
 					current.filter(
 						(entry) =>
-							entry.session.id !== sessionId && entry.piSessionId !== sessionId,
+							entry.session.projectRecord.id !== projectId ||
+							(entry.session.id !== sessionId &&
+								entry.piSessionId !== sessionId),
 					),
 				);
 				setSelectedSessionId((current) =>
-					current === sessionId ? null : current,
+					activeProjectIdRef.current === projectId && current === sessionId
+						? null
+						: current,
 				);
 				toast.success(
 					deleted.result.method === "trash"
@@ -165,7 +190,8 @@ export function useAppChatSessionActions({
 				clearDraftSession();
 			}
 			setSelectedSessionId((current) =>
-				current === entry.session.id || current === entry.piSessionId
+				activeProjectIdRef.current === entry.session.projectRecord.id &&
+				(current === entry.session.id || current === entry.piSessionId)
 					? piSessionId
 					: current,
 			);
