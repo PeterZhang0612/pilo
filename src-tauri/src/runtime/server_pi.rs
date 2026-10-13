@@ -122,7 +122,55 @@ impl Default for ServerPiSession {
     }
 }
 
+async fn stop_stream(client: &ServerClient, stream_id: &str) -> Result<(), String> {
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        loop {
+            match client
+                .request("pi.stop", json!({ "streamId": stream_id }))
+                .await
+            {
+                Err(error) if error.contains("request capacity exhausted") => {
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                }
+                result => return result.map(|_| ()),
+            }
+        }
+    })
+    .await
+    .map_err(|_| "timed out while stopping Pi stream".to_owned())?
+}
+
+impl Drop for ServerPiSession {
+    fn drop(&mut self) {
+        self.schedule_cleanup();
+    }
+}
+
 impl ServerPiSession {
+    fn schedule_cleanup(&mut self) {
+        if let Some(task) = self.event_task.take() {
+            task.abort();
+        }
+        let Some(client) = self.client.take() else {
+            return;
+        };
+        let Some(stream_id) = self.stream_id.take() else {
+            return;
+        };
+        match tokio::runtime::Handle::try_current() {
+            Ok(runtime) => {
+                runtime.spawn(async move {
+                    if let Err(error) = stop_stream(&client, &stream_id).await {
+                        log::warn!(target: "pilo-server", "failed to clean up Pi stream '{stream_id}': {error}");
+                    }
+                });
+            }
+            Err(error) => {
+                log::warn!(target: "pilo-server", "Pi stream cleanup has no runtime: {error}")
+            }
+        }
+    }
+
     pub fn stream_id(&self) -> Option<&str> {
         self.stream_id.as_deref()
     }
@@ -152,6 +200,8 @@ impl ServerPiSession {
             return Err("Pi process is already active".to_owned());
         }
 
+        // A failed generation may still own a server stream. Do not overwrite it.
+        self.schedule_cleanup();
         let client = servers.client(&project.connection).await?;
         let generation = self.generation.saturating_add(1);
         self.generation = generation;
@@ -183,6 +233,11 @@ impl ServerPiSession {
             generation,
         );
 
+        // Record ownership before awaiting the acknowledgement, so cancellation
+        // and a lost pi.start response still have a stream to clean up.
+        self.client = Some(Arc::clone(&client));
+        self.stream_id = Some(stream_id.clone());
+        self.event_task = Some(event_task);
         if let Err(error) = client
             .request(
                 "pi.start",
@@ -205,7 +260,10 @@ impl ServerPiSession {
             )
             .await
         {
-            event_task.abort();
+            if let Err(stop_error) = self.stop().await {
+                log::warn!(target: "pilo-server", "failed to roll back Pi startup: {stop_error}");
+                self.schedule_cleanup();
+            }
             self.state.set(PiProcessState::Failed);
             sink.send(RuntimeEvent::RuntimeError {
                 generation,
@@ -230,9 +288,6 @@ impl ServerPiSession {
             project: project.path.clone(),
             options: options.clone(),
         });
-        self.client = Some(client);
-        self.stream_id = Some(stream_id);
-        self.event_task = Some(event_task);
         Ok(self.snapshot())
     }
 
@@ -262,18 +317,16 @@ impl ServerPiSession {
     }
 
     pub async fn stop(&mut self) -> Result<PiSessionSnapshot, String> {
-        let Some(client) = self.client.take() else {
+        let Some(client) = self.client.as_ref() else {
             self.state.set(PiProcessState::Stopped);
             return Ok(self.snapshot());
         };
-        let Some(stream_id) = self.stream_id.take() else {
+        let Some(stream_id) = self.stream_id.as_ref() else {
             self.state.set(PiProcessState::Stopped);
             return Ok(self.snapshot());
         };
         self.state.set(PiProcessState::Stopping);
-        let result = client
-            .request("pi.stop", json!({ "streamId": stream_id }))
-            .await;
+        let result = stop_stream(client, stream_id).await;
         if let Some(task) = self.event_task.take() {
             task.abort();
         }
@@ -283,6 +336,8 @@ impl ServerPiSession {
             PiProcessState::Failed
         });
         result?;
+        self.client = None;
+        self.stream_id = None;
         Ok(self.snapshot())
     }
 

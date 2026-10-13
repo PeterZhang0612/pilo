@@ -166,9 +166,20 @@ impl ParallelAgentManager {
             Ordering::Release,
         );
         if let Some(prompt) = prompt.filter(|value| !value.trim().is_empty()) {
-            session
+            if let Err(error) = session
                 .send_rpc(json!({ "type": "prompt", "message": prompt.trim() }))
-                .await?;
+                .await
+            {
+                if let Err(stop_error) = session.stop().await {
+                    log::warn!(target: "pilo-server", "failed to stop unregistered parallel agent: {stop_error}");
+                }
+                if let Err(cleanup_error) =
+                    remove_worktree(&servers, project, &info.branch, &info.worktree_path).await
+                {
+                    log::warn!(target: "pilo-server", "failed to remove unregistered agent worktree: {cleanup_error}");
+                }
+                return Err(error);
+            }
             status.store(status_to_u8(ParallelAgentStatus::Busy), Ordering::Release);
         }
         self.agents.insert(

@@ -1,4 +1,7 @@
-use std::{process::Stdio, sync::Arc};
+use std::{
+    process::Stdio,
+    sync::{Arc, Mutex as StdMutex, Weak},
+};
 
 #[cfg(debug_assertions)]
 use std::{
@@ -16,13 +19,127 @@ use tokio::{
     sync::Mutex,
 };
 
-use crate::ServerState;
 use crate::environment::{cached_toolchain, process_command, resolve_program};
+use crate::{PiOutputTasks, PiStarts, ServerState};
 
 pub(crate) struct PiProcess {
     pub(crate) child: Child,
     pub(crate) stdin: Arc<Mutex<ChildStdin>>,
 }
+
+impl PiProcess {
+    pub(crate) async fn stop(self) -> Result<std::process::ExitStatus, String> {
+        let Self { mut child, stdin } = self;
+        // EOF lets Pi run session_shutdown hooks before any force-kill fallback.
+        drop(stdin);
+        if let Ok(Ok(status)) =
+            tokio::time::timeout(std::time::Duration::from_secs(1), child.wait()).await
+        {
+            return Ok(status);
+        }
+        if let Some(pid) = child.id() {
+            #[cfg(unix)]
+            let mut killer = {
+                let mut command = tokio::process::Command::new("/bin/kill");
+                command.args(["-KILL", "--", &format!("-{pid}")]);
+                command
+            };
+            #[cfg(windows)]
+            let mut killer = {
+                let mut command = tokio::process::Command::new("taskkill.exe");
+                command.args(["/PID", &pid.to_string(), "/T", "/F"]);
+                command.creation_flags(0x0800_0000);
+                command
+            };
+            #[cfg(any(unix, windows))]
+            {
+                killer
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .kill_on_drop(true);
+                if !matches!(tokio::time::timeout(std::time::Duration::from_secs(1), killer.status()).await, Ok(Ok(status)) if status.success())
+                {
+                    eprintln!(
+                        "[runtime-diagnostics] Pi process tree cleanup failed childPid={pid}; killing direct child"
+                    );
+                }
+            }
+        }
+        let _ = child.start_kill();
+        tokio::time::timeout(std::time::Duration::from_secs(1), child.wait())
+            .await
+            .map_err(|_| "timed out while stopping Pi process".to_owned())?
+            .map_err(|error| format!("failed to stop Pi process: {error}"))
+    }
+}
+
+async fn abort_output_tasks(tasks: [tokio::task::JoinHandle<()>; 2]) {
+    for task in &tasks {
+        task.abort();
+    }
+    for task in tasks {
+        let _ = task.await;
+    }
+}
+
+async fn stop_registered_pi(
+    processes: &Mutex<std::collections::HashMap<String, PiProcess>>,
+    starts: &Mutex<PiStarts>,
+    stops: &Mutex<tokio::task::JoinSet<()>>,
+    outputs: &StdMutex<PiOutputTasks>,
+    stream_id: &str,
+    expected_stdin: Option<&Weak<Mutex<ChildStdin>>>,
+) -> Result<Option<std::process::ExitStatus>, String> {
+    let stopped = {
+        let mut processes = processes.lock().await;
+        let mut stops = stops.lock().await;
+        let output = if let Some(expected_stdin) = expected_stdin {
+            // EOF belongs to this process instance, not to a replacement or pending start.
+            if !processes
+                .get(stream_id)
+                .is_some_and(|process| expected_stdin.ptr_eq(&Arc::downgrade(&process.stdin)))
+            {
+                return Ok(None);
+            }
+            None
+        } else {
+            // Only explicit stop cancels pending starts for this stream.
+            starts.lock().await.retain(|_, (key, _)| key != stream_id);
+            outputs
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .remove(stream_id)
+        };
+        let process = processes.remove(stream_id);
+        if process.is_none() && output.is_none() {
+            return Ok(None);
+        }
+        while stops.try_join_next().is_some() {}
+        let (reply, stopped) = tokio::sync::oneshot::channel();
+        // Removal and registration have no await between them: cancellation
+        // cannot strand a child outside both the live and stopping registries.
+        stops.spawn(async move {
+            let result = match process {
+                Some(process) => process.stop().await.map(Some),
+                None => Ok(None),
+            };
+            if let Some((_, tasks)) = output {
+                // Join output tasks before ACK, even if EOF cleanup already removed the child.
+                abort_output_tasks(tasks).await;
+            }
+            if let Err(error) = &result {
+                eprintln!("[runtime-diagnostics] Pi stop failed: {error}");
+            }
+            let _ = reply.send(result);
+        });
+        stopped
+    };
+    stopped
+        .await
+        .map_err(|_| "Pi stop task ended unexpectedly".to_owned())?
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PiStartParams {
@@ -271,6 +388,17 @@ pub(crate) async fn pi_start(state: &ServerState, params: PiStartParams) -> Resu
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
+    #[cfg(unix)]
+    command.process_group(0);
+    // Wait for old output tasks before allowing a replacement to publish any events.
+    let old_output = state
+        .pi_output_tasks
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .remove(&params.stream_id);
+    if let Some((_, tasks)) = old_output {
+        abort_output_tasks(tasks).await;
+    }
     let mut child = command.spawn().map_err(|error| {
         eprintln!(
             "[runtime-diagnostics] pi.start failed pid={} streamId={} error={error}",
@@ -304,13 +432,17 @@ pub(crate) async fn pi_start(state: &ServerState, params: PiStartParams) -> Resu
             "noSession": params.no_session,
         }),
     );
+    let stdin_identity = Arc::downgrade(&stdin);
     processes.insert(params.stream_id.clone(), PiProcess { child, stdin });
-    drop(processes);
 
     let stream_id = params.stream_id.clone();
     let writer = state.writer.clone();
     let pi = Arc::clone(&state.pi);
-    tokio::spawn(async move {
+    let starts = Arc::clone(&state.pi_starts);
+    let stops = Arc::clone(&state.pi_stops);
+    let outputs = Arc::clone(&state.pi_output_tasks);
+    let stdout_identity = stdin_identity.clone();
+    let stdout_task = tokio::spawn(async move {
         let mut lines = BufReader::new(stdout).lines();
         loop {
             match lines.next_line().await {
@@ -363,20 +495,24 @@ pub(crate) async fn pi_start(state: &ServerState, params: PiStartParams) -> Resu
                 }
             }
         }
-        let process = pi.lock().await.remove(&stream_id);
-        let exit_status = if let Some(process) = process {
-            let PiProcess { mut child, stdin } = process;
-            drop(stdin);
-            match tokio::time::timeout(std::time::Duration::from_secs(2), child.wait()).await {
-                Ok(Ok(status)) => Some(status),
-                Ok(Err(_)) => None,
-                Err(_) => {
-                    let _ = child.kill().await;
-                    child.wait().await.ok()
-                }
+        let exit_status = match stop_registered_pi(
+            &pi,
+            &starts,
+            &stops,
+            &outputs,
+            &stream_id,
+            Some(&stdout_identity),
+        )
+        .await
+        {
+            Ok(Some(status)) => Some(status),
+            Ok(None) => return,
+            Err(error) => {
+                eprintln!(
+                    "[runtime-diagnostics] Pi stdout cleanup failed streamId={stream_id} error={error}"
+                );
+                None
             }
-        } else {
-            None
         };
         let code = exit_status.as_ref().and_then(|status| status.code());
         let success = exit_status.as_ref().is_some_and(|status| status.success());
@@ -387,15 +523,33 @@ pub(crate) async fn pi_start(state: &ServerState, params: PiStartParams) -> Resu
         );
         let _ = writer
             .send(Envelope::event(
-                stream_id,
+                stream_id.clone(),
                 "pi.stdout_closed",
                 json!({ "code": code, "success": success }),
             ))
             .await;
+        let _processes = pi.lock().await;
+        let output = {
+            let mut outputs = outputs
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if outputs
+                .get(&stream_id)
+                .is_some_and(|(identity, _)| identity.ptr_eq(&stdout_identity))
+            {
+                outputs.remove(&stream_id)
+            } else {
+                None
+            }
+        };
+        if let Some((_, [_, stderr_task])) = output {
+            stderr_task.abort();
+            let _ = stderr_task.await;
+        }
     });
     let stream_id = params.stream_id.clone();
     let writer = state.writer.clone();
-    tokio::spawn(async move {
+    let stderr_task = tokio::spawn(async move {
         let mut reader = BufReader::new(stderr);
         let mut buffer = vec![0_u8; 4096];
         loop {
@@ -419,6 +573,15 @@ pub(crate) async fn pi_start(state: &ServerState, params: PiStartParams) -> Resu
             }
         }
     });
+    state
+        .pi_output_tasks
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .insert(
+            params.stream_id,
+            (stdin_identity, [stdout_task, stderr_task]),
+        );
+    drop(processes);
     Ok(json!({ "started": true }))
 }
 
@@ -472,16 +635,25 @@ pub(crate) async fn pi_send(state: &ServerState, params: PiSendParams) -> Result
 }
 
 pub(crate) async fn pi_stop(state: &ServerState, params: PiStopParams) -> Result<Value, String> {
-    let Some(mut process) = state.pi.lock().await.remove(&params.stream_id) else {
-        trace_pi("pi.stop", &params.stream_id, json!({ "found": false }));
-        return Ok(Value::Null);
-    };
+    let pid = state
+        .pi
+        .lock()
+        .await
+        .get(&params.stream_id)
+        .and_then(|process| process.child.id());
     trace_pi(
         "pi.stop",
         &params.stream_id,
-        json!({ "found": true, "childPid": process.child.id() }),
+        json!({ "found": pid.is_some(), "childPid": pid }),
     );
-    let _ = process.child.kill().await;
-    let _ = process.child.wait().await;
+    stop_registered_pi(
+        &state.pi,
+        &state.pi_starts,
+        &state.pi_stops,
+        &state.pi_output_tasks,
+        &params.stream_id,
+        None,
+    )
+    .await?;
     Ok(Value::Null)
 }

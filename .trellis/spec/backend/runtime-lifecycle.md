@@ -24,8 +24,17 @@ Frontend controller eviction alone is not backend process cleanup.
   their processes on eviction, detach, project stop and global shutdown.
 - `RuntimeEventBus::replay_after(sequence) -> Option<Vec<SequencedRuntimeEvent>>`:
   `None` means replay is incomplete and the WebUI must resync.
+  `prepare` / `ensure` run readiness in owned tasks so HTTP cancellation cannot
+  abandon a starting process in the shared registry.
+- `ServerPiSession` records client/stream/task ownership before awaiting `pi.start`.
+  Its `Drop` schedules bounded cleanup; failed `stop` retains the stream identity
+  for retry. `PendingRequestGuard` removes cancelled client request senders.
+- `PiProcess::stop()` drops stdin, waits for EOF shutdown, then force-kills only
+  if necessary. `serve_stdio()` handles EOF, framing errors and stdout failure
+  through cleanup; accepted Pi starts are registered in `pi_starts` at admission,
+  and accepted Pi stops are registered in `pi_stops` before awaiting.
 - `ServerClient::stop()` closes stdin, waits for server cleanup, then force-kills
-  only if necessary. `serve_stdio()` handles EOF and framing errors through cleanup.
+  only if necessary.
 
 ## 3. Contracts
 
@@ -119,10 +128,35 @@ Frontend controller eviction alone is not backend process cleanup.
   the existing whole-buffer bootstrap behavior.
 - Sequence allocation, replay insertion, and Web broadcast publication share a
   lock to preserve ordering across concurrent sessions.
+- Pi stop gives stdin EOF one second for Pi shutdown hooks, then a bounded
+  one-second process-tree fallback and one-second direct-child reap. Unix Pi
+  starts in a fresh process group and fallback uses `/bin/kill -KILL -- -<pid>`;
+  Windows fallback uses `taskkill.exe /PID <pid> /T /F`. This is not a Windows
+  Job Object: already-detached descendants and abrupt server crashes are not
+  guaranteed to be contained. Never kill unrelated processes by executable name.
+- Register each admitted `pi.start` cancellation sender by request ID and stream
+  ID before spawning its dispatch task. Stop cancels all pending starts for that
+  stream, even if no child exists yet. Cancellation is checked before dispatch
+  polling; a cancelled start returns `request_failed` with
+  `Pi stream startup cancelled`. Hold the Pi process registry lock while cancelling
+  starts and removing children, so a concurrently polled start either remains
+  cancellable or has already registered its child for the same stop to reap.
+  Remove start registrations on dispatch completion and clear them on shutdown;
+  the ordinary 64-request admission limit bounds this registry.
+- Natural stdout cleanup checks the original stdin Arc's Weak identity under the
+  Pi registry lock and never cancels pending starts. Explicit stop owns and joins
+  that instance's stdout/stderr tasks before ACK, including when natural cleanup
+  already removed its child. Same-stream replacement aborts and joins leftover
+  output tasks before spawning; a stopped instance cannot publish late exit/log
+  events into its replacement. Reader task registration and child registration
+  share the Pi registry lock, and accepted stop tasks own removed reader handles
+  before any await. Shutdown aborts all registered readers.
 - Abort and join pending server requests before draining Pi processes: an in-flight
-  `pi.start` must not create a process after cleanup passes the registry.
+  `pi.start` must not create a process after cleanup passes the registry. Removal
+  from the live registry and registration in the stopping JoinSet have no await
+  between them. Drain accepted stops and live children concurrently before exit.
 - Abort and join the client writer to drop server stdin. Keep the reader alive while
-  waiting for EOF cleanup (2 seconds); fallback kill/wait has another 1-second bound.
+  waiting for EOF cleanup (5 seconds); fallback kill/wait has another 1-second bound.
   Stop connection servers concurrently and do this even if earlier app teardown
   exceeds its 5-second grace period.
 
@@ -131,6 +165,8 @@ Frontend controller eviction alone is not backend process cleanup.
 | Condition | Behavior |
 | --- | --- |
 | Eligible idle cache exceeds budget | Stop oldest eligible processes; keep requested chat |
+| Old stdout finishes after explicit stop | Joined before ACK; cannot cancel or emit into a same-stream restart |
+| Title-generation HTTP timeout or unregistered worker error | Session drop schedules cleanup; no abandoned stream ownership |
 | Idle session evicted | No stop event; `states()` drops it; next `ensure` respawns and resets the generation |
 | Live/temporary/unsaved/in-flight session | Keep it, even above budget |
 | Extension resumes after compaction | Desktop adopts the live turn; queue and stop remain available |
@@ -162,6 +198,22 @@ Frontend controller eviction alone is not backend process cleanup.
 
 ## 6. Tests Required
 
+Existing WSL workspace tests and static checks have passed; no new repository
+tests have been added. An ad-hoc stdio check using a slow fake login shell and
+fake Pi confirmed cold-probe cancellation without a late child, successful
+same-stream restart after stop ACK, and 50 immediately paired start/stop requests
+with no remaining Pi children. Native Windows behavior remains unverified.
+The following targeted regressions remain to be added with explicit authorization:
+- Cancel title generation and readiness at different await points, fail a parallel
+  worker's first prompt, lose a start acknowledgement, and cancel stop after its
+  acceptance. Stop during cold toolchain probing and before the start task's first
+  poll; assert the original start receives a cancellation error, no late child
+  appears, and a fresh start after the stop acknowledgement still succeeds.
+  Assert no child is outside both live and stopping registries. Delay the old
+  stdout reader and stderr delivery, stop and await ACK, then restart the same
+  stream; the new start and process must survive without old terminal/log events.
+  Also replace a stream during natural EOF cleanup and cancel an accepted stop
+  while it owns reader handles.
 - `chat_sessions/idle_cache.rs`: LRU order, retained key, busy/compacting/initializing/
   temporary/unsaved/in-flight exclusions, busy-flag rollback on failed send.
 - `chat_sessions/event_sink.rs`: prompt rejection rolls back only the owning

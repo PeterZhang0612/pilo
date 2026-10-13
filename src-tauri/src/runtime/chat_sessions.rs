@@ -91,7 +91,7 @@ struct ChatRegistry {
     usage_sequence: u64,
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct ChatSessions {
     registry: Arc<Mutex<ChatRegistry>>,
 }

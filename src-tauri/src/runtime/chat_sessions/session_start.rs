@@ -181,6 +181,26 @@ impl ChatSessions {
         session_key: String,
         launch: ChatSessionLaunch,
     ) -> Result<PiSessionSnapshot, String> {
+        let sessions = self.clone();
+        // The HTTP caller may time out; readiness and failure cleanup still
+        // belong to the Host, not to the lifetime of that request future.
+        tokio::spawn(async move {
+            sessions
+                .prepare_inner(servers, events, project, session_key, launch)
+                .await
+        })
+        .await
+        .map_err(|error| format!("Pi preparation task failed: {error}"))?
+    }
+
+    async fn prepare_inner(
+        &self,
+        servers: Arc<ServerManager>,
+        events: RuntimeEventBus,
+        project: Project,
+        session_key: String,
+        launch: ChatSessionLaunch,
+    ) -> Result<PiSessionSnapshot, String> {
         runtime_trace(
             "chat.prepare.begin",
             Some(&session_key),
@@ -259,6 +279,24 @@ impl ChatSessions {
     }
 
     pub async fn ensure(
+        &self,
+        servers: Arc<ServerManager>,
+        events: RuntimeEventBus,
+        project: Project,
+        session_key: String,
+        launch: ChatSessionLaunch,
+    ) -> Result<PiSessionSnapshot, String> {
+        let sessions = self.clone();
+        tokio::spawn(async move {
+            sessions
+                .ensure_inner(servers, events, project, session_key, launch)
+                .await
+        })
+        .await
+        .map_err(|error| format!("Pi initialization task failed: {error}"))?
+    }
+
+    async fn ensure_inner(
         &self,
         servers: Arc<ServerManager>,
         events: RuntimeEventBus,

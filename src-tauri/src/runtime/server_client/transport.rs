@@ -30,6 +30,27 @@ pub(super) struct PendingRequest {
 
 pub(super) type PendingRequests = Arc<Mutex<HashMap<u64, PendingRequest>>>;
 
+pub(super) struct PendingRequestGuard {
+    pub(super) pending: PendingRequests,
+    pub(super) id: u64,
+}
+
+impl Drop for PendingRequestGuard {
+    fn drop(&mut self) {
+        // A caller can be cancelled while enqueueing, before the reply timeout
+        // starts. Remove its sender even when no response will ever arrive.
+        if let Ok(mut pending) = self.pending.try_lock() {
+            pending.remove(&self.id);
+        } else if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+            let pending = Arc::clone(&self.pending);
+            let id = self.id;
+            runtime.spawn(async move {
+                pending.lock().await.remove(&id);
+            });
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct ServerEvent {
     pub stream_id: String,
