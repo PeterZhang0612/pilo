@@ -655,6 +655,32 @@ export function useRemoteChat({
 		selectedSession,
 	]);
 
+	const refreshActiveAgentConfig = useCallback(
+		async (liveRuntime = true) => {
+			const targetSessionKey = activeSessionKey;
+			try {
+				if (liveRuntime && !readOnly) await ensureDraftRuntime();
+				if (activeSessionKeyRef.current !== targetSessionKey) return;
+				await refreshAgentConfig(liveRuntime);
+			} catch (error) {
+				if (
+					activeSessionKeyRef.current === targetSessionKey &&
+					!handleExpiredAuth(error)
+				) {
+					setFatalError(error instanceof Error ? error.message : String(error));
+				}
+			}
+		},
+		[
+			activeSessionKey,
+			ensureDraftRuntime,
+			handleExpiredAuth,
+			readOnly,
+			refreshAgentConfig,
+			setFatalError,
+		],
+	);
+
 	const suggestions = useRemoteChatSuggestions({
 		client,
 		activeProjectId,
@@ -740,7 +766,6 @@ export function useRemoteChat({
 		setAgentState,
 		setDraftModel,
 		setDraftThinkingLevel,
-		rpc,
 		rpcForSession,
 	});
 
@@ -774,6 +799,7 @@ export function useRemoteChat({
 			compacting ||
 			sending ||
 			readOnly,
+		ensureDraftRuntime,
 		rpcForSession,
 		refreshProjectSessions,
 		onForkSessionCreated: (sessionId, projectId) => {
@@ -899,7 +925,7 @@ export function useRemoteChat({
 		stop,
 		changeModel,
 		changeThinking,
-		refreshAgentConfig,
+		refreshAgentConfig: refreshActiveAgentConfig,
 		loadDraftCatalog,
 		abortPiRetry,
 		handleForkAssistant: fork.handleForkAssistant,

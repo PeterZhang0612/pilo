@@ -227,6 +227,7 @@ pub fn run() {
             initialize_macos_notification_application(app);
             initialize_windows_notification_application(app);
             desktop_window::create_main_window(app)?;
+            app.state::<PiloRuntime>().chat_sessions.start_idle_reaper();
 
             let remote_app = app.handle().clone();
             tauri::async_runtime::spawn(async move {

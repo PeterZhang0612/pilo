@@ -24,6 +24,7 @@ Frontend controller eviction alone is not backend process cleanup.
   their processes on eviction, detach, project stop and global shutdown.
 - `RuntimeEventBus::replay_after(sequence) -> Option<Vec<SequencedRuntimeEvent>>`:
   `None` means replay is incomplete and the WebUI must resync.
+- `ChatSessions::start_idle_reaper()` starts one Host-owned 30-second sweep.
   `prepare` / `ensure` run readiness in owned tasks so HTTP cancellation cannot
   abandon a starting process in the shared registry.
 - `ServerPiSession` records client/stream/task ownership before awaiting `pi.start`.
@@ -40,9 +41,17 @@ Frontend controller eviction alone is not backend process cleanup.
 
 ## 3. Contracts
 
-- The idle cache reserves one slot for the requested chat and retains up to three
-  other most recently used eligible processes. Pruning is admission-driven, not
-  a timer: simultaneous live turns may exceed the budget until another prepare/ensure.
+- Admission reserves one slot for the requested chat and retains up to three
+  other most recently used eligible processes. The 30-second Host sweep retains
+  at most four eligible idle processes and expires observed idle entries after
+  five minutes, without requiring another prepare/ensure. Active processes may
+  exceed this budget; they become eligible only after their work ends.
+  Read-only `get_*` RPC polling does not update recency or extend idle retention.
+  WebUI model/thinking changes, fork, manual model refresh and cached extension
+  command submission must ensure the target runtime first, just like Desktop.
+  Keep background config refresh separate: polling must not respawn idle sessions.
+  Capture the target session key across readiness awaits; late config results must
+  not update the newly selected session.
 - Never evict an active turn, compaction, uninitialized process, `no_session`
   session, or a session without a resolved JSONL path. A cloned `ChatProcess` Arc
   or a locked session protects in-flight startup/RPC work from eviction.
@@ -178,10 +187,15 @@ Frontend controller eviction alone is not backend process cleanup.
 
 | Condition | Behavior |
 | --- | --- |
-| Eligible idle cache exceeds budget | Stop oldest eligible processes; keep requested chat |
+| Eligible idle cache exceeds budget | Stop oldest eligible processes on admission or the next 30-second sweep |
+| Persisted idle process reaches five minutes | Sweep expires it; next ensure resumes its JSONL |
+| WebUI model/thinking/fork/manual refresh after eviction | Ensure the target before RPC; background polling stays read-only |
 | Old stdout finishes after explicit stop | Joined before ACK; cannot cancel or emit into a same-stream restart |
+| Read-only state/model polling | Does not extend idle TTL |
 | Title-generation HTTP timeout or unregistered worker error | Session drop schedules cleanup; no abandoned stream ownership |
+| Stop while Pi start is probing or waiting for the process registry | Cancel the pending dispatch; it cannot spawn a late child. Fresh starts after the stop ACK remain valid |
 | Ordinary server request saturation | Return server_busy; keep independent stop capacity |
+| Pi stdout exceeds line limit | Stop the stream without reading the full oversized line |
 | Idle session evicted | No stop event; `states()` drops it; next `ensure` respawns and resets the generation |
 | Live/temporary/unsaved/in-flight session | Keep it, even above budget |
 | Extension resumes after compaction | Desktop adopts the live turn; queue and stop remain available |
@@ -219,6 +233,12 @@ fake Pi confirmed cold-probe cancellation without a late child, successful
 same-stream restart after stop ACK, and 50 immediately paired start/stop requests
 with no remaining Pi children. Native Windows behavior remains unverified.
 The following targeted regressions remain to be added with explicit authorization:
+- Sweep over-budget sessions after their live turns finish, expire eligible idle
+  sessions, ignore read-only recency updates, and preserve active/temporary/
+  unsaved/in-flight exclusions. Exercise resumption on Desktop and WebUI, including
+  model/thinking changes, fork, manual model refresh and cached extension commands
+  after TTL eviction. Switch sessions while readiness/config RPCs are pending;
+  results must not update the newly selected session.
 - Cancel title generation and readiness at different await points, fail a parallel
   worker's first prompt, lose a start acknowledgement, and cancel stop after its
   acceptance. Stop during cold toolchain probing and before the start task's first

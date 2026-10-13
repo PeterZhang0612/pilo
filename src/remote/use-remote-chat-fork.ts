@@ -19,6 +19,7 @@ export function useRemoteChatFork({
 	selectedSession,
 	getMessages,
 	busy,
+	ensureDraftRuntime,
 	rpcForSession,
 	refreshProjectSessions,
 	onForkSessionCreated,
@@ -29,6 +30,7 @@ export function useRemoteChatFork({
 	selectedSession: SessionIndexEntry | null;
 	getMessages: () => readonly ChatMessage[];
 	busy: boolean;
+	ensureDraftRuntime: () => Promise<void>;
 	rpcForSession: RemoteSessionRpc;
 	refreshProjectSessions: (
 		projectId: string,
@@ -56,6 +58,7 @@ export function useRemoteChatFork({
 			setForkingMessageId(messageId);
 			let forkSessionKey: string | null = null;
 			try {
+				await ensureDraftRuntime();
 				const [sourceState, entries] = await Promise.all([
 					rpcForSession<PiAgentState>(activeSessionKey, { type: "get_state" }),
 					rpcForSession<PiSessionEntries>(activeSessionKey, {
@@ -121,6 +124,7 @@ export function useRemoteChatFork({
 			activeSessionKey,
 			busy,
 			client,
+			ensureDraftRuntime,
 			forkingMessageId,
 			getMessages,
 			onForkSessionCreated,

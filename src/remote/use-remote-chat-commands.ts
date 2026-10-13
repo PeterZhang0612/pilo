@@ -73,6 +73,7 @@ export function useRemoteChatCommands({
 			if (!extensionNames || !extensionNames.has(commandName)) return false;
 			clearComposer();
 			try {
+				await ensureDraftRuntime();
 				await client.sendChatCommand(activeSessionKey, {
 					type: "prompt",
 					message: command,

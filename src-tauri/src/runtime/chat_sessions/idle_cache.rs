@@ -3,10 +3,13 @@ use std::sync::{Arc, atomic::Ordering};
 use super::{ChatProcess, ChatSessions};
 
 const MAX_CACHED_IDLE_CHAT_PROCESSES: usize = 4;
+const IDLE_CHAT_TTL: std::time::Duration = std::time::Duration::from_secs(5 * 60);
+const IDLE_REAP_INTERVAL: std::time::Duration = std::time::Duration::from_secs(30);
 
 impl ChatProcess {
     fn can_evict(&self) -> bool {
-        !self.no_session
+        !self.closed.load(Ordering::Acquire)
+            && !self.no_session
             && self.initialized.load(Ordering::Acquire)
             && !self.active_turn.load(Ordering::Acquire)
             && !self.compacting.load(Ordering::Acquire)
@@ -19,33 +22,82 @@ impl ChatProcess {
 }
 
 impl ChatSessions {
+    pub(crate) fn start_idle_reaper(&self) {
+        let registry = Arc::downgrade(&self.registry);
+        tauri::async_runtime::spawn(async move {
+            loop {
+                tokio::time::sleep(IDLE_REAP_INTERVAL).await;
+                let Some(registry) = registry.upgrade() else {
+                    break;
+                };
+                let sessions = Self { registry };
+                if sessions.registry.lock().await.shutting_down {
+                    break;
+                }
+                sessions.prune_idle_processes(None).await;
+            }
+        });
+    }
+
     /// Reserve one cache slot for the requested session. Live turns and sessions
     /// that cannot be restored from Pi JSONL are never part of this idle budget.
     pub(super) async fn prune_idle(&self, retained_key: &str) {
+        self.prune_idle_processes(Some(retained_key)).await;
+    }
+
+    async fn prune_idle_processes(&self, retained_key: Option<&str>) {
         let evicted = {
             let mut registry = self.registry.lock().await;
+            let super::ChatRegistry {
+                processes,
+                idle_since,
+                ..
+            } = &mut *registry;
+            idle_since.retain(|key, _| {
+                processes
+                    .get(key)
+                    .is_some_and(|process| process.can_evict())
+            });
+            for (key, process) in processes.iter().filter(|(_, process)| process.can_evict()) {
+                let used = process.last_used.load(Ordering::Acquire);
+                let idle = idle_since
+                    .entry(key.clone())
+                    .or_insert_with(|| (used, std::time::Instant::now()));
+                if idle.0 != used {
+                    *idle = (used, std::time::Instant::now());
+                }
+            }
             let mut candidates = registry
                 .processes
                 .iter()
-                .filter(|(key, process)| key.as_str() != retained_key && process.can_evict())
+                .filter(|(key, process)| Some(key.as_str()) != retained_key && process.can_evict())
                 .map(|(key, process)| (key.clone(), process.last_used.load(Ordering::Acquire)))
                 .collect::<Vec<_>>();
             candidates.sort_by_key(|(_, last_used)| *last_used);
             let mut remaining = candidates.len();
+            let budget = MAX_CACHED_IDLE_CHAT_PROCESSES - usize::from(retained_key.is_some());
             let mut evicted = Vec::new();
             for (key, _) in candidates {
-                if remaining < MAX_CACHED_IDLE_CHAT_PROCESSES {
-                    break;
+                let expired = registry
+                    .idle_since
+                    .get(&key)
+                    .is_some_and(|(_, since)| since.elapsed() >= IDLE_CHAT_TTL);
+                if remaining <= budget && !expired {
+                    continue;
                 }
                 let process = &registry.processes[&key];
                 // A registry lookup clones the Arc before locking the session.
                 // Protect both pending RPCs and initialization, not just live turns.
-                if Arc::strong_count(process) != 1 || process.session.try_lock().is_err() {
+                if !process.can_evict()
+                    || Arc::strong_count(process) != 1
+                    || process.session.try_lock().is_err()
+                {
                     continue;
                 }
                 if let Some(process) = registry.processes.remove(&key) {
                     registry.snapshots.remove(&key);
-                    process.closed.store(true, Ordering::Release);
+                    registry.idle_since.remove(&key);
+                    process.mark_closed();
                     evicted.push((key, process));
                     remaining -= 1;
                 }

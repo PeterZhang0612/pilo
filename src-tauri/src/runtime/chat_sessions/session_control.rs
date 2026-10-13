@@ -23,6 +23,7 @@ impl ChatSessions {
             let mut registry = self.registry.lock().await;
             let process = registry.processes.remove(session_key)?;
             registry.snapshots.remove(session_key);
+            registry.idle_since.remove(session_key);
             process.mark_closed();
             (process, registry.events.clone())
         };
@@ -84,9 +85,12 @@ impl ChatSessions {
                 .get(session_key)
                 .cloned()
                 .ok_or_else(|| format!("session '{session_key}' is not running"))?;
-            process
-                .last_used
-                .store(registry.usage_sequence, Ordering::Release);
+            // Read-only polling must not keep an otherwise idle Pi warm forever.
+            if !command_type.starts_with("get_") {
+                process
+                    .last_used
+                    .store(registry.usage_sequence, Ordering::Release);
+            }
             process
         };
         let started = Instant::now();

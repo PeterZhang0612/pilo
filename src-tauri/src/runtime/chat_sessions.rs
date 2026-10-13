@@ -89,6 +89,7 @@ struct ChatRegistry {
     unavailable_projects: HashMap<String, bool>,
     shutting_down: bool,
     usage_sequence: u64,
+    idle_since: HashMap<String, (u64, std::time::Instant)>,
 }
 
 #[derive(Clone, Default)]
