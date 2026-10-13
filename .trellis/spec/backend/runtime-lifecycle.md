@@ -96,8 +96,16 @@ Frontend controller eviction alone is not backend process cleanup.
 - Replay retains at most 2048 events and 16 MiB of **serialized payload bytes**.
   This is not an exact RSS budget for Rust `Value` objects or live transport queues.
   Count bytes without allocating a second JSON buffer.
-- An event exceeding the byte budget is delivered live but clears replay. A client
-  behind that event receives a gap even when the replay deque is empty; a client
+- The shared Web live ring retains at most 512 events and 64 MiB serialized bytes.
+  Each receiver has a sequence cursor; watch notifications contain no payload.
+  Eviction or an event over the live limit reports lag and triggers resync.
+  Server-client queues retain up to 2048 events and 64 MiB payload bytes per
+  stream; binary attachments count too. Reserve a terminal control-event slot;
+  overflow disconnects that stream rather than silently dropping its output.
+  These limits exclude in-flight consumers and object-allocation overhead.
+- An event exceeding the replay budget but fitting the live budget is delivered
+  live and clears replay. A client behind that event receives a gap even when
+  the replay deque is empty; a client
   already at the latest sequence receives an empty replay. Sequence zero retains
   the existing whole-buffer bootstrap behavior.
 - Sequence allocation, replay insertion, and Web broadcast publication share a
@@ -129,7 +137,9 @@ Frontend controller eviction alone is not backend process cleanup.
 | External probe fails | Keep last activity; unknown is not completion |
 | Background idle stop fails | Log warning; do not block another chat launch |
 | Replay byte/count eviction | Older sequence returns `None`; WebUI resyncs |
-| Single oversized event | Deliver live; clear replay and expose the gap |
+| Event over 16 MiB replay limit but within 64 MiB live limit | Deliver live; clear replay and expose the gap |
+| Web live count/byte eviction or event over live limit | Report lag; request snapshot resync |
+| Server stream count/byte overflow | Reserved disconnect event; remove stream sender |
 | Session startup/RPC lock held | State queries use the independent snapshot reader |
 | Server stdin EOF or invalid frame | Cancel requests, clean up children, finish writer |
 | Server ignores EOF | Bounded force-kill fallback |
@@ -175,6 +185,9 @@ Frontend controller eviction alone is not backend process cleanup.
 - `events/mod.rs`: byte eviction before count limit, oversized live delivery, empty
   replay gap, latest-sequence empty replay, concurrent replay/broadcast ordering,
   existing sequence/count contracts.
+- Pending explicit test authorization: byte/count overflow including binary-only
+  events, live oversized-event gaps, notification coalescing without lost events,
+  cursor ordering, and state queries while startup/RPC holds the session mutex.
 - `server_client/tests.rs`: a fake server completes its EOF cleanup before stop returns.
 - `pilo-server/tests/stdio_protocol.rs`: a real fake-Pi child is reaped after server EOF.
 - Windows desktop shutdown and Local/WSL/SSH resumption still require platform testing;

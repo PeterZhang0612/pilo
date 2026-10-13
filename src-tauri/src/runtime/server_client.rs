@@ -25,7 +25,7 @@ use transport::{
 };
 
 pub(crate) use manager::ServerManager;
-pub use transport::{SERVER_DISCONNECTED_EVENT, ServerEvent};
+pub use transport::{SERVER_DISCONNECTED_EVENT, ServerEvent, ServerEventReceiver};
 
 const REQUEST_CAPACITY: usize = 256;
 const HANDSHAKE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
@@ -216,7 +216,7 @@ impl ServerClient {
             .map_err(|error| format!("invalid pilo-server response for {method}: {error}"))
     }
 
-    pub fn subscribe(&self, stream_id: &str) -> mpsc::Receiver<ServerEvent> {
+    pub fn subscribe(&self, stream_id: &str) -> ServerEventReceiver {
         self.events.subscribe(stream_id)
     }
 

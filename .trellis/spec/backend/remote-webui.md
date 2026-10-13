@@ -223,9 +223,12 @@ remote_devices(id, name, pair_ip, token_hash, created_at_ms, last_seen_at_ms, ex
   timestamp plus a window-local counter: concurrent windows sharing a session
   must not resolve each other's pending requests. Preserve the `pilo-` prefix
   used for caller-correlated error handling. Web broadcast/replay remains independent.
-- **Backpressure**: each Web subscriber has a bounded broadcast channel; a lagging
-  subscriber receives `Lagged` and is told to `resyncRequired` instead of blocking
-  the runtime. Desktop Tauri channel is another subscriber and is unaffected.
+- **Backpressure**: Web subscribers share a 512-event / 64 MiB serialized-payload
+  ring, with independent sequence cursors and payload-free watch notifications.
+  A lagging subscriber receives `Lagged` and is told to `resyncRequired` instead
+  of blocking the runtime. Events exceeding the live byte limit also create a
+  gap. Desktop Tauri channels remain independent and unaffected. See
+  [Runtime Resource Lifecycle](./runtime-lifecycle.md) for replay/stream limits.
 - **Browser recovery**: Remote Browser owns `online/offline` and foreground
   lifecycle recovery. `navigator.onLine` is advisory only: an already-live
   WebSocket remains authoritative, while an offline hint may slow background
@@ -294,7 +297,7 @@ remote_devices(id, name, pair_ip, token_hash, created_at_ms, last_seen_at_ms, ex
   token; regeneration/restart rejects all previous-batch requests, while valid
   device tokens remain usable.
 - **Bad**: A Web client that stops reading must **not** stall Pi streaming; it is
-  dropped to `resyncRequired` after the broadcast buffer fills.
+  dropped to `resyncRequired` after its cursor falls behind the live ring.
 
 ---
 
@@ -415,7 +418,8 @@ Do not return a receipt based on only the reusable secret + address ID.
   starts/stops the listener, persists `enabled`, and restores on app start.
   Remote OFF means the listener does not exist.
 - **EventHub over EventBus.** `RuntimeEventBus` keeps Tauri `Channel` subscribers
-  keyed by window label, plus a bounded Web `broadcast` sender and replay deque.
+  keyed by window label, plus a byte-bounded Web live ring, cursor receivers,
+  watch notifications and replay deque.
   Wrong: a single global `Option<Channel>` lets the newest window steal all
   completion/RPC replies. Correct: replace only the subscribing window's channel
   and fan out to all windows. Replay/sequence live in the adapter layer, never

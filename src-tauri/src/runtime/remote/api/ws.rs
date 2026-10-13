@@ -189,7 +189,7 @@ enum EventBatchResult {
 
 async fn collect_event_batch(
     first: SequencedRuntimeEvent,
-    receiver: &mut broadcast::Receiver<SequencedRuntimeEvent>,
+    receiver: &mut crate::runtime::events::WebEventReceiver,
 ) -> EventBatchResult {
     let mut batch = vec![first];
     let deadline = tokio::time::Instant::now() + WS_BATCH_WINDOW;
