@@ -114,7 +114,7 @@ export function ComposerActions({
 								disabled={disabled || submitBlocked}
 								className={cn(
 									CHAT_COMPOSER_RUN_CONFIG_TRIGGER_CLASS_NAME,
-									"gap-1 px-1.5 motion-reduce:active:scale-100 any-pointer-coarse:h-11 any-pointer-coarse:min-w-11",
+									"gap-1 px-1.5 motion-reduce:active:scale-100 pointer-coarse:h-11 pointer-coarse:min-w-11",
 								)}
 								aria-label={sendModeLabel}
 							>
@@ -157,7 +157,7 @@ export function ComposerActions({
 											: !canSendNow)
 								}
 								textValue={t(option.label)}
-								className="py-1 any-pointer-coarse:min-h-11"
+								className="py-1 pointer-coarse:min-h-11"
 							>
 								<span className={menuItemIconClassName}>
 									<option.icon aria-hidden="true" />
@@ -181,7 +181,7 @@ export function ComposerActions({
 							size="icon"
 							className={cn(
 								CHAT_COMPOSER_SEND_BUTTON_CLASS_NAME,
-								"motion-reduce:active:scale-100 any-pointer-coarse:size-11",
+								"motion-reduce:active:scale-100 pointer-coarse:size-11",
 							)}
 							aria-label={actionLabel}
 							disabled={
