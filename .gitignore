@@ -28,3 +28,6 @@ docs/chat-streaming-performance-design.md
 *.njsproj
 *.sln
 *.sw?
+
+# macOS-only helper for regenerating src-tauri/icons/icon.icns locally.
+scripts/make-macos-icon.sh
