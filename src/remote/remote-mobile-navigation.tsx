@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next";
 import {
 	Clock,
 	Folder,
-	RefreshCw,
 	Search,
 	SquarePen,
 	Wifi,
@@ -54,12 +53,9 @@ export function RemoteMobileNavigation({
 	selectedSessionId,
 	connectionState,
 	refreshingProjectIds,
-	refreshing,
 	onSelectSession,
 	onNewChat,
 	onRefreshProjectSessions,
-	onRefresh,
-	onReload,
 	onDeleteSession,
 }: {
 	client: PiloClient | null;
@@ -72,12 +68,9 @@ export function RemoteMobileNavigation({
 	selectedSessionId: string | null;
 	connectionState: RemoteConnectionState;
 	refreshingProjectIds: ReadonlySet<string>;
-	refreshing: boolean;
 	onSelectSession: (sessionId: string, projectId: string) => void;
 	onNewChat: (projectId?: string) => void;
 	onRefreshProjectSessions: (projectId: string) => void;
-	onRefresh: () => void;
-	onReload: () => void;
 	onDeleteSession: (sessionId: string, projectId: string) => void;
 }) {
 	const { t } = useTranslation();
@@ -221,18 +214,6 @@ export function RemoteMobileNavigation({
 						>
 							<SquarePen className="size-4 shrink-0" aria-hidden="true" />
 							<span className="truncate">{t("sidebar.newSession")}</span>
-						</button>
-						<button
-							type="button"
-							className={cn(ROW_ACTION_CLASS, "disabled:opacity-50")}
-							aria-label={t("sidebar.refreshSidebar")}
-							disabled={refreshing}
-							onClick={onRefresh}
-						>
-							<RefreshCw
-								className={cn("size-4", refreshing && "animate-spin")}
-								aria-hidden="true"
-							/>
 						</button>
 					</div>
 
@@ -479,14 +460,6 @@ export function RemoteMobileNavigation({
 						<span className="min-w-0 flex-1 truncate text-sm text-sidebar-foreground-muted">
 							{t(remoteConnectionLabelKey(connectionState))}
 						</span>
-						<button
-							type="button"
-							className={ROW_ACTION_CLASS}
-							aria-label={t("app.reload")}
-							onClick={onReload}
-						>
-							<RefreshCw className="size-4" aria-hidden="true" />
-						</button>
 					</footer>
 				</DialogPrimitive.Content>
 			</DialogPrimitive.Portal>

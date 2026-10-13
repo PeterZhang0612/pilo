@@ -18,7 +18,6 @@ import { EnvRow } from "./env-row";
 import { ProjectRow } from "./project-row";
 import { RecentSectionHeader } from "./recent-section-header";
 import { SessionRow, SessionRowGlide } from "./session-row";
-import { SidebarSkeleton } from "./sidebar-skeleton";
 import { SortableProjectBlock } from "./sortable-project-block";
 import { summarizeProjectSessions } from "./session-list";
 import type {
@@ -36,7 +35,6 @@ const VirtualSessionRows = lazy(() =>
 
 type SidebarTreeProps = {
 	scrollViewportRef: RefObject<HTMLDivElement | null>;
-	refreshing: boolean;
 	organizeMode: SidebarEnvView;
 	onOrganizeModeChange: (mode: SidebarEnvView) => void;
 	collapsedSections: Record<string, boolean>;
@@ -76,7 +74,6 @@ type SidebarTreeProps = {
  */
 export function SidebarTree({
 	scrollViewportRef,
-	refreshing,
 	organizeMode,
 	onOrganizeModeChange,
 	collapsedSections,
@@ -192,9 +189,7 @@ export function SidebarTree({
 			scrollbarThumbClassName="bg-[hsl(var(--muted-foreground)/0.35)] hover:bg-[hsl(var(--muted-foreground)/0.45)] active:bg-[hsl(var(--muted-foreground)/0.55)]"
 		>
 			<div className="relative w-full min-w-0 overflow-x-hidden pt-1">
-				{refreshing ? (
-					<SidebarSkeleton />
-				) : organizeMode === "recent" ? (
+				{organizeMode === "recent" ? (
 					<section className="mb-3 w-full min-w-0 space-y-0.5 overflow-hidden last:mb-0">
 						<RecentSectionHeader
 							collapsed={collapsedSections["recent"] ?? false}

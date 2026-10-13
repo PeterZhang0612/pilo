@@ -1,7 +1,7 @@
 /* oxlint-disable jsx-a11y/prefer-tag-over-role -- 宽度拖拽手柄是垂直分割线，role=separator 语义正确，无对应语义 HTML 元素 */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { PanelLeft, RefreshCw, Search, SquarePen } from "lucide-react";
+import { PanelLeft, Search, SquarePen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePreferences } from "@/lib/preferences-provider";
 import { tauriPiloClient } from "@/lib/tauri-pilo-client";
@@ -79,8 +79,6 @@ export function AppSidebar({
 	onDeleteSession,
 	onRefreshProjectSessions,
 	refreshingProjectIds = EMPTY_REFRESHING_PROJECT_IDS,
-	onRefresh,
-	refreshing = false,
 	selectedProjectId,
 	selectedSessionId,
 	onSelectSession,
@@ -363,23 +361,11 @@ export function AppSidebar({
 									</span>
 									<span className="truncate">{t("sidebar.newSession")}</span>
 								</button>
-								<button
-									type="button"
-									className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sidebar-foreground-muted transition-colors hover:bg-sidebar-hover hover:text-sidebar-hover-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring disabled:opacity-50"
-									aria-label={t("sidebar.refreshSidebar")}
-									onClick={() => onRefresh?.()}
-									disabled={refreshing}
-								>
-									<RefreshCw
-										className={cn("h-4 w-4", refreshing && "animate-spin")}
-									/>
-								</button>
 							</div>
 						)}
 					</div>
 					<SidebarTree
 						scrollViewportRef={scrollViewportRef}
-						refreshing={refreshing}
 						organizeMode={organizeMode}
 						onOrganizeModeChange={changeOrganizeMode}
 						collapsedSections={collapsedSections}

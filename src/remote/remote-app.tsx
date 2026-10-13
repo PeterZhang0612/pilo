@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { RefreshCw, Wifi, WifiOff, X } from "lucide-react";
+import { Wifi, WifiOff, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -81,7 +81,6 @@ function RemoteWorkspace() {
 	const isTouch = useMediaQuery("(hover: none) and (pointer: coarse)");
 	const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 	const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
-	const [sidebarRefreshing, setSidebarRefreshing] = useState(false);
 	const scrollRef = useRef<HTMLDivElement>(null);
 	// "chat-scrollbar" 预留 stable gutter，输入框不在滚动容器内，需补等宽内边距
 	// 才能与消息列左右对齐（手机 overlay 滚动条为 0，仅在桌面浏览器可见）。
@@ -122,20 +121,8 @@ function RemoteWorkspace() {
 		rawSessions,
 		externalActivity,
 		refreshingProjectIds,
-		reloadBootstrap,
 		refreshProjectSessions,
-		refreshAllSessions,
 	} = sessions;
-	// 刷新侧栏：拉取 bootstrap 与会话索引。远程端没有桌面版的事件驱动目录，
-	// 靠一个 loading 状态给刷新按钮反馈，避免“点了没反应”。
-	const handleRefreshSidebar = async () => {
-		setSidebarRefreshing(true);
-		try {
-			await Promise.allSettled([reloadBootstrap(), refreshAllSessions()]);
-		} finally {
-			setSidebarRefreshing(false);
-		}
-	};
 	const {
 		networkState,
 		recoveryState,
@@ -301,8 +288,6 @@ function RemoteWorkspace() {
 			onRefreshProjectSessions={(projectId) =>
 				void refreshProjectSessions(projectId, true)
 			}
-			onRefresh={handleRefreshSidebar}
-			refreshing={sidebarRefreshing}
 			refreshingProjectIds={refreshingProjectIds}
 			footer={
 				<div className="flex min-w-0 items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground">
@@ -314,14 +299,6 @@ function RemoteWorkspace() {
 					<span className="truncate">
 						{t(remoteConnectionLabelKey(networkState))}
 					</span>
-					<button
-						type="button"
-						aria-label="Reload"
-						className="ml-auto flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-hover hover:text-sidebar-hover-foreground"
-						onClick={() => void reloadBootstrap()}
-					>
-						<RefreshCw className="size-3.5" />
-					</button>
 				</div>
 			}
 		/>
@@ -354,9 +331,6 @@ function RemoteWorkspace() {
 						onRefreshProjectSessions={(projectId) =>
 							void refreshProjectSessions(projectId, true)
 						}
-						onRefresh={handleRefreshSidebar}
-						refreshing={sidebarRefreshing}
-						onReload={() => void reloadBootstrap()}
 					/>
 				) : (
 					sidebarNode
