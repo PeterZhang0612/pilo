@@ -22,7 +22,7 @@ import {
 	TooltipTrigger,
 } from "@/ui";
 import { menuItemIconClassName } from "@/ui/menu-styles";
-import { MiniSwitch, ViewMenuItem } from "./sidebar-row-parts";
+import { MiniSwitch, SIDEBAR_ACTION, ViewMenuItem } from "./sidebar-row-parts";
 import type { SidebarEnv, SidebarEnvView } from "./types";
 
 export function EnvRow({
@@ -55,7 +55,7 @@ export function EnvRow({
 		? t("sidebar.expandEnvironment")
 		: t("sidebar.collapseEnvironment");
 	return (
-		<div className="group flex h-7 items-center gap-1 rounded-md pr-2">
+		<div className="group flex h-7 items-center gap-0.5 rounded-md border border-transparent pr-2">
 			<button
 				type="button"
 				aria-label={toggleLabel}
@@ -82,7 +82,7 @@ export function EnvRow({
 				<TooltipTrigger asChild>
 					<button
 						type="button"
-						className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+						className={SIDEBAR_ACTION}
 						aria-label={t("sidebar.addProjectIn", { name: env.name })}
 						onClick={(event) => {
 							event.stopPropagation();
@@ -106,7 +106,7 @@ export function EnvRow({
 				<DropdownMenuTrigger asChild>
 					<button
 						type="button"
-						className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+						className={SIDEBAR_ACTION}
 						aria-label={t("sidebar.connectionMenu")}
 						onClick={(event) => event.stopPropagation()}
 					>

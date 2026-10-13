@@ -208,7 +208,7 @@ export function MobileSessionRow({
 					) : null}
 				</span>
 				{/* 保留右侧运行状态槽，避免状态变化时标题宽度跳动。 */}
-				<span className="flex h-5 w-3 shrink-0 items-center justify-center">
+				<span className="-mr-3 flex h-5 w-11 shrink-0 items-center justify-center">
 					{session.active ? (
 						<ActivityDot className="text-sidebar-primary -translate-y-px" />
 					) : null}
@@ -270,13 +270,15 @@ export function MobileProjectRow({
 						{sessionCount}
 					</span>
 				) : null}
-				<ChevronDown
-					aria-hidden="true"
-					className={cn(
-						"size-3.5 shrink-0 text-sidebar-foreground-muted transition-transform duration-150 ease-out motion-reduce:transition-none",
-						!expanded && "-rotate-90",
-					)}
-				/>
+				<span className="-mr-3 flex h-5 w-11 shrink-0 items-center justify-center">
+					<ChevronDown
+						aria-hidden="true"
+						className={cn(
+							"size-3.5 text-sidebar-foreground-muted transition-transform duration-150 ease-out motion-reduce:transition-none",
+							!expanded && "-rotate-90",
+						)}
+					/>
+				</span>
 			</button>
 			<button
 				type="button"
@@ -313,13 +315,15 @@ export function MobileEnvRow({
 			>
 				{env.name}
 			</span>
-			<ChevronDown
-				aria-hidden="true"
-				className={cn(
-					"size-3.5 shrink-0 transition-transform duration-150 ease-out motion-reduce:transition-none",
-					!expanded && "-rotate-90",
-				)}
-			/>
+			<span className="-mr-3 flex h-5 w-11 shrink-0 items-center justify-center">
+				<ChevronDown
+					aria-hidden="true"
+					className={cn(
+						"size-3.5 transition-transform duration-150 ease-out motion-reduce:transition-none",
+						!expanded && "-rotate-90",
+					)}
+				/>
+			</span>
 		</button>
 	);
 }

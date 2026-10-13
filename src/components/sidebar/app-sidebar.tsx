@@ -10,6 +10,7 @@ import { IS_MACOS } from "@/components/title-bar";
 import { CommandPalette } from "@/components/command-palette";
 import { ProjectSessionsToolbar } from "./project-sessions-toolbar";
 import { SidebarTree } from "./sidebar-tree";
+import { SIDEBAR_ACTION } from "./sidebar-row-parts";
 import {
 	MAX_SIDEBAR_WIDTH,
 	MIN_SIDEBAR_WIDTH,
@@ -318,26 +319,27 @@ export function AppSidebar({
 						{!collapsed && !settledCollapsed ? (
 							<div
 								className={cn(
-									"absolute right-1.5 flex items-center gap-0.5",
+									// Match the scroll body inset and row action padding.
+									"absolute right-2.5 flex h-7 items-center gap-0.5 border border-transparent px-2",
 									// 与 TRAFFIC_LIGHT_ALIGNED_HEADER 同一红绿灯圆心：11 - 2 + 14 = 23
 									IS_MACOS ? "-top-0.5" : "top-2",
 								)}
 							>
 								<button
 									type="button"
-									className="flex h-7 w-7 items-center justify-center rounded-md text-sidebar-foreground-muted transition-colors hover:bg-sidebar-hover hover:text-sidebar-hover-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+									className={SIDEBAR_ACTION}
 									aria-label={t("sidebar.searchSessions")}
 									onClick={() => setPaletteOpen(true)}
 								>
-									<Search className="h-4 w-4" />
+									<Search className="size-4" />
 								</button>
 								<button
 									type="button"
-									className="flex h-7 w-7 items-center justify-center rounded-md text-sidebar-foreground-muted transition-colors hover:bg-sidebar-hover hover:text-sidebar-hover-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+									className={SIDEBAR_ACTION}
 									aria-label={t("sidebar.collapseSidebar")}
 									onClick={() => onCollapse?.()}
 								>
-									<PanelLeft className="h-4 w-4" />
+									<PanelLeft className="size-4" />
 								</button>
 							</div>
 						) : null}

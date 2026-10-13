@@ -56,12 +56,10 @@ function ConfirmDeleteButton({
 			aria-label={confirming ? confirmLabel : label}
 			className={cn(
 				"relative inline-flex items-center justify-center rounded-sm",
-				// 折叠态只有 20px，用伪元素补到 24×24
-				"after:absolute after:-inset-0.5 after:content-['']",
 				"focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring",
 				confirming
-					? "relative z-10 h-5 min-w-10 overflow-hidden whitespace-nowrap rounded-full border border-destructive/20 bg-sidebar px-2 text-2xs font-medium leading-none text-destructive shadow-xs transition-none hover:bg-sidebar hover:text-destructive"
-					: "h-5 w-5 text-sidebar-foreground-muted transition-[opacity,color,background-color] duration-100 hover:text-sidebar-foreground",
+					? "relative z-10 h-6 min-w-10 overflow-hidden whitespace-nowrap rounded-full border border-destructive/20 bg-sidebar px-2 text-2xs font-medium leading-none text-destructive shadow-xs transition-none hover:bg-sidebar hover:text-destructive"
+					: "size-6 shrink-0 text-sidebar-foreground-muted transition-[opacity,color,background-color] duration-100 hover:text-sidebar-foreground",
 				className,
 			)}
 			onClick={(event) => {
@@ -275,7 +273,7 @@ export const SessionRow = memo(function SessionRow({
 						"group relative w-full min-w-0 cursor-pointer select-none rounded-md border border-transparent bg-transparent px-2 text-left transition-colors",
 						// 在滑动的悬浮高亮列表里，让高亮块而不是行自身承载 hover 背景。
 						"group-hover/glide:hover:bg-transparent",
-						projectContext ? "py-1.5" : "py-1",
+						projectContext ? "py-1" : "py-0.5",
 						"hover:bg-sidebar-hover hover:text-sidebar-hover-foreground data-[menu-open]:bg-sidebar-hover",
 						"focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sidebar-ring",
 						selected &&
@@ -288,8 +286,8 @@ export const SessionRow = memo(function SessionRow({
 							projectContext ? "items-start" : "items-center",
 						)}
 					>
-						{/* 图标槽 16px：让会话标题与项目标题共享同一条 30px 起始边；高度与标题行(20px)对齐，避免 items-start 时未读点偏高 */}
-						<div className="relative flex h-5 w-4 shrink-0 items-center justify-center">
+						{/* Keep the icon slot and title aligned with project rows. */}
+						<div className="relative flex h-6 w-4 shrink-0 items-center justify-center">
 							{!session.active && session.unread ? (
 								<span
 									aria-hidden="true"
@@ -314,10 +312,9 @@ export const SessionRow = memo(function SessionRow({
 										aria-label={t("sidebar.moreActions")}
 										onClick={(event) => event.stopPropagation()}
 										className={cn(
-											"absolute left-1/2 top-1/2 z-20 flex h-5 w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-md opacity-0 pointer-events-none",
+											"absolute left-1/2 top-1/2 z-20 flex size-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-md opacity-0 pointer-events-none",
 											"group-hover:pointer-events-auto group-hover:opacity-100 group-data-[menu-open]:pointer-events-auto group-data-[menu-open]:opacity-100",
 											"focus-visible:pointer-events-auto focus-visible:opacity-100",
-											"after:absolute after:-inset-0.5 after:content-['']",
 											"text-sidebar-foreground-muted transition-[opacity,color,background-color] duration-100",
 											"hover:bg-sidebar-foreground/15 hover:text-sidebar-foreground",
 											"group-data-[menu-open]:bg-sidebar-foreground/15 group-data-[menu-open]:text-sidebar-foreground",
@@ -383,7 +380,7 @@ export const SessionRow = memo(function SessionRow({
 									className="min-w-0 w-full rounded-sm bg-transparent px-1 text-sm outline-hidden ring-1 ring-sidebar-ring"
 								/>
 							) : (
-								<div className="flex h-5 min-w-0 items-center">
+								<div className="flex h-6 min-w-0 items-center">
 									<span
 										className={cn(
 											"block min-w-0 flex-1 truncate text-sm",
@@ -410,7 +407,7 @@ export const SessionRow = memo(function SessionRow({
 								</div>
 							) : null}
 						</div>
-						<div className="relative flex h-5 min-w-5 shrink-0 items-center justify-center pointer-events-none">
+						<div className="relative flex size-6 shrink-0 items-center justify-center pointer-events-none">
 							<span
 								aria-hidden="true"
 								className="flex items-center justify-center transition-opacity duration-100 group-hover:opacity-0 group-data-[menu-open]:opacity-0"

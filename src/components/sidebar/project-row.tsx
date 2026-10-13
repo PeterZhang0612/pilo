@@ -80,7 +80,7 @@ export function ProjectRow({
 						onSelect();
 					}}
 					className={cn(
-						"group relative flex min-w-0 w-full cursor-pointer select-none items-center gap-2 rounded-md border border-transparent bg-transparent py-1 pl-2 pr-3 text-left text-xs font-semibold transition-colors",
+						"group relative flex min-w-0 w-full cursor-pointer select-none items-center gap-1.5 rounded-md border border-transparent bg-transparent px-2 py-0.5 text-left text-xs font-semibold transition-colors",
 						"text-sidebar-foreground dark:text-sidebar-foreground/75",
 						"hover:bg-sidebar-hover hover:text-sidebar-hover-foreground data-[menu-open]:bg-sidebar-hover data-[menu-open]:text-sidebar-hover-foreground",
 						"focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring",
@@ -92,7 +92,7 @@ export function ProjectRow({
 				>
 					<button
 						type="button"
-						className="relative -mr-1.5 flex h-5 w-5 shrink-0 items-center justify-center"
+						className="relative -mx-1 flex size-6 shrink-0 items-center justify-center"
 						aria-label={toggleLabel}
 						aria-expanded={!collapsed}
 						disabled={refreshing}
@@ -102,10 +102,10 @@ export function ProjectRow({
 							onToggle();
 						}}
 					>
-						<Folder className="absolute left-0 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-current opacity-80 transition-opacity duration-100 group-hover:opacity-0" />
+						<Folder className="absolute size-3.5 text-current opacity-80 transition-opacity duration-100 group-hover:opacity-0" />
 						<ChevronDown
 							className={cn(
-								"absolute left-0 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-current transition-[opacity,transform] duration-150 ease-out",
+								"absolute size-3.5 text-current transition-[opacity,transform] duration-150 ease-out",
 								"opacity-0 group-hover:opacity-100",
 								collapsed ? "-rotate-90" : "rotate-0",
 							)}
@@ -117,7 +117,7 @@ export function ProjectRow({
 					<div className="flex shrink-0 items-center gap-0.5">
 						{refreshing ? (
 							<span
-								className="flex h-5 w-5 items-center justify-center text-muted-foreground"
+								className="flex size-6 items-center justify-center text-muted-foreground"
 								aria-label={t("sidebar.refreshingSessions")}
 							>
 								<Spinner className="h-3.5 w-3.5" />

@@ -9,7 +9,7 @@ import {
 	DropdownMenuTrigger,
 } from "@/ui";
 import { menuItemIconClassName } from "@/ui/menu-styles";
-import { MiniSwitch, ViewMenuItem } from "./sidebar-row-parts";
+import { MiniSwitch, SIDEBAR_ACTION, ViewMenuItem } from "./sidebar-row-parts";
 import type { SidebarEnvView } from "./types";
 
 /**
@@ -39,7 +39,7 @@ export function RecentSectionHeader({
 		? t("sidebar.expandRecent")
 		: t("sidebar.collapseRecent");
 	return (
-		<div className="group flex h-7 items-center gap-1 rounded-md">
+		<div className="group flex h-7 items-center gap-0.5 rounded-md border border-transparent pr-2">
 			<button
 				type="button"
 				aria-label={toggleLabel}
@@ -66,7 +66,7 @@ export function RecentSectionHeader({
 				<DropdownMenuTrigger asChild>
 					<button
 						type="button"
-						className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+						className={SIDEBAR_ACTION}
 						aria-label={t("sidebar.recentMenu")}
 					>
 						<MoreHorizontal className="h-3.5 w-3.5" />

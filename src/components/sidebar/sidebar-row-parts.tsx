@@ -3,17 +3,19 @@ import { cn } from "@/lib/utils";
 import { DropdownMenuItem } from "@/ui";
 import { menuItemIconClassName } from "@/ui/menu-styles";
 
+export const SIDEBAR_ACTION = cn(
+	"inline-flex size-6 shrink-0 items-center justify-center rounded-sm",
+	"text-sidebar-foreground-muted transition-[opacity,background-color,color] duration-100",
+	"hover:text-sidebar-hover-foreground hover:bg-sidebar-hover focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring",
+);
+
 // 悬浮时才出现的行内操作按钮（Lody loro-app-sidebar 的 hoverActionClassName）。
 export const HOVER_ACTION = cn(
-	"inline-flex h-5 w-5 items-center justify-center rounded-sm",
-	"text-muted-foreground transition-[opacity,background-color,color] duration-100",
+	SIDEBAR_ACTION,
 	"opacity-0 pointer-events-none",
 	"group-hover:opacity-100 group-hover:pointer-events-auto",
 	"group-data-[menu-open]:opacity-100 group-data-[menu-open]:pointer-events-auto",
 	"focus-visible:opacity-100 focus-visible:pointer-events-auto",
-	"hover:text-foreground hover:bg-muted/30 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
-	// 不可见时用伪元素把命中区补到 24×24，视觉尺寸保持不变
-	"relative after:absolute after:-inset-0.5 after:content-['']",
 );
 
 /** 菜单内的迷你开关（比标准 Switch 小一号，适合行内展示）。 */
