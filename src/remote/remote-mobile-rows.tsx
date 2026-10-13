@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, Folder, Monitor, SquarePen, Trash2 } from "lucide-react";
+import { ChevronDown, Folder, Monitor, SquarePen } from "lucide-react";
 
 import type {
 	SidebarEnv,
@@ -8,11 +8,11 @@ import type {
 	SidebarSession,
 } from "@/components/sidebar/types";
 import { cn } from "@/lib/utils";
-import { ActivityDot, Spinner } from "@/ui";
+import { ActivityDot, Button, Spinner } from "@/ui";
 
-/** 触摸端行内按钮：始终可见，且命中区不小于 36×36。 */
+/** 触摸端行内按钮：始终可见，且命中区不小于 44×44。 */
 export const ROW_ACTION_CLASS =
-	"flex size-9 shrink-0 items-center justify-center rounded-lg text-sidebar-foreground-muted transition-colors active:bg-sidebar-hover";
+	"flex size-11 shrink-0 items-center justify-center rounded-lg text-sidebar-foreground-muted transition-colors active:bg-sidebar-hover active:text-sidebar-foreground motion-reduce:transition-none";
 
 export function MobileSessionRow({
 	session,
@@ -36,12 +36,12 @@ export function MobileSessionRow({
 	const { t } = useTranslation();
 	const timerRef = useRef<number | null>(null);
 	const firedRef = useRef(false);
-	const deleteButtonRef = useRef<HTMLButtonElement>(null);
+	const sessionButtonRef = useRef<HTMLButtonElement>(null);
 	const cancelButtonRef = useRef<HTMLButtonElement>(null);
 	const wasConfirmingRef = useRef(false);
 	useEffect(() => {
 		if (confirmingDelete) cancelButtonRef.current?.focus();
-		else if (wasConfirmingRef.current) deleteButtonRef.current?.focus();
+		else if (wasConfirmingRef.current) sessionButtonRef.current?.focus();
 		wasConfirmingRef.current = confirmingDelete;
 	}, [confirmingDelete]);
 	const startRef = useRef<{ x: number; y: number } | null>(null);
@@ -61,42 +61,76 @@ export function MobileSessionRow({
 
 	if (confirmingDelete) {
 		return (
-			<div className="flex min-h-11 w-full min-w-0 items-center gap-2 rounded-lg bg-destructive/10 px-3 py-1.5">
-				<span className="min-w-0 flex-1 truncate text-sm text-destructive">
+			<div
+				className={cn(
+					"flex min-h-11 w-full min-w-0 items-center gap-2 rounded-md bg-sidebar pl-3 pr-1",
+					projectName && "min-h-14",
+					selected && "ring-1 ring-inset ring-sidebar-foreground/10",
+				)}
+			>
+				<span className="flex h-5 w-2 shrink-0 items-center justify-center">
+					{!session.active && session.unread ? (
+						<span
+							aria-hidden="true"
+							className="size-1.5 rounded-full bg-sidebar-primary -translate-y-px"
+						/>
+					) : null}
+				</span>
+				<span
+					className={cn(
+						"min-w-0 flex-1 truncate text-sm",
+						selected
+							? "text-sidebar-selection-foreground"
+							: "text-sidebar-foreground dark:text-sidebar-foreground/75",
+					)}
+					title={session.title}
+				>
 					{session.title}
 				</span>
-				<button
-					type="button"
-					className="shrink-0 rounded-md px-2.5 py-1.5 text-xs text-sidebar-foreground-muted active:bg-sidebar-hover"
-					ref={cancelButtonRef}
-					onClick={onCancelDelete}
-				>
-					{t("common.cancel")}
-				</button>
-				<button
-					type="button"
-					className="shrink-0 rounded-md bg-destructive px-2.5 py-1.5 text-xs font-medium text-destructive-foreground active:opacity-90"
-					onClick={onConfirmDelete}
-				>
-					{t("common.delete")}
-				</button>
+				<div className="flex shrink-0 items-center">
+					<Button
+						type="button"
+						variant="ghost"
+						className="h-11 px-2 text-sidebar-foreground active:bg-sidebar-hover motion-reduce:transition-none motion-reduce:active:scale-100"
+						ref={cancelButtonRef}
+						onClick={onCancelDelete}
+					>
+						{t("common.cancel")}
+					</Button>
+					<Button
+						type="button"
+						variant="ghost"
+						className="h-11 px-2 text-destructive hover:bg-sidebar-hover/40 hover:text-destructive active:bg-sidebar-hover/60 motion-reduce:transition-none motion-reduce:active:scale-100"
+						aria-label={`${t("common.delete")}: ${session.title}`}
+						onClick={onConfirmDelete}
+					>
+						{t("common.delete")}
+					</Button>
+				</div>
 			</div>
 		);
 	}
 
 	return (
-		<div className="flex min-w-0 items-center gap-0.5">
+		<div
+			className={cn(
+				"flex min-w-0 items-center rounded-md transition-colors motion-reduce:transition-none",
+				selected &&
+					"bg-sidebar-foreground/10 ring-1 ring-inset ring-sidebar-foreground/10",
+			)}
+		>
 			<button
 				type="button"
 				data-session-row=""
+				ref={sessionButtonRef}
 				aria-current={selected ? "page" : undefined}
 				className={cn(
 					// 长按删除与 iOS 的文字选择/长按弹窗冲突，一并关掉。
-					"flex min-h-11 min-w-0 flex-1 touch-manipulation select-none gap-2 rounded-lg px-3 py-2 text-left transition-colors [-webkit-touch-callout:none]",
+					"flex min-h-11 min-w-0 flex-1 touch-manipulation select-none gap-2 rounded-md px-3 py-2 text-left transition-colors active:bg-sidebar-hover motion-reduce:transition-none [-webkit-touch-callout:none]",
 					projectName ? "items-start" : "items-center",
 					selected
-						? "bg-sidebar-foreground/10 text-sidebar-foreground"
-						: "text-sidebar-foreground/85 active:bg-sidebar-hover",
+						? "text-sidebar-selection-foreground"
+						: "text-sidebar-foreground dark:text-sidebar-foreground/75",
 				)}
 				onClick={() => {
 					if (firedRef.current) {
@@ -106,6 +140,15 @@ export function MobileSessionRow({
 					onSelect(session.id, session.projectId);
 				}}
 				onContextMenu={(event) => event.preventDefault()}
+				onKeyDown={(event) => {
+					if (
+						event.key === "ContextMenu" ||
+						(event.shiftKey && event.key === "F10")
+					) {
+						event.preventDefault();
+						onRequestDelete(`${session.projectId}:${session.id}`);
+					}
+				}}
 				onPointerDown={(event) => {
 					// 鼠标/触控板不做长按，避免桌面误触。
 					if (event.pointerType === "mouse") return;
@@ -136,9 +179,7 @@ export function MobileSessionRow({
 					firedRef.current = false;
 				}}
 			>
-				{/* 左侧固定槽：未读标记，与桌面侧栏保持一致（左未读 / 右运行）。
-			    h-5 与标题行等高，单行居中，两行对齐标题首行。 */}
-				<span className="flex h-5 w-4 shrink-0 items-center justify-center">
+				<span className="flex h-5 w-2 shrink-0 items-center justify-center">
 					{!session.active && session.unread ? (
 						<span
 							aria-hidden="true"
@@ -147,9 +188,17 @@ export function MobileSessionRow({
 					) : null}
 				</span>
 				<span className="min-w-0 flex-1">
-					<span className="block truncate text-sm">{session.title}</span>
+					<span
+						className={cn(
+							"block truncate text-sm leading-5",
+							(selected || session.unread) && "font-medium",
+						)}
+						title={session.title}
+					>
+						{session.title}
+					</span>
 					{projectName ? (
-						<span className="mt-0.5 flex items-center gap-1 text-2xs text-sidebar-foreground-muted">
+						<span className="mt-1 flex items-center gap-1.5 text-xs leading-4 text-sidebar-foreground-muted">
 							<Folder
 								className="size-3 shrink-0 opacity-80"
 								aria-hidden="true"
@@ -158,24 +207,12 @@ export function MobileSessionRow({
 						</span>
 					) : null}
 				</span>
-				{/* 右侧固定槽：运行状态，与左侧未读槽共同预留宽度，标题不再占满整行。 */}
-				<span className="flex h-5 w-4 shrink-0 items-center justify-center">
+				{/* 保留右侧运行状态槽，避免状态变化时标题宽度跳动。 */}
+				<span className="flex h-5 w-3 shrink-0 items-center justify-center">
 					{session.active ? (
 						<ActivityDot className="text-sidebar-primary -translate-y-px" />
 					) : null}
 				</span>
-			</button>
-			<button
-				type="button"
-				aria-label={`${t("common.delete")}: ${session.title}`}
-				ref={deleteButtonRef}
-				className={cn(
-					ROW_ACTION_CLASS,
-					"size-11 focus-visible:outline-2 focus-visible:outline-ring",
-				)}
-				onClick={() => onRequestDelete(`${session.projectId}:${session.id}`)}
-			>
-				<Trash2 className="size-4" aria-hidden="true" />
 			</button>
 		</div>
 	);
@@ -202,31 +239,41 @@ export function MobileProjectRow({
 	return (
 		<div
 			className={cn(
-				"flex min-h-11 items-center gap-0.5 rounded-lg pr-1",
-				selected && "bg-sidebar-foreground/10",
+				"flex min-h-11 min-w-0 items-center rounded-md",
+				selected &&
+					"bg-sidebar-foreground/10 ring-1 ring-inset ring-sidebar-foreground/10",
 			)}
 		>
 			<button
 				type="button"
 				aria-expanded={expanded}
-				className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg px-3 text-left active:bg-sidebar-hover"
+				className="flex min-h-11 min-w-0 flex-1 items-center gap-2.5 rounded-md px-3 text-left transition-colors active:bg-sidebar-hover motion-reduce:transition-none"
 				onClick={onToggle}
 			>
-				<Folder className="size-4 shrink-0 opacity-80" aria-hidden="true" />
-				<span className="min-w-0 flex-1 truncate text-sm font-medium">
+				<Folder
+					className="size-4 shrink-0 text-sidebar-foreground-muted"
+					aria-hidden="true"
+				/>
+				<span
+					className={cn(
+						"min-w-0 flex-1 truncate text-sm",
+						selected ? "font-semibold" : "font-medium",
+					)}
+					title={project.name}
+				>
 					{project.name}
 				</span>
 				{refreshing ? (
 					<Spinner className="size-3.5 shrink-0 text-sidebar-foreground-muted" />
 				) : sessionCount > 0 ? (
-					<span className="shrink-0 text-2xs text-sidebar-foreground-muted">
+					<span className="shrink-0 text-xs tabular-nums text-sidebar-foreground-muted">
 						{sessionCount}
 					</span>
 				) : null}
 				<ChevronDown
 					aria-hidden="true"
 					className={cn(
-						"size-4 shrink-0 text-sidebar-foreground-muted transition-transform duration-150 ease-out",
+						"size-3.5 shrink-0 text-sidebar-foreground-muted transition-transform duration-150 ease-out motion-reduce:transition-none",
 						!expanded && "-rotate-90",
 					)}
 				/>
@@ -237,7 +284,7 @@ export function MobileProjectRow({
 				aria-label={t("sidebar.newSession")}
 				onClick={() => onNewChat(project.id)}
 			>
-				<SquarePen className="size-4" />
+				<SquarePen className="size-4" aria-hidden="true" />
 			</button>
 		</div>
 	);
@@ -256,17 +303,20 @@ export function MobileEnvRow({
 		<button
 			type="button"
 			aria-expanded={expanded}
-			className="flex min-h-9 w-full items-center gap-2 rounded-lg px-3 text-left text-sidebar-foreground-muted"
+			className="flex min-h-11 w-full min-w-0 items-center gap-2 rounded-md px-3 text-left text-sidebar-foreground-muted transition-colors active:bg-sidebar-hover motion-reduce:transition-none"
 			onClick={onToggle}
 		>
 			<Monitor className="size-3.5 shrink-0 opacity-80" aria-hidden="true" />
-			<span className="min-w-0 flex-1 truncate text-xs font-medium uppercase tracking-wide">
+			<span
+				className="min-w-0 flex-1 truncate text-xs font-medium"
+				title={env.name}
+			>
 				{env.name}
 			</span>
 			<ChevronDown
 				aria-hidden="true"
 				className={cn(
-					"size-3.5 shrink-0 transition-transform duration-150 ease-out",
+					"size-3.5 shrink-0 transition-transform duration-150 ease-out motion-reduce:transition-none",
 					!expanded && "-rotate-90",
 				)}
 			/>

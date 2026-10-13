@@ -96,6 +96,10 @@ export function RemoteMobileNavigation({
 		Record<string, boolean>
 	>({});
 
+	if (!open && confirmDeleteSessionId !== null) {
+		setConfirmDeleteSessionId(null);
+	}
+
 	// Clear only the newly selected project's override before rendering its page.
 	if (
 		pageSelection.activeProjectId !== activeProjectId ||
@@ -166,15 +170,16 @@ export function RemoteMobileNavigation({
 	return (
 		<DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
 			<DialogPrimitive.Portal>
-				<DialogPrimitive.Overlay className="fixed inset-0 z-[var(--z-dialog-overlay)] bg-black/40 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0" />
+				<DialogPrimitive.Overlay className="fixed inset-0 z-[var(--z-dialog-overlay)] bg-black/40 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 motion-reduce:animate-none" />
 				<DialogPrimitive.Content
 					className={cn(
 						// 固定宽度：移动端不提供拖拽调宽，也不必复用桌面侧栏的宽度状态。
-						"fixed inset-y-0 left-0 z-[var(--z-dialog)] flex w-[min(86vw,20rem)] flex-col",
-						"border-r border-sidebar-border bg-sidebar text-sidebar-foreground shadow-popover outline-none",
-						"pb-[max(0.25rem,env(safe-area-inset-bottom))] pl-[env(safe-area-inset-left)] pt-[env(safe-area-inset-top)]",
-						"data-[state=open]:animate-in data-[state=open]:slide-in-from-left-4",
-						"data-[state=closed]:animate-out data-[state=closed]:slide-out-to-left-4",
+						"fixed inset-y-0 left-0 z-[var(--z-dialog)] flex w-[min(90vw,22rem)] flex-col overflow-hidden rounded-r-xl",
+						"border-r border-sidebar-border/60 bg-sidebar text-sidebar-foreground shadow-popover outline-none",
+						"pb-[max(0.5rem,env(safe-area-inset-bottom))] pl-[env(safe-area-inset-left)] pt-[env(safe-area-inset-top)]",
+						"[&_button]:touch-manipulation [&_button]:outline-none [&_button:focus-visible]:ring-2 [&_button:focus-visible]:ring-inset [&_button:focus-visible]:ring-sidebar-ring",
+						"data-[state=open]:animate-in data-[state=open]:slide-in-from-left-full data-[state=open]:duration-300",
+						"data-[state=closed]:animate-out data-[state=closed]:slide-out-to-left-full data-[state=closed]:duration-200 motion-reduce:animate-none",
 					)}
 				>
 					<DialogPrimitive.Title className="sr-only">
@@ -184,7 +189,7 @@ export function RemoteMobileNavigation({
 						{t("common.sessions")}
 					</DialogPrimitive.Description>
 
-					<header className="flex h-14 shrink-0 items-center gap-1 px-3">
+					<header className="flex h-14 shrink-0 items-center gap-1 px-4">
 						<span className="min-w-0 flex-1 truncate text-lg font-semibold tracking-tight">
 							Pilo
 						</span>
@@ -198,23 +203,23 @@ export function RemoteMobileNavigation({
 								setPaletteOpen(true);
 							}}
 						>
-							<Search className="size-4" />
+							<Search className="size-4" aria-hidden="true" />
 						</button>
 						<DialogPrimitive.Close
 							className={ROW_ACTION_CLASS}
 							aria-label={t("common.close")}
 						>
-							<X className="size-4" />
+							<X className="size-4" aria-hidden="true" />
 						</DialogPrimitive.Close>
 					</header>
 
-					<div className="flex shrink-0 items-center gap-1 px-3 pb-2">
+					<div className="flex shrink-0 items-center gap-2 px-4 pb-2">
 						<button
 							type="button"
-							className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg px-3 text-left text-sm active:bg-sidebar-hover"
+							className="flex min-h-11 min-w-0 flex-1 items-center gap-2.5 rounded-lg px-3 text-left text-sm text-sidebar-foreground transition-colors active:bg-sidebar-hover motion-reduce:transition-none dark:text-sidebar-foreground/75"
 							onClick={() => handleNewChat(activeProjectId ?? undefined)}
 						>
-							<SquarePen className="size-4 shrink-0" />
+							<SquarePen className="size-4 shrink-0" aria-hidden="true" />
 							<span className="truncate">{t("sidebar.newSession")}</span>
 						</button>
 						<button
@@ -226,11 +231,19 @@ export function RemoteMobileNavigation({
 						>
 							<RefreshCw
 								className={cn("size-4", refreshing && "animate-spin")}
+								aria-hidden="true"
 							/>
 						</button>
 					</div>
 
-					<div className="mx-3 mb-2 grid shrink-0 grid-cols-2 gap-1 rounded-lg bg-sidebar-hover/60 p-1">
+					<div className="relative mx-4 mb-3 grid shrink-0 grid-cols-2 rounded-lg bg-sidebar-hover/60 p-1">
+						<span
+							aria-hidden="true"
+							className={cn(
+								"pointer-events-none absolute inset-y-1 left-1 w-[calc(50%-0.25rem)] rounded-md bg-sidebar transition-transform duration-200 ease-out motion-reduce:transition-none",
+								mode === "recent" && "translate-x-full",
+							)}
+						/>
 						{(
 							[
 								{ value: "projects", label: t("sidebar.projects") },
@@ -242,31 +255,39 @@ export function RemoteMobileNavigation({
 								type="button"
 								aria-pressed={mode === option.value}
 								className={cn(
-									"flex min-h-9 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium transition-colors",
+									"relative flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-md px-2 text-sm font-medium transition-colors motion-reduce:transition-none",
 									mode === option.value
-										? "bg-sidebar text-sidebar-foreground shadow-sm"
-										: "text-sidebar-foreground-muted",
+										? "text-sidebar-foreground"
+										: "text-sidebar-foreground-muted active:text-sidebar-foreground",
 								)}
 								onClick={() => setMode(option.value)}
 							>
 								{option.value === "projects" ? (
-									<Folder className="size-3.5 shrink-0" aria-hidden="true" />
+									<Folder
+										className="hidden size-3.5 shrink-0 min-[360px]:block"
+										aria-hidden="true"
+									/>
 								) : (
-									<Clock className="size-3.5 shrink-0" aria-hidden="true" />
+									<Clock
+										className="hidden size-3.5 shrink-0 min-[360px]:block"
+										aria-hidden="true"
+									/>
 								)}
-								<span className="min-w-0 truncate">{option.label}</span>
+								<span className="min-w-0 text-balance leading-4">
+									{option.label}
+								</span>
 							</button>
 						))}
 					</div>
 
-					<div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-2 pb-3">
+					<div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-3 pb-4">
 						{mode === "recent" ? (
 							recentSessions.length === 0 ? (
 								<p className="px-3 py-10 text-center text-sm text-sidebar-foreground-muted">
 									{t("sidebar.noSessions")}
 								</p>
 							) : (
-								<div className="space-y-0.5">
+								<div className="space-y-1">
 									{recentSessions.map((session) => (
 										<MobileSessionRow
 											key={`${session.projectId}:${session.id}`}
@@ -303,7 +324,7 @@ export function RemoteMobileNavigation({
 											onToggle={() => toggleSection(`env:${env.id}`, true)}
 										/>
 										{envExpanded ? (
-											<div className="space-y-0.5">
+											<div className="space-y-1">
 												{envProjects.map((project) => {
 													const projectExpanded =
 														sectionOverrides[`project:${project.id}`] ??
@@ -354,11 +375,11 @@ export function RemoteMobileNavigation({
 															/>
 															{projectExpanded ? (
 																projectSessions.length === 0 ? (
-																	<p className="px-3 py-3 text-xs text-sidebar-foreground-muted">
+																	<p className="px-3 py-4 text-sm text-sidebar-foreground-muted">
 																		{t("sidebar.noSessions")}
 																	</p>
 																) : (
-																	<div className="mt-0.5 space-y-0.5 pb-1">
+																	<div className="mt-1 space-y-1 pb-2">
 																		{projectSessions
 																			.slice(
 																				page * PROJECT_SESSION_PAGE_SIZE,
@@ -443,7 +464,7 @@ export function RemoteMobileNavigation({
 						)}
 					</div>
 
-					<footer className="flex min-h-12 shrink-0 items-center gap-2 border-t border-sidebar-border px-3">
+					<footer className="mx-4 flex min-h-14 shrink-0 items-center gap-2.5 border-t border-sidebar-border/60 pt-1">
 						{connectionState === "connected" ? (
 							<Wifi
 								className="size-4 shrink-0 text-sidebar-foreground-muted"
@@ -455,7 +476,7 @@ export function RemoteMobileNavigation({
 								aria-hidden="true"
 							/>
 						)}
-						<span className="min-w-0 flex-1 truncate text-xs text-sidebar-foreground-muted">
+						<span className="min-w-0 flex-1 truncate text-sm text-sidebar-foreground-muted">
 							{t(remoteConnectionLabelKey(connectionState))}
 						</span>
 						<button
@@ -464,7 +485,7 @@ export function RemoteMobileNavigation({
 							aria-label={t("app.reload")}
 							onClick={onReload}
 						>
-							<RefreshCw className="size-4" />
+							<RefreshCw className="size-4" aria-hidden="true" />
 						</button>
 					</footer>
 				</DialogPrimitive.Content>
