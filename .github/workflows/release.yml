@@ -92,6 +92,12 @@ jobs:
             arch: arm64
             artifact: Pilo-macos-arm64
             install_mode: installed
+          - platform: ubuntu-22.04
+            target: ""
+            args: --bundles deb,rpm,appimage
+            arch: x64
+            artifact: Pilo-linux-x64
+            install_mode: installed
 
     runs-on: ${{ matrix.platform }}
     timeout-minutes: 60
@@ -122,6 +128,24 @@ jobs:
         if: matrix.target != ''
         shell: bash
         run: rustup target add "${{ matrix.target }}"
+
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            curl \
+            file \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            pkg-config \
+            rpm \
+            wget
 
       - name: Cache Cargo
         uses: swatinem/rust-cache@v2
@@ -231,6 +255,35 @@ jobs:
           cp "$UPDATER" "release-assets/Pilo-v${VERSION}-${ARCH}.app.tar.gz"
           cp "${UPDATER}.sig" "release-assets/Pilo-v${VERSION}-${ARCH}.app.tar.gz.sig"
 
+      - name: Prepare Linux assets
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION='${{ needs.preflight.outputs.version }}'
+          BUNDLE_DIR='target/release/bundle'
+          mkdir -p release-assets
+
+          DEB=$(find "$BUNDLE_DIR/deb" -type f -name '*.deb' -print -quit)
+          RPM=$(find "$BUNDLE_DIR/rpm" -type f -name '*.rpm' -print -quit)
+          APPIMAGE=$(find "$BUNDLE_DIR/appimage" -type f -name '*.AppImage' -print -quit)
+
+          for ASSET in "$DEB" "$RPM" "$APPIMAGE"; do
+            if [ -z "$ASSET" ] || [ ! -f "$ASSET" ]; then
+              echo "Required Linux bundle was not produced under $BUNDLE_DIR" >&2
+              exit 1
+            fi
+          done
+          if [ ! -f "${APPIMAGE}.sig" ]; then
+            echo "Linux updater signature was not produced for $APPIMAGE" >&2
+            exit 1
+          fi
+
+          cp "$DEB" "release-assets/Pilo-v${VERSION}-x64.deb"
+          cp "$RPM" "release-assets/Pilo-v${VERSION}-x64.rpm"
+          cp "$APPIMAGE" "release-assets/Pilo-v${VERSION}-x64.AppImage"
+          cp "${APPIMAGE}.sig" "release-assets/Pilo-v${VERSION}-x64.AppImage.sig"
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
         with:
@@ -266,6 +319,7 @@ jobs:
 
           WIN_SIG=$(cat "release-assets/Pilo-v${VERSION}-x64-setup.exe.sig")
           MAC_ARM_SIG=$(cat "release-assets/Pilo-v${VERSION}-arm64.app.tar.gz.sig")
+          LINUX_X64_SIG=$(cat "release-assets/Pilo-v${VERSION}-x64.AppImage.sig")
 
           jq -n \
             --arg version "$VERSION" \
@@ -275,13 +329,16 @@ jobs:
             --arg win_sig "$WIN_SIG" \
             --arg mac_arm_url "$BASE_URL/Pilo-v${VERSION}-arm64.app.tar.gz" \
             --arg mac_arm_sig "$MAC_ARM_SIG" \
+            --arg linux_x64_url "$BASE_URL/Pilo-v${VERSION}-x64.AppImage" \
+            --arg linux_x64_sig "$LINUX_X64_SIG" \
             '{
               version: $version,
               notes: $notes,
               pub_date: $pub_date,
               platforms: {
                 "windows-x86_64": { url: $win_url, signature: $win_sig },
-                "darwin-aarch64": { url: $mac_arm_url, signature: $mac_arm_sig }
+                "darwin-aarch64": { url: $mac_arm_url, signature: $mac_arm_sig },
+                "linux-x86_64": { url: $linux_x64_url, signature: $linux_x64_sig }
               }
             }' > release-assets/latest.json
 
@@ -328,6 +385,9 @@ jobs:
           | Windows x64 | [Pilo-v${VERSION}-x64-setup.exe](https://github.com/${REPO}/releases/download/${TAG}/Pilo-v${VERSION}-x64-setup.exe) | 安装版 |
           | Windows x64 | [Pilo-v${VERSION}-x64-Portable.zip](https://github.com/${REPO}/releases/download/${TAG}/Pilo-v${VERSION}-x64-Portable.zip) | 便携版，解压后直接运行 |
           | macOS (Apple Silicon) | [Pilo-v${VERSION}-arm64.dmg](https://github.com/${REPO}/releases/download/${TAG}/Pilo-v${VERSION}-arm64.dmg) | Apple Silicon |
+          | Linux x64 | [Pilo-v${VERSION}-x64.deb](https://github.com/${REPO}/releases/download/${TAG}/Pilo-v${VERSION}-x64.deb) | Debian / Ubuntu 安装包 |
+          | Linux x64 | [Pilo-v${VERSION}-x64.rpm](https://github.com/${REPO}/releases/download/${TAG}/Pilo-v${VERSION}-x64.rpm) | Fedora / RHEL 系安装包 |
+          | Linux x64 | [Pilo-v${VERSION}-x64.AppImage](https://github.com/${REPO}/releases/download/${TAG}/Pilo-v${VERSION}-x64.AppImage) | 便携版，赋予执行权限后运行 |
 
           #### macOS 安装提示
 
