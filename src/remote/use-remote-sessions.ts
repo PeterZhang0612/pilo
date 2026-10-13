@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
 	sameStringSet,
@@ -41,9 +41,18 @@ export function useRemoteSessions({
 	const [refreshingProjectIds, setRefreshingProjectIds] = useState<
 		ReadonlySet<string>
 	>(() => new Set());
+	// Activity-only bootstrap updates must not restart project scans or polling.
+	const projectIdsKey = projects.map((project) => project.id).join("\0");
+	const projectIds = useMemo(
+		() => (projectIdsKey ? projectIdsKey.split("\0") : []),
+		[projectIdsKey],
+	);
 	const runtimeActivityRefreshTimerRef = useRef<number | null>(null);
 	const reloadBootstrapRef = useRef<(() => Promise<void>) | null>(null);
-	const refreshAllSessionsRef = useRef<(() => Promise<void>) | null>(null);
+	const refreshProjectSessionsRef = useRef<
+		((projectId: string) => Promise<void>) | null
+	>(null);
+	const runtimeActivityProjectIdsRef = useRef(new Set<string>());
 
 	const reloadBootstrap = useCallback(async () => {
 		if (!client) return;
@@ -95,19 +104,18 @@ export function useRemoteSessions({
 	);
 
 	const refreshAllSessions = useCallback(async () => {
-		if (!client || projects.length === 0) {
+		if (!client) {
 			setRawSessions([]);
 			return;
 		}
-		const results = await Promise.allSettled(
-			projects.map((project) => client.listSessions(project.id)),
+		setRawSessions((current) =>
+			current.filter((session) => projectIds.includes(session.projectId)),
 		);
-		const next: SessionIndexEntry[] = [];
-		for (const result of results) {
-			if (result.status === "fulfilled") next.push(...result.value);
-		}
-		setRawSessions(next);
-	}, [client, projects]);
+		// A failed project refresh leaves its last successful snapshot intact.
+		await Promise.all(
+			projectIds.map((projectId) => refreshProjectSessions(projectId)),
+		);
+	}, [client, projectIds, refreshProjectSessions]);
 
 	const refreshExternalActivity = useCallback(
 		async (projectId: string) => {
@@ -144,17 +152,22 @@ export function useRemoteSessions({
 	);
 
 	useEffect(() => {
-		refreshAllSessionsRef.current = refreshAllSessions;
-	}, [refreshAllSessions]);
+		refreshProjectSessionsRef.current = refreshProjectSessions;
+	}, [refreshProjectSessions]);
 
 	// Debounced Host chat-session refresh so the sidebar running/unread markers
 	// track every session, not just the visible one. ponytail: refetch bootstrap on
 	// activity bursts; add a Host activity endpoint if this proves heavy.
-	const scheduleRuntimeActivityRefresh = useCallback(() => {
+	const scheduleRuntimeActivityRefresh = useCallback((projectId?: string) => {
+		if (projectId) runtimeActivityProjectIdsRef.current.add(projectId);
 		if (runtimeActivityRefreshTimerRef.current !== null) return;
 		runtimeActivityRefreshTimerRef.current = window.setTimeout(() => {
 			runtimeActivityRefreshTimerRef.current = null;
 			void reloadBootstrapRef.current?.();
+			for (const pendingProjectId of runtimeActivityProjectIdsRef.current) {
+				void refreshProjectSessionsRef.current?.(pendingProjectId);
+			}
+			runtimeActivityProjectIdsRef.current.clear();
 		}, 120);
 	}, []);
 
@@ -185,7 +198,7 @@ export function useRemoteSessions({
 
 	// 外部会话开关不会触发 Host 事件，靠轮询兜底，让侧栏与打开的会话跟上状态。
 	useEffect(() => {
-		if (!client || projects.length === 0) {
+		if (!client || projectIds.length === 0) {
 			setExternalActivity(new Map());
 			return;
 		}
@@ -193,8 +206,8 @@ export function useRemoteSessions({
 
 		const run = () => {
 			if (document.visibilityState !== "visible") return;
-			for (const project of projects) {
-				void refreshExternalActivity(project.id);
+			for (const projectId of projectIds) {
+				void refreshExternalActivity(projectId);
 			}
 		};
 		const handleVisibilityChange = () => {
@@ -207,7 +220,7 @@ export function useRemoteSessions({
 			window.clearInterval(timer);
 			document.removeEventListener("visibilitychange", handleVisibilityChange);
 		};
-	}, [browserOnline, client, projects, refreshExternalActivity]);
+	}, [browserOnline, client, projectIds, refreshExternalActivity]);
 	/* oxlint-enable react/set-state-in-effect, react/exhaustive-effect-dependencies */
 
 	return {

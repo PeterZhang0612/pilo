@@ -58,7 +58,7 @@ type UseRemoteChatTransportOptions = {
 	setFatalError: (message: string | null) => void;
 	setResyncKey: Dispatch<SetStateAction<number>>;
 	setConversation: Dispatch<SetStateAction<ConversationState>>;
-	scheduleRuntimeActivityRefresh: () => void;
+	scheduleRuntimeActivityRefresh: (projectId?: string) => void;
 	refreshAllSessions: () => Promise<void>;
 	refreshAgentConfigRef: MutableRefObject<(() => Promise<void>) | null>;
 	handleExtensionRequestRef: MutableRefObject<
@@ -138,20 +138,24 @@ export function useRemoteChatTransport({
 				// Running/unread markers track every session, not just the visible one.
 				switch (event.type) {
 					case "user_message_start":
-					case "assistant_message_start":
 					case "assistant_message_end":
+					case "compaction_end":
+					case "process_state":
+						scheduleRuntimeActivityRefresh(event.projectId);
+						break;
+					case "assistant_message_start":
 					case "auto_retry_start":
 					case "compaction_start":
-					case "compaction_end":
 					case "runtime_error":
 						scheduleRuntimeActivityRefresh();
 						break;
-					case "process_state":
-						scheduleRuntimeActivityRefresh();
-						break;
 					case "rpc_message":
-						if (chatRpcChangesActivity(event.message)) {
-							scheduleRuntimeActivityRefresh();
+						if (
+							chatRpcChangesActivity(event.message) ||
+							(isRpcResponse(event.message) &&
+								event.message.command === "set_session_name")
+						) {
+							scheduleRuntimeActivityRefresh(event.projectId);
 						}
 						break;
 				}

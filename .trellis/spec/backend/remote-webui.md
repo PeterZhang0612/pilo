@@ -234,6 +234,14 @@ remote_devices(id, name, pair_ip, token_hash, created_at_ms, last_seen_at_ms, ex
   Ordinary reconnects consume sequence replay and refresh bootstrap/session
   metadata; only an explicit `resyncRequired` frame may trigger full history
   resync.
+- **Remote session-list refresh**: stable project IDs prevent activity-only
+  bootstrap updates from restarting every project scan or external-activity
+  poll. `scheduleRuntimeActivityRefresh(projectId?: string)` batches affected
+  project IDs for 120 ms and refreshes their session indexes alongside bootstrap.
+  Creation, completion, compaction, process-state and `set_session_name` response
+  events supply their project ID before filtering for the visible session;
+  activity-only events refresh bootstrap without scanning all projects. Verify
+  that a desktop-created background chat appears in WebUI without manual refresh.
 - **PWA cache boundary**: the Service Worker is progressive enhancement for
   production Remote Browser on a secure context only. Tauri never registers it.
   It may precache the minimal built App Shell, but `/api/v1/**` is always

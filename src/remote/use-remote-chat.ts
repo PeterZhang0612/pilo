@@ -73,7 +73,7 @@ type UseRemoteChatOptions = {
 		showProgress?: boolean,
 	) => Promise<void>;
 	refreshAllSessions: () => Promise<void>;
-	scheduleRuntimeActivityRefresh: () => void;
+	scheduleRuntimeActivityRefresh: (projectId?: string) => void;
 	isExternalOpenTurn: (projectId: string, sessionPath: string) => boolean;
 	isNarrow: boolean;
 	closeMobileNavigation: () => void;
