@@ -2,6 +2,7 @@ import {
 	useCallback,
 	useEffect,
 	useMemo,
+	useRef,
 	useState,
 	type RefObject,
 } from "react";
@@ -96,6 +97,7 @@ export function RightSidebar({
 	const [selectedPath, setSelectedPath] = useState<string | null>(null);
 	const [diff, setDiff] = useState("");
 	const [diffLoading, setDiffLoading] = useState(false);
+	const refreshGenerationRef = useRef(0);
 
 	const visibleFiles = useMemo(() => {
 		const files = status?.files ?? [];
@@ -110,6 +112,7 @@ export function RightSidebar({
 		: (visibleFiles[0]?.path ?? null);
 
 	const refresh = useCallback(async () => {
+		const generation = ++refreshGenerationRef.current;
 		if (!project) {
 			setStatus(null);
 			setSelectedPath(null);
@@ -120,9 +123,11 @@ export function RightSidebar({
 		setError(null);
 		try {
 			const next = await getProjectGitStatus(project.id);
+			if (generation !== refreshGenerationRef.current) return;
 			setStatus(next);
 			setLoadState("ready");
 		} catch (loadError) {
+			if (generation !== refreshGenerationRef.current) return;
 			setStatus(null);
 			setLoadState("error");
 			setError(
@@ -133,14 +138,21 @@ export function RightSidebar({
 
 	useEffect(() => {
 		const timer = window.setTimeout(() => void refresh(), 0);
-		return () => window.clearTimeout(timer);
+		return () => {
+			window.clearTimeout(timer);
+			refreshGenerationRef.current += 1;
+		};
 	}, [refresh]);
 
 	useEffect(() => {
-		if (!project || !effectiveSelectedPath) return;
 		let cancelled = false;
 		const timer = window.setTimeout(() => {
 			if (cancelled) return;
+			if (!project || !status || !effectiveSelectedPath) {
+				setDiff("");
+				setDiffLoading(false);
+				return;
+			}
 			setDiffLoading(true);
 			void getProjectGitDiff(project.id, {
 				path: effectiveSelectedPath,
@@ -169,7 +181,7 @@ export function RightSidebar({
 			cancelled = true;
 			window.clearTimeout(timer);
 		};
-	}, [effectiveSelectedPath, mode, project, t]);
+	}, [effectiveSelectedPath, mode, project, status, t]);
 
 	return (
 		<Panel
