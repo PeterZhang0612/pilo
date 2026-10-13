@@ -306,7 +306,7 @@ function ToolCallActivityView({
 			<button
 				type="button"
 				className={cn(
-					"group/tool -mx-1 flex min-h-6 w-[calc(100%+0.5rem)] items-start gap-1.5 rounded-md px-1 py-0.5 text-left transition-colors any-pointer-coarse:min-h-11",
+					"group/tool -mx-1 flex min-h-6 w-[calc(100%+0.5rem)] items-start gap-1.5 rounded-md px-1 py-0.5 text-left transition-colors",
 					PROCESS_TEXT_CLASS,
 					hasDetails
 						? "hover:bg-muted/40 hover:text-foreground"
