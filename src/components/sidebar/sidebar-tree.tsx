@@ -195,25 +195,25 @@ export function SidebarTree({
 				{refreshing ? (
 					<SidebarSkeleton />
 				) : organizeMode === "recent" ? (
-					recentSessions.length > 0 ? (
-						<section className="mb-3 w-full min-w-0 space-y-0.5 overflow-hidden last:mb-0">
-							<RecentSectionHeader
-								collapsed={collapsedSections["recent"] ?? false}
-								onToggle={() => onToggleSection("recent")}
-								view={organizeMode}
-								onViewChange={onOrganizeModeChange}
-								showProjects={showProjectsInRecents}
-								onShowProjectsChange={onShowProjectsInRecentsChange}
-							/>
-							{!(collapsedSections["recent"] ?? false)
-								? renderSessionList(recentSessions)
-								: null}
-						</section>
-					) : (
-						<div className="px-3 py-8 text-center text-xs text-sidebar-foreground-muted">
-							{t("sidebar.noSessions")}
-						</div>
-					)
+					<section className="mb-3 w-full min-w-0 space-y-0.5 overflow-hidden last:mb-0">
+						<RecentSectionHeader
+							collapsed={collapsedSections["recent"] ?? false}
+							onToggle={() => onToggleSection("recent")}
+							view={organizeMode}
+							onViewChange={onOrganizeModeChange}
+							showProjects={showProjectsInRecents}
+							onShowProjectsChange={onShowProjectsInRecentsChange}
+						/>
+						{recentSessions.length > 0 ? (
+							!(collapsedSections["recent"] ?? false) ? (
+								renderSessionList(recentSessions)
+							) : null
+						) : (
+							<div className="px-3 py-8 text-center text-xs text-sidebar-foreground-muted">
+								{t("sidebar.noSessions")}
+							</div>
+						)}
+					</section>
 				) : projectSessionsViewProject ? (
 					projectSessionsViewSessions.length > 0 ? (
 						renderSessionList(projectSessionsViewSessions)
