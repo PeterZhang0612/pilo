@@ -1,4 +1,11 @@
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
+
+static SERVER_RESOURCE_DIR: OnceLock<PathBuf> = OnceLock::new();
+
+pub(crate) fn initialize_server_resource_dir(resource_dir: PathBuf) {
+    let _ = SERVER_RESOURCE_DIR.set(resource_dir);
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum ServerPlatform {
@@ -87,23 +94,23 @@ pub(crate) fn parse_target_probe(output: &[u8], label: &str) -> Result<ServerTar
     ServerTarget::from_uname(os, arch)
 }
 
-pub(crate) fn installed_server_candidates(exe: &Path, resource_name: &str) -> Vec<PathBuf> {
+pub(crate) fn installed_server_candidates(
+    exe: &Path,
+    resource_dir: Option<&Path>,
+    resource_name: &str,
+) -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    if let Some(resource_dir) = resource_dir {
+        candidates.push(resource_dir.join("runtime").join(resource_name));
+    }
     let Some(dir) = exe.parent() else {
-        return Vec::new();
+        return candidates;
     };
 
-    let mut candidates = vec![
+    candidates.extend([
         dir.join("runtime").join(resource_name),
         dir.join("../Resources/runtime").join(resource_name),
-    ];
-    if let Some(exe_name) = exe.file_stem().and_then(|name| name.to_str()) {
-        candidates.push(
-            dir.join("../lib")
-                .join(exe_name)
-                .join("runtime")
-                .join(resource_name),
-        );
-    }
+    ]);
     candidates
 }
 
@@ -126,7 +133,11 @@ pub(crate) fn server_binary(target: ServerTarget) -> Result<PathBuf, String> {
 
     let mut candidates = Vec::new();
     if let Ok(exe) = std::env::current_exe() {
-        candidates.extend(installed_server_candidates(&exe, resource_name));
+        candidates.extend(installed_server_candidates(
+            &exe,
+            SERVER_RESOURCE_DIR.get().map(PathBuf::as_path),
+            resource_name,
+        ));
     }
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
     candidates.push(manifest.join("resources").join(resource_name));

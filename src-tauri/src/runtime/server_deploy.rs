@@ -27,6 +27,8 @@ pub(super) struct SpawnedServer {
 
 mod target;
 
+pub(crate) use target::initialize_server_resource_dir;
+
 #[cfg(test)]
 pub(super) use target::{ServerArch, installed_server_candidates};
 pub(super) use target::{ServerPlatform, ServerTarget, parse_target_probe, server_binary};
