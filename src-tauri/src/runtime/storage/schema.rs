@@ -117,6 +117,18 @@ pub(super) fn initialize_schema(db: &SqliteConnection) -> Result<(), String> {
            title_override TEXT,
            updated_at_ms INTEGER NOT NULL
          );
+         CREATE TABLE IF NOT EXISTS session_read_revision (
+           id INTEGER PRIMARY KEY CHECK(id=1),
+           revision INTEGER NOT NULL
+         );
+         INSERT OR IGNORE INTO session_read_revision(id,revision) VALUES(1,0);
+         CREATE TABLE IF NOT EXISTS session_read_state (
+           project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+           session_path TEXT NOT NULL,
+           completed_revision INTEGER NOT NULL DEFAULT 0,
+           read_revision INTEGER NOT NULL DEFAULT 0,
+           PRIMARY KEY(project_id, session_path)
+         );
          CREATE TABLE IF NOT EXISTS remote_host_config (
            id INTEGER PRIMARY KEY CHECK(id=1),
            enabled INTEGER NOT NULL DEFAULT 0,

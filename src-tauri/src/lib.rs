@@ -29,11 +29,12 @@ use runtime::{
         runtime_abort_pi, runtime_get_pi_state, runtime_restart_pi, runtime_send_rpc,
         runtime_stop_pi, runtime_subscribe_events, session_delete, session_external_activity,
         session_generate_title, session_history, session_history_image, session_list,
-        session_reconcile, session_search, session_update_ui_state, session_watch_start,
-        session_watch_stop, ssh_connection_list, ssh_connection_password_get,
-        ssh_connection_remove, ssh_connection_save, ssh_connection_test, ssh_connection_test_draft,
-        system_font_families, terminal_close, terminal_resize, terminal_write, wsl_connection_list,
-        wsl_connection_remove, wsl_connection_save, wsl_connection_test, wsl_list_distributions,
+        session_mark_read, session_read_states, session_reconcile, session_search,
+        session_update_ui_state, session_watch_start, session_watch_stop, ssh_connection_list,
+        ssh_connection_password_get, ssh_connection_remove, ssh_connection_save,
+        ssh_connection_test, ssh_connection_test_draft, system_font_families, terminal_close,
+        terminal_resize, terminal_write, wsl_connection_list, wsl_connection_remove,
+        wsl_connection_save, wsl_connection_test, wsl_list_distributions,
     },
 };
 use std::{fs::OpenOptions, io::Write};
@@ -186,6 +187,8 @@ pub fn run() {
             project_fs_search,
             project_mcp_server_approve,
             session_list,
+            session_read_states,
+            session_mark_read,
             session_external_activity,
             session_generate_title,
             session_reconcile,
@@ -226,6 +229,8 @@ pub fn run() {
 
             initialize_macos_notification_application(app);
             initialize_windows_notification_application(app);
+            app.state::<runtime::RuntimeEventBus>()
+                .initialize_session_reads(app.handle())?;
             desktop_window::create_main_window(app)?;
             app.state::<PiloRuntime>().chat_sessions.start_idle_reaper();
 

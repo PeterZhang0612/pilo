@@ -1,4 +1,5 @@
 import { describeDevice } from "@/lib/device-name";
+import type { SessionReadState } from "@/lib/session-read-state";
 import type { RemoteAccessAddress } from "@/lib/remote";
 import type { ChatSessionRuntimeState } from "@/lib/chat-session-client";
 import type {
@@ -209,6 +210,24 @@ export function searchRemoteSessions(
 		token,
 		`/api/v1/sessions/search?${params.toString()}`,
 	);
+}
+
+export function loadRemoteSessionReadStates(token: string) {
+	return remoteFetch<SessionReadState[]>(token, "/api/v1/sessions/read-state", {
+		cache: "no-store",
+	});
+}
+
+export function markRemoteSessionRead(
+	token: string,
+	projectId: string,
+	sessionPath: string,
+	revision: number,
+) {
+	return remoteFetch<SessionReadState>(token, "/api/v1/sessions/read-state", {
+		method: "POST",
+		body: JSON.stringify({ projectId, sessionPath, revision }),
+	});
 }
 
 export function loadRemoteExternalActivity(token: string, projectId: string) {

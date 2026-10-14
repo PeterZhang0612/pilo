@@ -2,6 +2,7 @@ mod connections;
 mod projects;
 mod remote;
 mod schema;
+mod session_reads;
 mod sessions;
 
 pub use connections::*;
@@ -9,6 +10,7 @@ pub use projects::*;
 pub(crate) use remote::*;
 pub(crate) use schema::open_with_paths;
 pub use schema::{now_ms, open};
+pub(crate) use session_reads::*;
 pub use sessions::*;
 
 #[cfg(test)]

@@ -34,6 +34,8 @@ impl RuntimeEventSink for ChatEventSink {
         if self.closed.load(Ordering::Acquire) {
             return;
         }
+        let completed_turn = matches!(&event, RuntimeEvent::AssistantMessageEnd { .. })
+            && self.active_turn.load(Ordering::Acquire);
         match &event {
             RuntimeEvent::RuntimeLog {
                 stream: RuntimeLogStream::Stderr,
@@ -158,6 +160,17 @@ impl RuntimeEventSink for ChatEventSink {
                     let _ = sender.send(result);
                 }
                 return;
+            }
+        }
+        if completed_turn {
+            let path = self
+                .session_path
+                .lock()
+                .unwrap_or_else(|error| error.into_inner())
+                .clone();
+            if let Some(path) = path {
+                self.events
+                    .record_session_completion(self.project_id.clone(), path);
             }
         }
         self.events.send(RuntimeEventEnvelope::session(

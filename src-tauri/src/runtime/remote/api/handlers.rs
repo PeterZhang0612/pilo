@@ -13,7 +13,7 @@ use tauri::Manager;
 use crate::runtime::{
     PiloRuntime, RuntimeEventBus,
     chat_service::{self, ChatSessionRequest},
-    pi_workspace, remote_fs, session_activity, session_history, session_index, storage,
+    pi_workspace, remote_fs, session_history, session_index, storage,
 };
 
 use super::{RemoteHttpState, api_error, get_project};
@@ -40,6 +40,39 @@ pub(super) async fn bootstrap(State(state): State<RemoteHttpState>) -> Response 
         latest_sequence: events.latest_sequence(),
     })
     .into_response()
+}
+
+pub(super) async fn session_read_states(State(state): State<RemoteHttpState>) -> Response {
+    match crate::runtime::commands::session_read_states(state.app.state::<RuntimeEventBus>()).await
+    {
+        Ok(states) => Json(states).into_response(),
+        Err(error) => api_error(StatusCode::INTERNAL_SERVER_ERROR, &error),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct SessionReadRequest {
+    project_id: String,
+    session_path: String,
+    revision: u64,
+}
+
+pub(super) async fn session_mark_read(
+    State(state): State<RemoteHttpState>,
+    Json(request): Json<SessionReadRequest>,
+) -> Response {
+    match crate::runtime::commands::session_mark_read(
+        state.app.state::<RuntimeEventBus>(),
+        request.project_id,
+        request.session_path,
+        request.revision,
+    )
+    .await
+    {
+        Ok(read_state) => Json(read_state).into_response(),
+        Err(error) => api_error(StatusCode::BAD_REQUEST, &error),
+    }
 }
 
 #[derive(Deserialize)]
@@ -100,7 +133,12 @@ pub(super) async fn sessions_external_activity(
         Err(error) => return api_error(StatusCode::NOT_FOUND, &error),
     };
     let runtime = state.app.state::<PiloRuntime>();
-    match session_activity::external_session_activities_for_project(&runtime, &project).await {
+    match state
+        .app
+        .state::<RuntimeEventBus>()
+        .external_session_activity(&runtime, &project)
+        .await
+    {
         Ok(activities) => Json(activities).into_response(),
         Err(error) => api_error(StatusCode::INTERNAL_SERVER_ERROR, &error),
     }

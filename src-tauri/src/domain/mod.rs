@@ -14,4 +14,6 @@ pub use project::{
 pub use remote::{
     RemoteAccessAddress, RemoteAccessConfig, RemoteDevice, RemoteHostConfig, random_remote_port,
 };
-pub use session::{SessionIndexEntry, SessionReconcileResult, SessionUiStateUpdate};
+pub use session::{
+    SessionIndexEntry, SessionReadState, SessionReconcileResult, SessionUiStateUpdate,
+};

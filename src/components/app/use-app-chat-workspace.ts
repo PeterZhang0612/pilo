@@ -31,7 +31,9 @@ import {
 import { useAppChatNavigation } from "@/components/app/use-app-chat-navigation";
 import { useAppChatSessionActions } from "@/components/app/use-app-chat-session-actions";
 import { useAppSessionIndex } from "@/components/app/use-app-session-index";
-import { useSessionUnread } from "@/components/app/use-session-unread";
+import { useSyncedSessionUnread } from "@/components/app/use-synced-session-unread";
+import { listenRuntimeEvents } from "@/lib/pi-runtime";
+import { tauriPiloClient } from "@/lib/tauri-pilo-client";
 import type { BusyChatControllersRef } from "@/components/app/use-opened-chat-controllers";
 import type { ChatSession } from "@/components/chat/chat-page";
 import type { ChatSubmission } from "@/lib/chat-submission";
@@ -175,12 +177,13 @@ export function useAppChatWorkspace({
 	);
 
 	// 未读标记：agent 从运行中转为空闲时置为未读，打开会话即清除。
-	const unreadSessionIds = useSessionUnread(
+	const { unread: unreadSessionIds } = useSyncedSessionUnread(
 		sidebarSessionsBase,
 		activeProjectId && selectedSessionId
 			? chatUiStateKey(activeProjectId, selectedSessionId)
 			: null,
 		runtimeStates,
+		{ client: tauriPiloClient, subscribe: listenRuntimeEvents },
 	);
 
 	const sidebarSessions = useMemo(

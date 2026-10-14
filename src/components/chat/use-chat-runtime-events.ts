@@ -260,7 +260,7 @@ export function useChatRuntimeEvents({
 
 	const handleRuntimeEvent = useCallback(
 		(event: PiloRuntimeEvent) => {
-			if (event.type === "project_model_scope_changed") return;
+			if (!("generation" in event)) return;
 			recordChatRuntimeEvent();
 			const latestGeneration = runtimeGenerationRef.current;
 			if (latestGeneration !== null && event.generation < latestGeneration) {

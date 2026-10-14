@@ -141,6 +141,91 @@ path uniqueness to accommodate an old process; stop using the incompatible build
 Wrong: `DELETE FROM sessions WHERE session_path=?1`.
 Correct: `DELETE FROM sessions WHERE project_id=?1 AND session_path=?2`.
 
+## Shared Session Read Progress
+
+### 1. Scope / Trigger
+
+Desktop windows and Remote WebUI share Host-owned read progress. Apply this
+contract when changing unread tracking, completion events or read-state APIs.
+
+### 2. Signatures
+
+- `session_read_states() -> SessionReadState[]`
+- `session_mark_read(projectId, sessionPath, revision) -> SessionReadState`
+- Authenticated `GET /api/v1/sessions/read-state` returns the same list; `POST`
+  accepts `{ projectId, sessionPath, revision }` and returns one state.
+- State: `{ projectId, sessionPath, completedRevision, readRevision }`.
+- `session_read_state`: composite key `(project_id, session_path)`, project FK
+  with cascading deletion, completed/read revisions. It does not require an
+  indexed session: a new Pi chat may settle before indexing finishes.
+- `session_read_revision`: one durable counter, allocated in the same immediate
+  transaction as completion. Do not reset it when deleting sessions/projects.
+
+### 3. Contracts
+
+`ChatEventSink` records an active turn's `AssistantMessageEnd`, not process exit
+or runtime failure. Desktop/WebUI external-activity polls share serialized
+per-project observation: known open -> explicitly idle records completion;
+a disappeared process does not. Unobserved external turns cannot be inferred.
+SQLite runs in blocking workers, never on the Pi event stream's executor.
+
+At completion, immediately broadcast global `session_turn_completed {
+projectId, sessionPath, completionId }`. Its opaque random ID identifies the exact
+turn, not a persisted revision. A single blocking worker preserves turn order
+within each session, coalesces queued turns to the latest completion per session,
+and broadcasts `session_read_state_changed { state, completionId }` after commit.
+Ordinary read acknowledgements omit `completionId`. Both events
+have no Pi generation and must bypass conversation/RPC reducers. Desktop uses
+the existing global channel; WebUI consumes its existing socket rather than
+creating another socket.
+
+Read acknowledgement is monotonic and bounded by the supplied observed revision:
+`read_revision = MAX(read_revision, MIN(requested, completed_revision))`. The
+shared hook merges each revision by maximum to tolerate snapshot/replay/HTTP
+reordering. Full snapshots remove absent records, except live updates received
+after that snapshot request started. Discard superseded snapshot responses so
+an older request cannot restore deleted records. Refresh on initialization,
+foreground and WebUI recovery; `refreshKey` is an explicit effect generation.
+Only the visible, focused client's selected session observes completion IDs.
+Retain these observations across navigation/focus changes, then acknowledge only
+the matching committed revision. Bound pending observations to 512 IDs if storage
+repeatedly fails. Already committed selected sessions are acknowledged normally.
+Selection itself is not synchronized. New completion revisions remain unread
+until seen.
+Sessions without a Host record retain legacy local tracking (including temporary
+chats). Existing historical turns are not retroactively marked unread.
+
+### 4. Validation & Error Matrix
+
+- Zero, negative, fractional or unsafe JS revision: reject; never clear a turn.
+- Unknown project/path record: reject acknowledgement; never create a record.
+- DB failure: report failure, do not broadcast an acknowledgement.
+- Old acknowledgement after a newer completion: newer completion stays unread.
+- Session deletion: remove its scoped read state; project deletion cascades.
+
+### 5. Good / Base / Bad Cases
+
+- Good: open a completed Host chat on WebUI; every desktop window clears its dot.
+- Base: restart/refresh loads persisted progress; temporary chats remain local.
+- Bad: an old HTTP reply or replay must not restore a cleared dot or read a new turn.
+
+### 6. Required Verification (When Authorized)
+
+Cover both read directions, two desktop windows, refresh/restart, foreground and
+reconnect, hidden clients, acknowledgement racing a new completion, reversed
+snapshot/event delivery, completion observed before a delayed commit followed
+by navigation/blur, consecutive completions racing acknowledgement, overlapping
+snapshots and deletion with a live event in flight, colliding project paths,
+delete/recreate revision allocation, external open/idle/disappearance and SQLite
+failure. No historical
+conversation payload is copied into read-state storage.
+
+### 7. Wrong vs Correct
+
+Wrong: persist a boolean, use Pi process generation as a turn ID, or synchronize
+which session is selected. Correct: persist Host-issued completion/read revisions
+and acknowledge only the revision actually observed by the focused client.
+
 ## Testing
 
 Storage unit tests live in `src-tauri/src/runtime/storage.rs` under `#[cfg(test)]`

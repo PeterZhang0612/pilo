@@ -60,7 +60,7 @@ function traceRuntimeDebug(stage: string, detail: Record<string, unknown>) {
 }
 
 function traceRuntimeLifecycle(event: PiloRuntimeEvent) {
-	if (event.type === "project_model_scope_changed") return;
+	if (!("generation" in event)) return;
 	if (
 		!import.meta.env.DEV &&
 		event.type !== "rpc_message" &&
@@ -271,7 +271,7 @@ export async function requestPiRpc<T>(
 		unlisten = await listenRuntimeEvents(
 			(event) => {
 				lastSessionEventType = event.type;
-				if (event.type !== "project_model_scope_changed") {
+				if ("generation" in event) {
 					generation = event.generation;
 				}
 				if (event.type === "runtime_error") {

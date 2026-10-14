@@ -118,6 +118,10 @@ pub(crate) fn router(
     let protected = Router::new()
         .route("/api/v1/bootstrap", get(handlers::bootstrap))
         .route("/api/v1/sessions", get(handlers::sessions))
+        .route(
+            "/api/v1/sessions/read-state",
+            get(handlers::session_read_states).post(handlers::session_mark_read),
+        )
         .route("/api/v1/sessions/search", get(handlers::sessions_search))
         .route(
             "/api/v1/sessions/external-activity",

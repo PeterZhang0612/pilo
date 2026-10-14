@@ -13,6 +13,7 @@ import {
 	type PiloClientStartChatInput,
 } from "@/lib/pilo-client";
 import { listProjects } from "@/lib/projects";
+import type { SessionReadState } from "@/lib/session-read-state";
 import { readProjectImage } from "@/lib/files";
 import type {
 	ProjectModelScope,
@@ -55,6 +56,22 @@ export class TauriPiloClient implements PiloClient {
 	async listSessions(projectId: string): Promise<SessionIndexEntry[]> {
 		const result = await reconcileSessions(projectId);
 		return result.sessions;
+	}
+
+	loadSessionReadStates(): Promise<SessionReadState[]> {
+		return invoke<SessionReadState[]>("session_read_states");
+	}
+
+	markSessionRead(
+		projectId: string,
+		sessionPath: string,
+		revision: number,
+	): Promise<SessionReadState> {
+		return invoke<SessionReadState>("session_mark_read", {
+			projectId,
+			sessionPath,
+			revision,
+		});
 	}
 
 	searchSessions(

@@ -8,7 +8,7 @@ import {
 	toSidebarSession,
 } from "@/components/app/app-chat-state";
 import { runtimeActivityFromStates } from "@/components/app/app-session-index-model";
-import { useSessionUnread } from "@/components/app/use-session-unread";
+import { useSyncedSessionUnread } from "@/components/app/use-synced-session-unread";
 import { ChatComposer } from "@/components/chat/chat-composer";
 import { ConversationColumn } from "@/components/chat/chat-conversation-column";
 import { RemoteConversationViewport } from "./remote-conversation-viewport";
@@ -109,9 +109,6 @@ function RemoteWorkspace() {
 	});
 
 	useEffect(() => {
-		socketHandlerRef.current = chat.handleSocketMessage;
-	}, [chat.handleSocketMessage]);
-	useEffect(() => {
 		reconnectProbeRef.current = sessions.reloadBootstrap;
 	}, [sessions.reloadBootstrap]);
 
@@ -206,13 +203,28 @@ function RemoteWorkspace() {
 		[rawSessions, runtimeActivity, externalActivity],
 	);
 
-	const unreadSessionIds = useSessionUnread(
+	const { unread: unreadSessionIds, handleReadEvent } = useSyncedSessionUnread(
 		sessionsWithActivity,
 		chat.identifiedSessionId
 			? chatUiStateKey(chat.activeProjectId, chat.identifiedSessionId)
 			: null,
 		chatSessions,
+		{
+			client: connection.client,
+			refreshKey: `${connection.resyncKey}:${connection.snapshotRefreshKey}`,
+			onError: connection.handleExpiredAuth,
+		},
 	);
+
+	const { handleSocketMessage } = chat;
+	useEffect(() => {
+		socketHandlerRef.current = (message) => {
+			if (message.type === "events") {
+				for (const event of message.events) handleReadEvent(event);
+			}
+			handleSocketMessage(message);
+		};
+	}, [handleSocketMessage, handleReadEvent]);
 
 	const sidebarSessions = useMemo(
 		() =>

@@ -3,7 +3,10 @@ mod connections;
 mod projects;
 mod remote;
 mod runtime;
+mod session_reads;
 mod sessions;
+
+pub use session_reads::{session_mark_read, session_read_states};
 
 pub use appearance::system_font_families;
 

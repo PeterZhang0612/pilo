@@ -125,6 +125,11 @@ pub fn remove_session_for_project(
         > 0;
     if removed {
         db.execute(
+            "DELETE FROM session_read_state WHERE project_id=?1 AND session_path=?2",
+            params![project_id, session_path],
+        )
+        .map_err(|error| error.to_string())?;
+        db.execute(
             "DELETE FROM session_ui_state WHERE project_id=?1 AND session_path=?2",
             params![project_id, session_path],
         )

@@ -6,6 +6,7 @@ import type {
 	PiloClientStartChatInput,
 } from "@/lib/pilo-client";
 import type { PiSessionSnapshot } from "@/lib/pi-runtime";
+import type { SessionReadState } from "@/lib/session-read-state";
 import type { ProjectPiModels } from "@/lib/pi-models";
 import type {
 	ProjectModelScope,
@@ -35,6 +36,8 @@ import {
 	loadRemoteModelScope,
 	saveRemoteModelScope,
 	loadRemoteSessions,
+	loadRemoteSessionReadStates,
+	markRemoteSessionRead,
 	searchRemoteFiles,
 	searchRemoteSessions,
 	sendRemoteChatCommand,
@@ -51,6 +54,18 @@ export class WebPiloClient implements PiloClient {
 
 	listSessions(projectId: string): Promise<SessionIndexEntry[]> {
 		return loadRemoteSessions(this.token, projectId);
+	}
+
+	loadSessionReadStates(): Promise<SessionReadState[]> {
+		return loadRemoteSessionReadStates(this.token);
+	}
+
+	markSessionRead(
+		projectId: string,
+		sessionPath: string,
+		revision: number,
+	): Promise<SessionReadState> {
+		return markRemoteSessionRead(this.token, projectId, sessionPath, revision);
 	}
 
 	searchSessions(

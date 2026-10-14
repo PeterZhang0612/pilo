@@ -2,6 +2,7 @@ import type { ChatSessionRuntimeState } from "@/lib/chat-session-client";
 import type { PiSessionSnapshot, PiloRuntimeEvent } from "@/lib/pi-runtime";
 import type { ProjectPiModels } from "@/lib/pi-models";
 import type { Project } from "@/lib/projects";
+import type { SessionReadState } from "@/lib/session-read-state";
 import type {
 	ProjectModelScope,
 	ProjectScopedModel,
@@ -50,6 +51,12 @@ export type PiloClientEventOptions = {
 export interface PiloClient {
 	bootstrap(): Promise<PiloClientBootstrap>;
 	listSessions(projectId: string): Promise<SessionIndexEntry[]>;
+	loadSessionReadStates(): Promise<SessionReadState[]>;
+	markSessionRead(
+		projectId: string,
+		sessionPath: string,
+		revision: number,
+	): Promise<SessionReadState>;
 	searchSessions(
 		projectId: string,
 		query: string,
