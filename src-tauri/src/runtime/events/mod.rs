@@ -15,6 +15,7 @@ use tokio::sync::{broadcast, watch};
 use super::debug_trace::runtime_trace;
 
 mod model;
+mod session_reads;
 mod trace;
 
 pub use model::*;
@@ -123,6 +124,9 @@ pub struct RuntimeEventBus {
     web_queue: Arc<StdMutex<WebEventQueue>>,
     replay: Arc<StdMutex<EventReplay>>,
     sequence: Arc<AtomicU64>,
+    session_read_paths: Arc<StdMutex<Option<super::host_paths::HostPaths>>>,
+    external_read_activity: session_reads::ExternalReadActivity,
+    session_completions: Arc<StdMutex<session_reads::SessionCompletionQueue>>,
 }
 
 impl Default for RuntimeEventBus {
@@ -134,6 +138,11 @@ impl Default for RuntimeEventBus {
             web_queue: Arc::new(StdMutex::new(WebEventQueue::default())),
             replay: Arc::new(StdMutex::new(EventReplay::default())),
             sequence: Arc::new(AtomicU64::new(0)),
+            session_read_paths: Arc::new(StdMutex::new(None)),
+            external_read_activity: Arc::new(StdMutex::new(HashMap::new())),
+            session_completions: Arc::new(StdMutex::new(
+                session_reads::SessionCompletionQueue::default(),
+            )),
         }
     }
 }

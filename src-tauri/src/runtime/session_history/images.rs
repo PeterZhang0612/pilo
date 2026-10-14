@@ -9,7 +9,7 @@ use crate::runtime::server_client::ServerManager;
 
 use super::{
     cache::{SessionFileFingerprint, SessionHistoryCache, cache_key},
-    reader::{read_file, read_fingerprint},
+    reader::{acquire_cold_load, read_file, read_fingerprint},
 };
 
 const SESSION_RANGE_CHUNK_BYTES: usize = 8 * 1024 * 1024;
@@ -42,7 +42,8 @@ pub async fn read_history_image_bytes(
     } else if let Some(locations) = cache.lock().await.get_image_locations(&key, fingerprint) {
         locations
     } else {
-        let (history, parsed_fingerprint) = read_file(servers, project, path).await?;
+        let load_permit = acquire_cold_load().await?;
+        let (history, parsed_fingerprint) = read_file(servers, project, path, load_permit).await?;
         let locations = Arc::new(history.image_locations);
         if let Some(parsed_fingerprint) = parsed_fingerprint {
             cache.lock().await.insert_image_locations(

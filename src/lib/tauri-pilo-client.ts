@@ -1,3 +1,8 @@
+import type {
+	NextPromptModel,
+	NextPromptSettings,
+	NextPromptRequest,
+} from "@/lib/next-prompt";
 import { invoke } from "@tauri-apps/api/core";
 
 import {
@@ -13,6 +18,7 @@ import {
 	type PiloClientStartChatInput,
 } from "@/lib/pilo-client";
 import { listProjects } from "@/lib/projects";
+import type { SessionReadState } from "@/lib/session-read-state";
 import { readProjectImage } from "@/lib/files";
 import type {
 	ProjectModelScope,
@@ -55,6 +61,22 @@ export class TauriPiloClient implements PiloClient {
 	async listSessions(projectId: string): Promise<SessionIndexEntry[]> {
 		const result = await reconcileSessions(projectId);
 		return result.sessions;
+	}
+
+	loadSessionReadStates(): Promise<SessionReadState[]> {
+		return invoke<SessionReadState[]>("session_read_states");
+	}
+
+	markSessionRead(
+		projectId: string,
+		sessionPath: string,
+		revision: number,
+	): Promise<SessionReadState> {
+		return invoke<SessionReadState>("session_mark_read", {
+			projectId,
+			sessionPath,
+			revision,
+		});
 	}
 
 	searchSessions(
@@ -130,6 +152,28 @@ export class TauriPiloClient implements PiloClient {
 			projectId,
 			models,
 		});
+	}
+
+	loadNextPromptSettings(connectionId: string): Promise<NextPromptSettings> {
+		return invoke<NextPromptSettings>("next_prompt_settings_get", {
+			connectionId,
+		});
+	}
+
+	saveNextPromptSettings(
+		connectionId: string,
+		enabled: boolean,
+		model: NextPromptModel | null,
+	): Promise<NextPromptSettings> {
+		return invoke<NextPromptSettings>("next_prompt_settings_set", {
+			connectionId,
+			enabled,
+			model,
+		});
+	}
+
+	requestNextPrompt(request: NextPromptRequest): Promise<void> {
+		return invoke<void>("next_prompt_request", { request });
 	}
 
 	startChat(input: PiloClientStartChatInput): Promise<PiSessionSnapshot> {

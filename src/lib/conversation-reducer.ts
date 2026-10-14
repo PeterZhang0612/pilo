@@ -162,13 +162,73 @@ function endTurn(
 	return { ...state, messages, active: null };
 }
 
+export function isAssistantBatchAction(action: ConversationAction) {
+	return (
+		action.type === "assistant_message_start" ||
+		action.type === "assistant_text_delta" ||
+		action.type === "assistant_text_snapshot" ||
+		action.type === "assistant_thinking_start" ||
+		action.type === "assistant_thinking_delta" ||
+		action.type === "assistant_thinking_end" ||
+		action.type === "tool_execution_start" ||
+		action.type === "tool_execution_update" ||
+		action.type === "tool_execution_end" ||
+		action.type === "assistant_turn_end"
+	);
+}
+
 export function reduceConversation(
+	state: ConversationState,
+	action: ConversationAction,
+	context: ConversationReducerContext,
+): ConversationState {
+	const pending = state.pendingUsers[0];
+	if (pending?.previousTurn && isAssistantBatchAction(action)) {
+		const index = state.messages.findIndex(
+			(message) => message.id === pending.previousTurn?.assistantMessageId,
+		);
+		const previous = state.messages[index];
+		if (previous?.role === "assistant") {
+			// Until the user echo, runtime output still belongs to the previous turn.
+			const next = reduceConversationAction(
+				{ ...state, active: pending.previousTurn },
+				action,
+				context,
+			);
+			const updated = next.messages[index];
+			let messages = next.messages;
+			if (
+				previous.streaming !== true &&
+				updated?.role === "assistant" &&
+				updated.streaming === true
+			) {
+				messages = messages.slice();
+				messages[index] = { ...updated, streaming: false };
+			}
+			return { ...next, messages, active: state.active };
+		}
+	}
+	return reduceConversationAction(state, action, context);
+}
+
+function reduceConversationAction(
 	state: ConversationState,
 	action: ConversationAction,
 	context: ConversationReducerContext,
 ): ConversationState {
 	switch (action.type) {
 		case "local_user_submit": {
+			const previous = state.messages[state.messages.length - 1];
+			// Image-only prompts do not emit a text user echo in the runtime adapter.
+			const previousTurn =
+				action.text.length > 0 && previous?.role === "assistant"
+					? {
+							turnStartedAtMs: previous.timestampMs,
+							firstRuntimeUserSeen: true,
+							...state.active,
+							assistantMessageId: previous.id,
+						}
+					: undefined;
 			const message: ChatMessage = {
 				id: action.clientMessageId,
 				role: "user",
@@ -195,6 +255,9 @@ export function reduceConversation(
 						text: action.text,
 						images: action.images,
 						timestampMs: action.timestampMs,
+						replyStartIndex:
+							state.messages.length + (action.appendMessage === false ? 0 : 1),
+						previousTurn,
 					},
 				],
 			};
@@ -311,15 +374,62 @@ export function reduceConversation(
 					}));
 				}
 				if (!pending.queueKind) {
+					const startedAtMs = action.timestampMs ?? context.now();
+					if (pending.replyStartIndex !== undefined) {
+						const replyStartIndex = pending.replyStartIndex;
+						const provisional = next.messages.slice(replyStartIndex);
+						const staleAssistant = provisional.find(
+							(message) =>
+								message.role === "assistant" &&
+								(message.text.length > 0 ||
+									Boolean(message.content?.length) ||
+									Boolean(message.activity?.length) ||
+									message.streaming !== true),
+						);
+						if (
+							staleAssistant?.role === "assistant" &&
+							!provisional.some((message) => message.role === "user")
+						) {
+							// Without a previous reply to update, keep the output as its own segment.
+							next = endTurn(
+								next,
+								staleAssistant.stopReason,
+								staleAssistant.errorMessage,
+								startedAtMs,
+								staleAssistant.completion ?? "continued",
+							);
+							const userIndex = next.messages.findIndex(
+								(message) => message.id === pending.clientMessageId,
+							);
+							const insertionIndex =
+								userIndex >= 0 ? userIndex : Math.max(0, replyStartIndex - 1);
+							next = {
+								...next,
+								messages: [
+									...next.messages.slice(0, insertionIndex),
+									...next.messages
+										.slice(replyStartIndex)
+										.filter((message) => message.role === "assistant"),
+									...next.messages.slice(insertionIndex, replyStartIndex),
+									...provisional.filter(
+										(message) => message.role !== "assistant",
+									),
+								],
+								active: null,
+							};
+							next = withAssistant(next, context, startedAtMs, (message) => ({
+								...message,
+								replyRunwayPx: staleAssistant.replyRunwayPx,
+							}));
+						}
+					}
 					next = {
 						...next,
-						active: next.active
-							? {
-									...next.active,
-									turnStartedAtMs: action.timestampMs ?? context.now(),
-									firstRuntimeUserSeen: true,
-								}
-							: next.active,
+						active: {
+							...next.active,
+							turnStartedAtMs: startedAtMs,
+							firstRuntimeUserSeen: true,
+						},
 					};
 				}
 				return { ...next, pendingUsers: next.pendingUsers.slice(1) };

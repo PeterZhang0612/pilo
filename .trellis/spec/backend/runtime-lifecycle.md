@@ -24,17 +24,43 @@ Frontend controller eviction alone is not backend process cleanup.
   their processes on eviction, detach, project stop and global shutdown.
 - `RuntimeEventBus::replay_after(sequence) -> Option<Vec<SequencedRuntimeEvent>>`:
   `None` means replay is incomplete and the WebUI must resync.
+- `ChatSessions::start_idle_reaper()` starts one Host-owned 30-second sweep.
+  `prepare` / `ensure` run readiness in owned tasks so HTTP cancellation cannot
+  abandon a starting process in the shared registry.
+- `ServerPiSession` records client/stream/task ownership before awaiting `pi.start`.
+  Its `Drop` schedules bounded cleanup; failed `stop` retains the stream identity
+  for retry. `PendingRequestGuard` removes cancelled client request senders.
+- `PiProcess::stop()` drops stdin, waits for EOF shutdown, then force-kills only
+  if necessary. `serve_stdio()` handles EOF, framing errors and stdout failure
+  through cleanup; accepted Pi starts are registered in `pi_starts` at admission,
+  and accepted Pi stops are registered in `pi_stops` before awaiting.
+- `ServerWriter::send` / `blocking_send` share a 256-envelope / 64 MiB payload
+  budget, including binary data and the frame currently being written.
 - `ServerClient::stop()` closes stdin, waits for server cleanup, then force-kills
-  only if necessary. `serve_stdio()` handles EOF and framing errors through cleanup.
+  only if necessary.
 
 ## 3. Contracts
 
-- The idle cache reserves one slot for the requested chat and retains up to three
-  other most recently used eligible processes. Pruning is admission-driven, not
-  a timer: simultaneous live turns may exceed the budget until another prepare/ensure.
+- Admission reserves one slot for the requested chat and retains up to three
+  other most recently used eligible processes. The 30-second Host sweep retains
+  at most four eligible idle processes and expires observed idle entries after
+  five minutes, without requiring another prepare/ensure. Active processes may
+  exceed this budget; they become eligible only after their work ends.
+  Read-only `get_*` RPC polling does not update recency or extend idle retention.
+  WebUI model/thinking changes, fork, manual model refresh and cached extension
+  command submission must ensure the target runtime first, just like Desktop.
+  Keep background config refresh separate: polling must not respawn idle sessions.
+  Capture the target session key across readiness awaits; late config results must
+  not update the newly selected session.
 - Never evict an active turn, compaction, uninitialized process, `no_session`
   session, or a session without a resolved JSONL path. A cloned `ChatProcess` Arc
   or a locked session protects in-flight startup/RPC work from eviction.
+- WebUI explicit navigation away from a temporary chat (new draft, project
+  change or session selection) stops its old session key. A late temporary start
+  or MCP approval completion checks the active key and stops an abandoned runtime.
+  Do not use effect cleanup on network/auth changes to kill live work. Browser
+  disappearance still has no lease-based cleanup; temporary state cannot be
+  restored and must not be silently included in the persisted-session TTL.
 - Remove an evicted process under the registry lock, mark it closed, and stop it
   asynchronously. Late events from the old process must not reach a replacement.
   Persisted sessions are resumed by the existing prepare/ensure path. Eviction
@@ -119,10 +145,47 @@ Frontend controller eviction alone is not backend process cleanup.
   the existing whole-buffer bootstrap behavior.
 - Sequence allocation, replay insertion, and Web broadcast publication share a
   lock to preserve ordering across concurrent sessions.
+- Pi stop gives stdin EOF one second for Pi shutdown hooks, then a bounded
+  one-second process-tree fallback and one-second direct-child reap. Unix Pi
+  starts in a fresh process group and fallback uses `/bin/kill -KILL -- -<pid>`;
+  Windows fallback uses `taskkill.exe /PID <pid> /T /F`. This is not a Windows
+  Job Object: already-detached descendants and abrupt server crashes are not
+  guaranteed to be contained. Never kill unrelated processes by executable name.
+- Register each admitted `pi.start` cancellation sender by request ID and stream
+  ID before spawning its dispatch task. Stop cancels all pending starts for that
+  stream, even if no child exists yet. Cancellation is checked before dispatch
+  polling; a cancelled start returns `request_failed` with
+  `Pi stream startup cancelled`. Hold the Pi process registry lock while cancelling
+  starts and removing children, so a concurrently polled start either remains
+  cancellable or has already registered its child for the same stop to reap.
+  Remove start registrations on dispatch completion and clear them on shutdown;
+  the ordinary 64-request admission limit bounds this registry.
+- Natural stdout cleanup checks the original stdin Arc's Weak identity under the
+  Pi registry lock and never cancels pending starts. Explicit stop owns and joins
+  that instance's stdout/stderr tasks before ACK, including when natural cleanup
+  already removed its child. Same-stream replacement aborts and joins leftover
+  output tasks before spawning; a stopped instance cannot publish late exit/log
+  events into its replacement. Reader task registration and child registration
+  share the Pi registry lock, and accepted stop tasks own removed reader handles
+  before any await. Shutdown aborts all registered readers.
 - Abort and join pending server requests before draining Pi processes: an in-flight
-  `pi.start` must not create a process after cleanup passes the registry.
+  `pi.start` must not create a process after cleanup passes the registry. Removal
+  from the live registry and registration in the stopping JoinSet have no await
+  between them. Drain accepted stops and live children concurrently before exit.
+- Ordinary server request admission is nonblocking and capped at 64. Pi/terminal/
+  watcher stop commands have a separate 64-slot allowance. Overload returns
+  `server_busy`; if the rejection cannot be queued within one second, clean up
+  the connection rather than indefinitely stop reading stdin. Client Pi stop
+  retries capacity rejection within its five-second cleanup deadline.
+- Count server output bytes without making another serialized buffer. Oversized
+  responses return `output_too_large`; Pi stdout is bounded while reading, not
+  after allocating a complete line. An over-limit line terminates that stream.
+  Queue budgets exclude waiting producers and object-allocation overhead.
+- Event coalescing ticks only while a Pi stream has buffered events. Reset the
+  16 ms window when an empty buffer first receives a delta; idle streams do not
+  continuously wake their tasks.
 - Abort and join the client writer to drop server stdin. Keep the reader alive while
-  waiting for EOF cleanup (2 seconds); fallback kill/wait has another 1-second bound.
+  waiting for EOF cleanup (5 seconds); fallback kill/wait has another 1-second bound.
   Stop connection servers concurrently and do this even if earlier app teardown
   exceeds its 5-second grace period.
 
@@ -130,7 +193,16 @@ Frontend controller eviction alone is not backend process cleanup.
 
 | Condition | Behavior |
 | --- | --- |
-| Eligible idle cache exceeds budget | Stop oldest eligible processes; keep requested chat |
+| Eligible idle cache exceeds budget | Stop oldest eligible processes on admission or the next 30-second sweep |
+| Persisted idle process reaches five minutes | Sweep expires it; next ensure resumes its JSONL |
+| WebUI model/thinking/fork/manual refresh after eviction | Ensure the target before RPC; background polling stays read-only |
+| Old stdout finishes after explicit stop | Joined before ACK; cannot cancel or emit into a same-stream restart |
+| Read-only state/model polling | Does not extend idle TTL |
+| WebUI explicitly leaves temporary chat | Stop the old key, including late startup/approval completion |
+| Title-generation HTTP timeout or unregistered worker error | Session drop schedules cleanup; no abandoned stream ownership |
+| Stop while Pi start is probing or waiting for the process registry | Cancel the pending dispatch; it cannot spawn a late child. Fresh starts after the stop ACK remain valid |
+| Ordinary server request saturation | Return server_busy; keep independent stop capacity |
+| Pi stdout exceeds line limit | Stop the stream without reading the full oversized line |
 | Idle session evicted | No stop event; `states()` drops it; next `ensure` respawns and resets the generation |
 | Live/temporary/unsaved/in-flight session | Keep it, even above budget |
 | Extension resumes after compaction | Desktop adopts the live turn; queue and stop remain available |
@@ -162,6 +234,34 @@ Frontend controller eviction alone is not backend process cleanup.
 
 ## 6. Tests Required
 
+Existing WSL workspace tests and static checks have passed; no new repository
+tests have been added. An ad-hoc stdio check using a slow fake login shell and
+fake Pi confirmed cold-probe cancellation without a late child, successful
+same-stream restart after stop ACK, and 50 immediately paired start/stop requests
+with no remaining Pi children. Native Windows behavior remains unverified.
+The following targeted regressions remain to be added with explicit authorization:
+- Sweep over-budget sessions after their live turns finish, expire eligible idle
+  sessions, ignore read-only recency updates, and preserve active/temporary/
+  unsaved/in-flight exclusions. Exercise resumption on Desktop and WebUI, including
+  model/thinking changes, fork, manual model refresh and cached extension commands
+  after TTL eviction. Switch sessions while readiness/config RPCs are pending;
+  results must not update the newly selected session.
+- Cancel title generation and readiness at different await points, fail a parallel
+  worker's first prompt, lose a start acknowledgement, and cancel stop after its
+  acceptance. Stop during cold toolchain probing and before the start task's first
+  poll; assert the original start receives a cancellation error, no late child
+  appears, and a fresh start after the stop acknowledgement still succeeds.
+  Assert no child is outside both live and stopping registries. Delay the old
+  stdout reader and stderr delivery, stop and await ACK, then restart the same
+  stream; the new start and process must survive without old terminal/log events.
+  Also replace a stream during natural EOF cleanup and cancel an accepted stop
+  while it owns reader handles.
+- Verify EOF hooks precede force-kill, forced Unix group/Windows tree cleanup,
+  server stdout failure, request saturation with stop/EOF still responsive,
+  queued/in-flight byte permit release, oversized responses and unterminated
+  oversized Pi stdout lines. Native Windows/macOS and Local/WSL/SSH remain pending.
+- Navigate away from a WebUI temporary chat during startup and MCP approval;
+  stop only the abandoned key. Network/auth changes must not stop running work.
 - `chat_sessions/idle_cache.rs`: LRU order, retained key, busy/compacting/initializing/
   temporary/unsaved/in-flight exclusions, busy-flag rollback on failed send.
 - `chat_sessions/event_sink.rs`: prompt rejection rolls back only the owning

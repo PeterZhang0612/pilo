@@ -125,6 +125,11 @@ export function useRemoteChatTransport({
 					handleModelScopeEvent(event);
 					continue;
 				}
+				if (
+					event.type === "session_read_state_changed" ||
+					event.type === "session_turn_completed"
+				)
+					continue;
 				if (event.type === "rpc_message" && isRpcResponse(event.message)) {
 					const id = event.message.id;
 					if (id) {

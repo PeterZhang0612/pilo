@@ -25,6 +25,7 @@ import { ConnectionsSettings } from "./connections-settings";
 import { KeyboardShortcutsSettings } from "./keyboard-shortcuts-settings";
 import { NotificationSettings } from "./notification-settings";
 import { PreferencesSettings } from "./preferences-settings";
+import { ConnectionNextPromptSettings } from "./connection-next-prompt-settings";
 import { SessionNamingSettings } from "./session-naming-settings";
 
 type SettingsTabId =
@@ -33,6 +34,7 @@ type SettingsTabId =
 	| "appearance"
 	| "shortcuts"
 	| "connections"
+	| "next-prompt"
 	| "session-naming"
 	| "about";
 
@@ -66,6 +68,12 @@ const SETTINGS_TABS = [
 		section: "project",
 		labelKey: "settings.connections",
 		icon: Plug,
+	},
+	{
+		id: "next-prompt" as const,
+		section: "project",
+		labelKey: "settings.nextPrompt",
+		icon: Type,
 	},
 	{
 		id: "session-naming" as const,
@@ -184,6 +192,9 @@ export function SettingsDialog({
 										) : null}
 										{activeTab === "connections" ? (
 											<ConnectionsSettings />
+										) : null}
+										{activeTab === "next-prompt" ? (
+											<ConnectionNextPromptSettings />
 										) : null}
 										{activeTab === "session-naming" ? (
 											<SessionNamingSettings />

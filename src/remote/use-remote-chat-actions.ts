@@ -30,7 +30,6 @@ import { randomId } from "@/lib/utils";
 import { reducerContext } from "./remote-app-model";
 import type {
 	QueuedSubmission,
-	RemoteRpc,
 	RemoteSessionRpc,
 } from "./use-remote-chat-transport";
 import type { WebPiloClient } from "./web-pilo-client";
@@ -67,7 +66,6 @@ type UseRemoteChatActionsOptions = {
 	setAgentState: Dispatch<SetStateAction<PiAgentState | null>>;
 	setDraftModel: Dispatch<SetStateAction<PiModel | null>>;
 	setDraftThinkingLevel: Dispatch<SetStateAction<PiThinkingLevel | null>>;
-	rpc: RemoteRpc;
 	rpcForSession: RemoteSessionRpc;
 };
 
@@ -96,7 +94,6 @@ export function useRemoteChatActions({
 	setAgentState,
 	setDraftModel,
 	setDraftThinkingLevel,
-	rpc,
 	rpcForSession,
 }: UseRemoteChatActionsOptions) {
 	const [sendingSessionKeys, setSendingSessionKeys] = useState(
@@ -714,22 +711,34 @@ export function useRemoteChatActions({
 				setDraftThinkingLevel(model.defaultThinkingLevel ?? null);
 				return;
 			}
+			if (!activeSessionKey) return;
+			const targetSessionKey = activeSessionKey;
+			const isActiveSession = () =>
+				activeSessionKeyRef.current === targetSessionKey;
 			try {
-				const next = await rpc<PiModel>({
+				await ensureDraftRuntime();
+				if (!isActiveSession()) return;
+				const next = await rpcForSession<PiModel>(targetSessionKey, {
 					type: "set_model",
 					provider: model.provider,
 					modelId: model.id,
 				});
-				setAgentState((current) =>
-					current ? { ...current, model: next } : current,
-				);
+				if (isActiveSession()) {
+					setAgentState((current) =>
+						current ? { ...current, model: next } : current,
+					);
+				}
 			} catch (error) {
-				setFatalError(error instanceof Error ? error.message : String(error));
+				if (isActiveSession())
+					setFatalError(error instanceof Error ? error.message : String(error));
 			}
 		},
 		[
+			activeSessionKey,
+			activeSessionKeyRef,
+			ensureDraftRuntime,
 			hasIdentifiedSession,
-			rpc,
+			rpcForSession,
 			setAgentState,
 			setDraftModel,
 			setDraftThinkingLevel,
@@ -743,18 +752,33 @@ export function useRemoteChatActions({
 				setDraftThinkingLevel(level);
 				return;
 			}
+			if (!activeSessionKey) return;
+			const targetSessionKey = activeSessionKey;
+			const isActiveSession = () =>
+				activeSessionKeyRef.current === targetSessionKey;
 			try {
-				await rpc<void>({ type: "set_thinking_level", level });
-				setAgentState((current) =>
-					current ? { ...current, thinkingLevel: level } : current,
-				);
+				await ensureDraftRuntime();
+				if (!isActiveSession()) return;
+				await rpcForSession<void>(targetSessionKey, {
+					type: "set_thinking_level",
+					level,
+				});
+				if (isActiveSession()) {
+					setAgentState((current) =>
+						current ? { ...current, thinkingLevel: level } : current,
+					);
+				}
 			} catch (error) {
-				setFatalError(error instanceof Error ? error.message : String(error));
+				if (isActiveSession())
+					setFatalError(error instanceof Error ? error.message : String(error));
 			}
 		},
 		[
+			activeSessionKey,
+			activeSessionKeyRef,
+			ensureDraftRuntime,
 			hasIdentifiedSession,
-			rpc,
+			rpcForSession,
 			setAgentState,
 			setDraftThinkingLevel,
 			setFatalError,

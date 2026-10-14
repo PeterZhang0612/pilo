@@ -88,6 +88,8 @@ GET  /api/v1/events          -> WebSocket upgrade
 - Server frames: `{ type: "hello", deviceId, latestSequence }`,
   `{ type: "events", events: SequencedRuntimeEvent[] }`,
   `{ type: "resyncRequired", latestSequence }`.
+- Transport-only heartbeat: client `{ type: "ping" }`, server `{ type: "pong" }`.
+  The Web adapter consumes pong; it is not a sequenced runtime event or a resync.
 - `SequencedRuntimeEvent` = `{ sequence, ...RuntimeEventEnvelope }` (flattened).
 - Token is read from `Authorization: Bearer` **or** the `pilo-token.` subprotocol
   — never from the URL query.
@@ -232,8 +234,14 @@ remote_devices(id, name, pair_ip, token_hash, created_at_ms, last_seen_at_ms, ex
 - **Browser recovery**: Remote Browser owns `online/offline` and foreground
   lifecycle recovery. `navigator.onLine` is advisory only: an already-live
   WebSocket remains authoritative, while an offline hint may slow background
-  polling/retry but must not hard-disable LAN HTTP/WS access. Returning online or
-  resuming after background suspension recreates the WebSocket immediately.
+  polling/retry but must not hard-disable LAN HTTP/WS access. Returning online
+  recreates the WebSocket. Returning from at least 1.5 seconds in the background
+  instead probes an open socket with an application-level ping (browser APIs
+  cannot send native Ping frames). Any received server frame clears the 5-second
+  deadline; failure/timeout closes the socket and uses ordinary reconnect. Clear
+  the deadline on hide, disconnect and disposal. Healthy foreground return must
+  not emit disconnected, hello or snapshot-refresh transitions: these discard
+  pending/completed input assistance even when the Session has not changed.
   Ordinary reconnects consume sequence replay and refresh bootstrap/session
   metadata; only an explicit `resyncRequired` frame may trigger full history
   resync.
@@ -277,6 +285,8 @@ remote_devices(id, name, pair_ip, token_hash, created_at_ms, last_seen_at_ms, ex
 | Request body over `MAX_REQUEST_BYTES`       | rejected by `DefaultBodyLimit`                  |
 | Handler over 45 s                           | `408` (Tower timeout)                           |
 | WS buffer lag                               | `resyncRequired`, connection kept               |
+| Healthy foreground socket probe             | Pong consumed locally; no reconnect or prediction invalidation |
+| Foreground probe timeout/send failure        | Socket closes; existing auth probe/reconnect/replay runs |
 | Another desktop window subscribes/reloads   | Existing windows retain completion/RPC delivery |
 | Desktop window destroyed                   | Remove only that window's channel               |
 
@@ -291,6 +301,9 @@ remote_devices(id, name, pair_ip, token_hash, created_at_ms, last_seen_at_ms, ex
 - **Good pairing**: scan once → selection (zero consumption) → manually open
   three origins → three independent tokens; plain bookmarks subsequently work.
   Lost response + the original proof returns exactly the original authorization.
+- **Good foreground**: hide a WebUI with a pending/completed suggestion for more
+  than 1.5 seconds, return with its socket intact, and retain the suggestion
+  without a new prediction call. A stale socket still reconnects after probe failure.
 - **Base**: Remote disabled → no listener, no port, Desktop path unchanged.
 - **Bad pairing**: an unreachable target is not authenticated. Retry before TTL
   or obtain a fresh scan after expiry. Another proof cannot retrieve an issued
@@ -302,6 +315,12 @@ remote_devices(id, name, pair_ip, token_hash, created_at_ms, last_seen_at_ms, ex
 ---
 
 ## 6. Tests Required
+
+Foreground recovery assertions, pending explicit authorization (not run): healthy
+socket ping/pong or intervening events preserves input assistance; silent socket
+closes after 5 seconds; repeated hide/resume and disposal leave no probe timers or
+visibility listeners; real reconnect still invalidates predictions and replays
+without creating a new model call; auth expiry still reaches pairing.
 
 Assertion points (inline `#[cfg(test)] mod tests`):
 

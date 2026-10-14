@@ -1,5 +1,7 @@
 mod connection;
+mod next_prompt;
 mod project;
+pub use next_prompt::{NextPromptModel, NextPromptRequest, NextPromptSettings};
 mod remote;
 mod session;
 
@@ -14,4 +16,6 @@ pub use project::{
 pub use remote::{
     RemoteAccessAddress, RemoteAccessConfig, RemoteDevice, RemoteHostConfig, random_remote_port,
 };
-pub use session::{SessionIndexEntry, SessionReconcileResult, SessionUiStateUpdate};
+pub use session::{
+    SessionIndexEntry, SessionReadState, SessionReconcileResult, SessionUiStateUpdate,
+};

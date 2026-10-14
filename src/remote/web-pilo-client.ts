@@ -1,4 +1,9 @@
 import type {
+	NextPromptModel,
+	NextPromptSettings,
+	NextPromptRequest,
+} from "@/lib/next-prompt";
+import type {
 	PiloClient,
 	PiloClientBootstrap,
 	PiloClientEventOptions,
@@ -6,6 +11,7 @@ import type {
 	PiloClientStartChatInput,
 } from "@/lib/pilo-client";
 import type { PiSessionSnapshot } from "@/lib/pi-runtime";
+import type { SessionReadState } from "@/lib/session-read-state";
 import type { ProjectPiModels } from "@/lib/pi-models";
 import type {
 	ProjectModelScope,
@@ -32,9 +38,14 @@ import {
 	loadRemoteProjectImage,
 	loadRemoteExternalActivity,
 	loadRemoteModels,
+	loadRemoteNextPromptSettings,
+	saveRemoteNextPromptSettings,
+	requestRemoteNextPrompt,
 	loadRemoteModelScope,
 	saveRemoteModelScope,
 	loadRemoteSessions,
+	loadRemoteSessionReadStates,
+	markRemoteSessionRead,
 	searchRemoteFiles,
 	searchRemoteSessions,
 	sendRemoteChatCommand,
@@ -51,6 +62,18 @@ export class WebPiloClient implements PiloClient {
 
 	listSessions(projectId: string): Promise<SessionIndexEntry[]> {
 		return loadRemoteSessions(this.token, projectId);
+	}
+
+	loadSessionReadStates(): Promise<SessionReadState[]> {
+		return loadRemoteSessionReadStates(this.token);
+	}
+
+	markSessionRead(
+		projectId: string,
+		sessionPath: string,
+		revision: number,
+	): Promise<SessionReadState> {
+		return markRemoteSessionRead(this.token, projectId, sessionPath, revision);
 	}
 
 	searchSessions(
@@ -107,6 +130,27 @@ export class WebPiloClient implements PiloClient {
 		sessionPath: string,
 	): Promise<SessionDeleteResult> {
 		return deleteRemoteSession(this.token, projectId, sessionPath);
+	}
+
+	loadNextPromptSettings(connectionId: string): Promise<NextPromptSettings> {
+		return loadRemoteNextPromptSettings(this.token, connectionId);
+	}
+
+	saveNextPromptSettings(
+		connectionId: string,
+		enabled: boolean,
+		model: NextPromptModel | null,
+	): Promise<NextPromptSettings> {
+		return saveRemoteNextPromptSettings(
+			this.token,
+			connectionId,
+			enabled,
+			model,
+		);
+	}
+
+	requestNextPrompt(request: NextPromptRequest): Promise<void> {
+		return requestRemoteNextPrompt(this.token, request);
 	}
 
 	startChat(input: PiloClientStartChatInput): Promise<PiSessionSnapshot> {

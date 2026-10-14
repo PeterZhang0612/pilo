@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+	type RefObject,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -11,77 +18,102 @@ import {
 	createPiExtensionCommandNames,
 } from "@/lib/pi-command-suggestions";
 import type { PiCommand } from "@/lib/pi-runtime";
+import type { RemoteSessionRpc } from "./use-remote-chat-transport";
 import type { WebPiloClient } from "./web-pilo-client";
 
 type UseRemoteChatSuggestionsOptions = {
 	client: WebPiloClient | null;
 	activeProjectId: string;
+	activeSessionKey: string | null;
+	activeSessionKeyRef: RefObject<string | null>;
+	runtimeReady: boolean;
 	readOnly: boolean;
 	ensureDraftRuntime: () => Promise<void>;
-	rpc: <T>(command: Record<string, unknown>, timeoutMs?: number) => Promise<T>;
+	rpcForSession: RemoteSessionRpc;
 };
 
 export function useRemoteChatSuggestions({
 	client,
 	activeProjectId,
+	activeSessionKey,
+	activeSessionKeyRef,
+	runtimeReady,
 	readOnly,
 	ensureDraftRuntime,
-	rpc,
+	rpcForSession,
 }: UseRemoteChatSuggestionsOptions) {
 	const { t } = useTranslation();
 
 	const [fileSuggestions, setFileSuggestions] = useState<ComposerSuggestion[]>(
 		[],
 	);
-	const [commandSuggestions, setCommandSuggestions] = useState<
-		ComposerSuggestion[]
-	>([]);
-	const extensionCommandNamesRef = useRef<Set<string>>(new Set());
-	const commandsLoadedRef = useRef(false);
-	const commandLoadingRef = useRef(false);
+	const [commandSuggestions, setCommandSuggestions] = useState<{
+		sessionKey: string;
+		items: ComposerSuggestion[];
+	} | null>(null);
+	const extensionCommandNamesRef = useRef<{
+		sessionKey: string;
+		names: Set<string>;
+	} | null>(null);
+	const commandLoadingRef = useRef(new Set<string>());
 	const fileSuggestionTimerRef = useRef<number | null>(null);
 	const fileSuggestionRequestRef = useRef(0);
 
-	const loadCommands = useCallback(async () => {
-		if (commandsLoadedRef.current || commandLoadingRef.current || readOnly)
-			return;
-		commandLoadingRef.current = true;
-		try {
-			await ensureDraftRuntime();
-			const result = await rpc<{ commands: PiCommand[] }>({
-				type: "get_commands",
-			});
-			extensionCommandNamesRef.current = createPiExtensionCommandNames(
-				result.commands,
+	const loadCommandCatalog = useCallback(
+		async (targetSessionKey: string) => {
+			const result = await rpcForSession<{ commands: PiCommand[] }>(
+				targetSessionKey,
+				{ type: "get_commands" },
 			);
-			setCommandSuggestions(createPiCommandSuggestions(result.commands));
-			commandsLoadedRef.current = true;
+			const names = createPiExtensionCommandNames(result.commands);
+			if (activeSessionKeyRef.current === targetSessionKey) {
+				extensionCommandNamesRef.current = {
+					sessionKey: targetSessionKey,
+					names,
+				};
+				setCommandSuggestions({
+					sessionKey: targetSessionKey,
+					items: createPiCommandSuggestions(result.commands),
+				});
+			}
+			return names;
+		},
+		[activeSessionKeyRef, rpcForSession],
+	);
+	const loadCommands = useCallback(async () => {
+		// Passive suggestions may query an existing runtime, but must not start Pi.
+		if (
+			!activeSessionKey ||
+			!runtimeReady ||
+			readOnly ||
+			extensionCommandNamesRef.current?.sessionKey === activeSessionKey ||
+			commandLoadingRef.current.has(activeSessionKey)
+		)
+			return;
+		const targetSessionKey = activeSessionKey;
+		commandLoadingRef.current.add(targetSessionKey);
+		try {
+			await loadCommandCatalog(targetSessionKey);
 		} catch (error) {
 			console.warn("Failed to load Pi commands for remote composer", error);
 		} finally {
-			commandLoadingRef.current = false;
+			commandLoadingRef.current.delete(targetSessionKey);
 		}
-	}, [ensureDraftRuntime, readOnly, rpc]);
+	}, [activeSessionKey, loadCommandCatalog, readOnly, runtimeReady]);
 
-	// Resolve the extension command set for `/name` submissions, loading it on demand.
-	// Returns null when the command catalog cannot be fetched.
+	// Explicit `/name` submissions may start Pi to resolve extension commands.
 	const loadExtensionCommandNames = useCallback(async () => {
-		if (commandsLoadedRef.current) return extensionCommandNamesRef.current;
+		if (!activeSessionKey || readOnly) return null;
+		const cached = extensionCommandNamesRef.current;
+		if (cached?.sessionKey === activeSessionKey) return cached.names;
+		const targetSessionKey = activeSessionKey;
 		try {
 			await ensureDraftRuntime();
-			const result = await rpc<{ commands: PiCommand[] }>({
-				type: "get_commands",
-			});
-			extensionCommandNamesRef.current = createPiExtensionCommandNames(
-				result.commands,
-			);
-			setCommandSuggestions(createPiCommandSuggestions(result.commands));
-			commandsLoadedRef.current = true;
-			return extensionCommandNamesRef.current;
+			return await loadCommandCatalog(targetSessionKey);
 		} catch {
 			return null;
 		}
-	}, [ensureDraftRuntime, rpc]);
+	}, [activeSessionKey, ensureDraftRuntime, loadCommandCatalog, readOnly]);
 
 	const handleSuggestionTrigger = useCallback(
 		(trigger: "@" | "/" | null, query: string) => {
@@ -133,9 +165,11 @@ export function useRemoteChatSuggestions({
 		() => [
 			...fileSuggestions,
 			...piSessionSuggestions(t),
-			...commandSuggestions,
+			...(commandSuggestions?.sessionKey === activeSessionKey
+				? commandSuggestions.items
+				: []),
 		],
-		[commandSuggestions, fileSuggestions, t],
+		[activeSessionKey, commandSuggestions, fileSuggestions, t],
 	);
 
 	return {

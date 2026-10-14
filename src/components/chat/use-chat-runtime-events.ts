@@ -17,7 +17,11 @@ import {
 	notifyAgentResult,
 	type AgentNotificationStatus,
 } from "@/lib/desktop-notifications";
-import { runtimeErrorMessage, type PiloRuntimeEvent } from "@/lib/pi-runtime";
+import {
+	runtimeErrorMessage,
+	type PiAgentState,
+	type PiloRuntimeEvent,
+} from "@/lib/pi-runtime";
 
 const CONTEXT_STATS_REFRESH_DELAY_MS = 1000;
 
@@ -94,7 +98,7 @@ type UseChatRuntimeEventsOptions = {
 		turn: ActiveTurn,
 		options?: { preserveQueued?: boolean },
 	) => void;
-	refreshSessionState: () => Promise<void>;
+	refreshSessionState: (agentState?: PiAgentState) => Promise<void>;
 	refreshSessionStats: () => Promise<void>;
 };
 
@@ -260,7 +264,7 @@ export function useChatRuntimeEvents({
 
 	const handleRuntimeEvent = useCallback(
 		(event: PiloRuntimeEvent) => {
-			if (event.type === "project_model_scope_changed") return;
+			if (!("generation" in event)) return;
 			recordChatRuntimeEvent();
 			const latestGeneration = runtimeGenerationRef.current;
 			if (latestGeneration !== null && event.generation < latestGeneration) {
@@ -515,8 +519,9 @@ export function useChatRuntimeEvents({
 				}
 				runtimeGenerationRef.current = runtimeState.snapshot.generation;
 				const agentState = await client.getPiAgentState();
-				if (cancelled || !agentState.isStreaming || activeTurnRef.current)
-					return;
+				if (cancelled) return;
+				void refreshSessionState(agentState).catch(() => undefined);
+				if (!agentState.isStreaming || activeTurnRef.current) return;
 				adoptActiveTurn(
 					runtimeState.snapshot.generation,
 					session.temporary ? session.id : (agentState.sessionId ?? session.id),
@@ -542,6 +547,7 @@ export function useChatRuntimeEvents({
 		adoptActiveTurn,
 		client,
 		identifiedRef,
+		refreshSessionState,
 		runtimeGenerationRef,
 		session.id,
 		session.temporary,

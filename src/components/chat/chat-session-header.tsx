@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import {
 	MessageSquareDashed,
 	PanelLeft,
@@ -32,6 +33,7 @@ export function SessionHeader({
 	onRenameSession,
 	onFindInSession,
 	onOpenInNewWindow,
+	additionalActions,
 	reserveWindowControls = false,
 	sidebarCollapsed = false,
 	overlay = false,
@@ -50,6 +52,7 @@ export function SessionHeader({
 	onRenameSession?: (title: string) => void;
 	onFindInSession?: () => void;
 	onOpenInNewWindow?: () => void;
+	additionalActions?: ReactNode;
 	reserveWindowControls?: boolean;
 	sidebarCollapsed?: boolean;
 	overlay?: boolean;
@@ -154,6 +157,7 @@ export function SessionHeader({
 			onNewChat ||
 			onOpenChanges ||
 			onOpenTerminal ||
+			additionalActions ||
 			(session && !session.temporary) ? (
 				<div
 					className={cn(
@@ -161,6 +165,7 @@ export function SessionHeader({
 						reserveWindowControls && "-translate-y-1",
 					)}
 				>
+					{additionalActions}
 					{onOpenTerminal ? (
 						<Tooltip>
 							<TooltipTrigger asChild>

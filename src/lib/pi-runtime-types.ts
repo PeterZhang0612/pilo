@@ -1,4 +1,6 @@
+import type { NextPromptSettings } from "./next-prompt";
 import type { ProjectModelScope } from "./project-model-scope";
+import type { SessionReadState } from "./session-read-state";
 
 export type PiProcessState =
 	| "stopped"
@@ -158,6 +160,18 @@ export type PiloRuntimeEvent = {
 	projectId?: string;
 } & (
 	| { type: "project_model_scope_changed"; scope: ProjectModelScope }
+	| { type: "next_prompt_settings_changed"; settings: NextPromptSettings }
+	| {
+			type: "session_turn_completed";
+			projectId: string;
+			sessionPath: string;
+			completionId: string;
+	  }
+	| {
+			type: "session_read_state_changed";
+			state: SessionReadState;
+			completionId?: string;
+	  }
 	| {
 			type: "process_state";
 			generation: number;

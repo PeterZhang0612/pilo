@@ -1,10 +1,8 @@
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 
 use crate::runtime::{
-    PiloRuntime,
-    session_activity::{SessionExternalActivity, external_session_activities_for_project},
-    session_history,
+    PiloRuntime, RuntimeEventBus, session_activity::SessionExternalActivity, session_history,
 };
 
 use super::session_runtime_project;
@@ -16,7 +14,9 @@ pub async fn session_external_activity(
     project_id: String,
 ) -> Result<Vec<SessionExternalActivity>, String> {
     let project = session_runtime_project(&app, &project_id)?;
-    external_session_activities_for_project(&runtime, &project).await
+    app.state::<RuntimeEventBus>()
+        .external_session_activity(&runtime, &project)
+        .await
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

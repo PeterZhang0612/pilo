@@ -53,6 +53,7 @@ impl ChatSessions {
             .cloned()
             .collect::<std::collections::HashSet<_>>();
         registry.snapshots.retain(|key, _| retained.contains(key));
+        registry.idle_since.retain(|key, _| retained.contains(key));
         registry
             .unavailable_projects
             .insert(project_id.to_owned(), false);
@@ -64,6 +65,7 @@ impl ChatSessions {
             let mut registry = self.registry.lock().await;
             registry.shutting_down = true;
             registry.snapshots.clear();
+            registry.idle_since.clear();
             registry
                 .processes
                 .drain()
@@ -73,8 +75,14 @@ impl ChatSessions {
                 })
                 .collect::<Vec<_>>()
         };
+        let mut stops = JoinSet::new();
         for process in processes {
-            let _ = process.session.lock().await.stop().await;
+            stops.spawn(async move { process.session.lock().await.stop().await });
+        }
+        while let Some(result) = stops.join_next().await {
+            if let Err(error) = result.unwrap_or_else(|error| Err(error.to_string())) {
+                log::warn!(target: "chat-cache", "failed to stop chat during shutdown: {error}");
+            }
         }
     }
 }

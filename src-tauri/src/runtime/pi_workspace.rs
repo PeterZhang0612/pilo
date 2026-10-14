@@ -1,30 +1,19 @@
-use std::{collections::BTreeMap, fs};
+use std::fs;
 
-use serde::Serialize;
+use pilo_protocol::{BuiltinExtension, SshWorkspaceConfig};
 use tauri::AppHandle;
 
 use crate::domain::{ConnectionKind, PiRuntime, Project};
 
 use super::{host_paths::HostPaths, ssh, storage};
 
-const SSH_WORKSPACE_EXTENSION: &str = include_str!("pi_ssh_workspace.js");
-const CONFIG_PLACEHOLDER: &str = "__PILO_SSH_WORKSPACE_CONFIG__";
-
 pub(crate) struct PiRuntimeProfile {
     pub project: Project,
     pub extensions: Vec<String>,
+    pub builtin_extensions: Vec<BuiltinExtension>,
     pub disable_builtin_tools: bool,
     pub disable_extension_discovery: bool,
     pub disable_context_files: bool,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct SshWorkspaceConfig<'a> {
-    label: &'a str,
-    remote_cwd: &'a str,
-    ssh_args: Vec<String>,
-    ssh_environment: BTreeMap<String, String>,
 }
 
 pub(crate) fn resolve_session_project(
@@ -55,12 +44,13 @@ pub(crate) fn resolve_pi_runtime(
 pub(crate) fn resolve_pi_runtime_with_paths(
     paths: &HostPaths,
     project: &Project,
-    mut extensions: Vec<String>,
+    extensions: Vec<String>,
 ) -> Result<PiRuntimeProfile, String> {
     match project.connection.pi_runtime {
         PiRuntime::Workspace => Ok(PiRuntimeProfile {
             project: project.clone(),
             extensions,
+            builtin_extensions: Vec::new(),
             disable_builtin_tools: false,
             disable_extension_discovery: false,
             disable_context_files: false,
@@ -77,17 +67,15 @@ pub(crate) fn resolve_pi_runtime_with_paths(
                 );
             }
             let config = SshWorkspaceConfig {
-                label: &project.connection.name,
-                remote_cwd: &project.path,
+                label: project.connection.name.clone(),
+                remote_cwd: project.path.clone(),
                 ssh_args: ssh::ssh_base_args(target)?,
                 ssh_environment: ssh::ssh_child_environment(&project.connection)?,
             };
-            let config_json = serde_json::to_string(&config)
-                .map_err(|error| format!("failed to encode SSH workspace config: {error}"))?;
-            extensions.push(SSH_WORKSPACE_EXTENSION.replace(CONFIG_PLACEHOLDER, &config_json));
             Ok(PiRuntimeProfile {
                 project: runtime_project,
                 extensions,
+                builtin_extensions: vec![BuiltinExtension::SshWorkspace { config }],
                 disable_builtin_tools: true,
                 disable_extension_discovery: true,
                 disable_context_files: true,

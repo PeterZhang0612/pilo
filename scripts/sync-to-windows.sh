@@ -34,7 +34,7 @@ require_command() {
 sync_once() {
   if [[ ! -f "$SERVER_RESOURCE" ]] ||
     find "$SOURCE_DIR/crates/pilo-protocol" "$SOURCE_DIR/crates/pilo-server" \
-      -type f \( -name '*.rs' -o -name 'Cargo.toml' \) \
+      -type f \( -name '*.rs' -o -name '*.js' -o -name 'Cargo.toml' \) \
       -newer "$SERVER_RESOURCE" -print -quit 2>/dev/null | grep -q .; then
     "$SCRIPT_DIR/build-pilo-server.sh"
   fi

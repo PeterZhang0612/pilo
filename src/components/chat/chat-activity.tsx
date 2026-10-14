@@ -28,6 +28,7 @@ import {
 	fileBasename,
 	flattenToolResult,
 	formatUnknown,
+	isRecord,
 	keyedDiffLines,
 	resultContent,
 	toolEditDiff,
@@ -206,7 +207,13 @@ function ThinkingActivityView({ activity }: { activity: ThinkingActivity }) {
 	);
 }
 
-function ToolDetail({ activity }: { activity: ToolCallActivity }) {
+function ToolDetail({
+	activity,
+	writeContent,
+}: {
+	activity: ToolCallActivity;
+	writeContent: string | null;
+}) {
 	const { t, i18n } = useTranslation();
 	const hasArgs = activity.args !== undefined && activity.args !== null;
 	const hasResult = activity.result !== undefined && activity.result !== null;
@@ -233,7 +240,13 @@ function ToolDetail({ activity }: { activity: ToolCallActivity }) {
 	const hasExecutionSummary =
 		exitCode != null || wallTimeSeconds != null || flattenedResult?.truncated;
 
-	if (!diff && !detailText && images.length === 0 && !hasExecutionSummary)
+	if (
+		writeContent === null &&
+		!diff &&
+		!detailText &&
+		images.length === 0 &&
+		!hasExecutionSummary
+	)
 		return null;
 
 	return (
@@ -258,6 +271,11 @@ function ToolDetail({ activity }: { activity: ToolCallActivity }) {
 						<span>{t("chat.toolOutputTruncated")}</span>
 					) : null}
 				</div>
+			) : null}
+			{writeContent !== null ? (
+				<pre className="scrollbar-pro max-h-56 overflow-auto whitespace-pre-wrap py-0.5 pr-1 font-mono text-[length:var(--pilo-code-font-size)] leading-[1.4] [overflow-wrap:anywhere]">
+					<code>{writeContent}</code>
+				</pre>
 			) : null}
 			{diff ? (
 				<ToolDiff diff={diff} />
@@ -294,7 +312,14 @@ function ToolCallActivityView({
 	const preview = toolPreview(activity);
 	const filePath = toolFilePath(activity);
 	const previewLabel = filePath ? fileBasename(filePath) : preview;
+	const writeContent =
+		activity.toolName.toLowerCase() === "write" &&
+		isRecord(activity.args) &&
+		typeof activity.args.content === "string"
+			? activity.args.content
+			: null;
 	const hasDetails =
+		writeContent !== null ||
 		(activity.args !== undefined &&
 			activity.args !== null &&
 			preview === null) ||
@@ -345,7 +370,9 @@ function ToolCallActivityView({
 					<Spinner className="mt-0.5 size-3.5 shrink-0" />
 				) : null}
 			</button>
-			{hasDetails && open ? <ToolDetail activity={activity} /> : null}
+			{hasDetails && open ? (
+				<ToolDetail activity={activity} writeContent={writeContent} />
+			) : null}
 		</div>
 	);
 }

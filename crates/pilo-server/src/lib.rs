@@ -1,6 +1,9 @@
 mod command;
 mod environment;
+mod extensions;
+pub use extensions::runtime_directory;
 mod fs_ops;
+mod output;
 mod runtime_streams;
 mod session;
 
@@ -18,6 +21,7 @@ use fs_ops::{
     fs_mkdir, fs_mkdir_absolute, fs_read_dir, fs_read_file, fs_remove, fs_rename, fs_search,
     fs_stat, fs_write_file,
 };
+use output::ServerWriter;
 use pilo_protocol::{
     Envelope, MAX_BINARY_PAYLOAD_BYTES, PROTOCOL_VERSION, SERVER_CAPABILITIES, ServerPing,
     ServerStatus, read_frame, write_frame,
@@ -60,42 +64,64 @@ pub fn binary_fingerprint(path: &Path) -> io::Result<String> {
     Ok(format!("{hash:016x}"))
 }
 
+type PiStarts = HashMap<u64, (String, tokio::sync::oneshot::Sender<()>)>;
+type PiOutputTasks = HashMap<
+    String,
+    (
+        std::sync::Weak<Mutex<tokio::process::ChildStdin>>,
+        [JoinHandle<()>; 2],
+    ),
+>;
+
 #[derive(Clone)]
 struct ServerState {
-    writer: mpsc::Sender<Envelope>,
+    writer: ServerWriter,
     request_slots: Arc<Semaphore>,
+    control_slots: Arc<Semaphore>,
     search_slots: Arc<Semaphore>,
     started_at: Instant,
     pi: Arc<Mutex<HashMap<String, PiProcess>>>,
+    pi_starts: Arc<Mutex<PiStarts>>,
+    pi_stops: Arc<Mutex<JoinSet<()>>>,
+    pi_output_tasks: Arc<StdMutex<PiOutputTasks>>,
     session_watchers: Arc<Mutex<HashMap<String, JoinHandle<()>>>>,
     terminals: Arc<StdMutex<HashMap<String, TerminalSession>>>,
     login_path: Arc<OnceCell<String>>,
     toolchain: Arc<OnceCell<ToolchainInfo>>,
+    extensions_dir: Arc<std::path::PathBuf>,
 }
 
 pub async fn serve_stdio() -> Result<(), Box<dyn std::error::Error>> {
+    let extensions_dir = extensions::deploy()?;
     eprintln!(
         "[runtime-diagnostics] server started pid={} version={SERVER_VERSION} maxInFlight={MAX_IN_FLIGHT_REQUESTS}",
         std::process::id()
     );
-    let (writer_tx, mut writer_rx) = mpsc::channel::<Envelope>(256);
+    let (writer_tx, mut writer_rx) = mpsc::channel::<output::QueuedOutput>(256);
     let state = ServerState {
-        writer: writer_tx,
+        writer: ServerWriter::new(writer_tx),
         request_slots: Arc::new(Semaphore::new(MAX_IN_FLIGHT_REQUESTS)),
+        control_slots: Arc::new(Semaphore::new(MAX_IN_FLIGHT_REQUESTS)),
         search_slots: Arc::new(Semaphore::new(2)),
         started_at: Instant::now(),
         pi: Arc::new(Mutex::new(HashMap::new())),
+        pi_starts: Arc::new(Mutex::new(HashMap::new())),
+        pi_stops: Arc::new(Mutex::new(JoinSet::new())),
+        pi_output_tasks: Arc::new(StdMutex::new(HashMap::new())),
         session_watchers: Arc::new(Mutex::new(HashMap::new())),
         terminals: Arc::new(StdMutex::new(HashMap::new())),
         login_path: Arc::new(OnceCell::new()),
         toolchain: Arc::new(OnceCell::new()),
+        extensions_dir: Arc::new(extensions_dir),
     };
 
-    let writer_task = tokio::spawn(async move {
+    let (writer_done_tx, mut writer_done_rx) = tokio::sync::oneshot::channel();
+    let mut writer_task = tokio::spawn(async move {
         let stdout = tokio::io::stdout();
         let mut stdout = stdout;
-        while let Some(message) = writer_rx.recv().await {
-            if let Err(error) = write_frame(&mut stdout, message).await {
+        while let Some(queued) = writer_rx.recv().await {
+            // Keep the byte reservation until the frame has actually been written.
+            if let Err(error) = write_frame(&mut stdout, queued.message).await {
                 eprintln!(
                     "[runtime-diagnostics] server stdout failed pid={} kind={:?} error={error}",
                     std::process::id(),
@@ -104,6 +130,7 @@ pub async fn serve_stdio() -> Result<(), Box<dyn std::error::Error>> {
                 break;
             }
         }
+        let _ = writer_done_tx.send(());
     });
 
     let stdin = tokio::io::stdin();
@@ -120,7 +147,11 @@ pub async fn serve_stdio() -> Result<(), Box<dyn std::error::Error>> {
                 );
             }
         }
-        let message = match read_frame(&mut stdin).await {
+        let frame = tokio::select! {
+            frame = read_frame(&mut stdin) => frame,
+            _ = &mut writer_done_rx => break Ok(()),
+        };
+        let message = match frame {
             Ok(Some(message)) => message,
             Ok(None) => break Ok(()),
             Err(error) => break Err(error),
@@ -134,30 +165,65 @@ pub async fn serve_stdio() -> Result<(), Box<dyn std::error::Error>> {
         else {
             continue;
         };
-        let admission_started = Instant::now();
-        if state.request_slots.available_permits() == 0 {
-            eprintln!(
-                "[runtime-diagnostics] server request capacity exhausted pid={} requestId={id} method={method} maxInFlight={MAX_IN_FLIGHT_REQUESTS}",
-                std::process::id()
-            );
-        }
-        let Ok(permit) = Arc::clone(&state.request_slots).acquire_owned().await else {
-            break Ok(());
+        let slots = if matches!(
+            method.as_str(),
+            "pi.stop" | "terminal.close" | "session.watch_stop"
+        ) {
+            &state.control_slots
+        } else {
+            &state.request_slots
         };
-        if admission_started.elapsed().as_secs() >= 1 {
-            eprintln!(
-                "[runtime-diagnostics] server request admission delayed pid={} requestId={id} method={method} elapsedMs={}",
-                std::process::id(),
-                admission_started.elapsed().as_millis()
-            );
-        }
+        // Never stop reading stdin while waiting for admission: EOF and stop
+        // requests must still reach cleanup when ordinary requests are saturated.
+        let permit = match Arc::clone(slots).try_acquire_owned() {
+            Ok(permit) => permit,
+            Err(_) => {
+                let response =
+                    Envelope::error(id, "server_busy", "pilo-server request capacity exhausted");
+                match tokio::time::timeout(
+                    std::time::Duration::from_secs(1),
+                    state.writer.send(response),
+                )
+                .await
+                {
+                    Ok(Ok(())) => continue,
+                    _ => break Ok(()),
+                }
+            }
+        };
+        // Register starts in input order, before their tasks can await probing.
+        let start_cancel = if method == "pi.start"
+            && let Some(stream_id) = params.get("streamId").and_then(Value::as_str)
+        {
+            let (cancel, cancelled) = tokio::sync::oneshot::channel();
+            state
+                .pi_starts
+                .lock()
+                .await
+                .insert(id, (stream_id.to_owned(), cancel));
+            Some(cancelled)
+        } else {
+            None
+        };
         let state = state.clone();
         requests.spawn(async move {
             let _permit = permit;
             let started = Instant::now();
             let stream_id = params.get("streamId").and_then(Value::as_str).map(str::to_owned);
             let rpc_id = params.pointer("/command/id").and_then(Value::as_str).map(str::to_owned);
-            let result = dispatch(&state, &method, params, binary).await;
+            let operation = dispatch(&state, &method, params, binary);
+            let result = if let Some(cancelled) = start_cancel {
+                tokio::select! {
+                    biased;
+                    _ = cancelled => Err("Pi stream startup cancelled".to_owned()),
+                    result = operation => result,
+                }
+            } else {
+                operation.await
+            };
+            if method == "pi.start" {
+                state.pi_starts.lock().await.remove(&id);
+            }
             if result.is_err() || started.elapsed().as_secs() >= 5 {
                 eprintln!("[runtime-diagnostics] server request pid={} requestId={id} method={method} streamId={stream_id:?} rpcId={rpc_id:?} ok={} elapsedMs={} activeRequests={}", std::process::id(), result.is_ok(), started.elapsed().as_millis(), MAX_IN_FLIGHT_REQUESTS.saturating_sub(state.request_slots.available_permits()));
             }
@@ -181,16 +247,43 @@ pub async fn serve_stdio() -> Result<(), Box<dyn std::error::Error>> {
     // spawn a new child after shutdown cleanup has already passed it.
     requests.abort_all();
     while requests.join_next().await.is_some() {}
-    let mut pi = state.pi.lock().await;
+    state.pi_starts.lock().await.clear();
+    for (_, (_, tasks)) in state
+        .pi_output_tasks
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .drain()
+    {
+        for task in tasks {
+            task.abort();
+        }
+    }
+    let processes = state
+        .pi
+        .lock()
+        .await
+        .drain()
+        .map(|(_, process)| process)
+        .collect::<Vec<_>>();
     eprintln!(
         "[runtime-diagnostics] server cleanup pid={} piProcesses={}",
         std::process::id(),
-        pi.len()
+        processes.len()
     );
-    for (_, mut process) in pi.drain() {
-        let _ = process.child.kill().await;
+    let mut stops = state.pi_stops.lock().await;
+    for process in processes {
+        stops.spawn(async move {
+            if let Err(error) = process.stop().await {
+                eprintln!("[runtime-diagnostics] Pi cleanup failed: {error}");
+            }
+        });
     }
-    drop(pi);
+    while let Some(result) = stops.join_next().await {
+        if let Err(error) = result {
+            eprintln!("[runtime-diagnostics] Pi cleanup task failed: {error}");
+        }
+    }
+    drop(stops);
     for (_, task) in state.session_watchers.lock().await.drain() {
         task.abort();
     }
@@ -201,7 +294,13 @@ pub async fn serve_stdio() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     drop(state.writer);
-    let _ = writer_task.await;
+    if tokio::time::timeout(std::time::Duration::from_secs(1), &mut writer_task)
+        .await
+        .is_err()
+    {
+        writer_task.abort();
+        let _ = writer_task.await;
+    }
     eprintln!(
         "[runtime-diagnostics] server stopped pid={}",
         std::process::id()

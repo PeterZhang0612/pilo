@@ -138,6 +138,8 @@ export type ConversationState = {
 		text: string;
 		images?: ChatConversationImage[];
 		timestampMs?: number;
+		replyStartIndex?: number;
+		previousTurn?: ConversationState["active"];
 		queueKind?: "steer" | "follow_up";
 	}>;
 };

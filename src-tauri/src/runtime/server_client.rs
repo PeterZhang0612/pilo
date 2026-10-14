@@ -20,8 +20,8 @@ use crate::domain::Connection;
 
 use super::server_deploy::{SpawnedServer, spawn_server};
 use transport::{
-    PendingRequest, PendingRequests, ServerEventHub, ServerProcess, ServerResponse, fail_pending,
-    reader_loop, writer_loop,
+    PendingRequest, PendingRequestGuard, PendingRequests, ServerEventHub, ServerProcess,
+    ServerResponse, fail_pending, reader_loop, writer_loop,
 };
 
 pub(crate) use manager::ServerManager;
@@ -198,6 +198,10 @@ impl ServerClient {
             .lock()
             .await
             .insert(id, PendingRequest { reply: reply_tx });
+        let _pending_guard = PendingRequestGuard {
+            pending: Arc::clone(&self.pending),
+            id,
+        };
         if self.is_closed() {
             self.pending.lock().await.remove(&id);
             return Err("pilo-server connection is closed".to_owned());
@@ -275,7 +279,7 @@ impl ServerClient {
         // the server first bypasses that cleanup and can orphan those processes.
         process.writer_task.abort();
         let _ = process.writer_task.await;
-        if tokio::time::timeout(std::time::Duration::from_secs(2), process.child.wait())
+        if tokio::time::timeout(std::time::Duration::from_secs(5), process.child.wait())
             .await
             .is_err()
         {

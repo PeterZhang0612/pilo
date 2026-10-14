@@ -8,7 +8,9 @@ import {
 	toSidebarSession,
 } from "@/components/app/app-chat-state";
 import { runtimeActivityFromStates } from "@/components/app/app-session-index-model";
-import { useSessionUnread } from "@/components/app/use-session-unread";
+import { useSyncedSessionUnread } from "@/components/app/use-synced-session-unread";
+import { NextPromptSettingsButton } from "@/components/settings/next-prompt-settings";
+import { useNextPrompt } from "@/components/chat/use-next-prompt";
 import { ChatComposer } from "@/components/chat/chat-composer";
 import { ConversationColumn } from "@/components/chat/chat-conversation-column";
 import { RemoteConversationViewport } from "./remote-conversation-viewport";
@@ -109,9 +111,6 @@ function RemoteWorkspace() {
 	});
 
 	useEffect(() => {
-		socketHandlerRef.current = chat.handleSocketMessage;
-	}, [chat.handleSocketMessage]);
-	useEffect(() => {
 		reconnectProbeRef.current = sessions.reloadBootstrap;
 	}, [sessions.reloadBootstrap]);
 
@@ -206,13 +205,44 @@ function RemoteWorkspace() {
 		[rawSessions, runtimeActivity, externalActivity],
 	);
 
-	const unreadSessionIds = useSessionUnread(
+	const { unread: unreadSessionIds, handleReadEvent } = useSyncedSessionUnread(
 		sessionsWithActivity,
 		chat.identifiedSessionId
 			? chatUiStateKey(chat.activeProjectId, chat.identifiedSessionId)
 			: null,
 		chatSessions,
+		{
+			client: connection.client,
+			refreshKey: `${connection.resyncKey}:${connection.snapshotRefreshKey}`,
+			onError: connection.handleExpiredAuth,
+		},
 	);
+
+	const nextPrompt = useNextPrompt({
+		client: connection.client,
+		connectionId: chat.activeProject?.connection.id ?? "",
+		sessionKey: chat.activeSessionKey,
+		sessionId: chat.identifiedSessionId ?? null,
+		draft: chat.composer,
+		hasAttachments: chat.images.length > 0,
+		active: networkState === "connected",
+		busy: active || chat.sending || chat.compacting || Boolean(chat.retryState),
+		blocked:
+			chat.readOnly || !chat.historyReady || Boolean(chat.extensionDialog),
+		model: chat.selectedModel,
+		refreshKey: `${connection.resyncKey}:${connection.snapshotRefreshKey}`,
+	});
+	const { handleSocketMessage } = chat;
+	const { handleMessage: handleNextPromptMessage } = nextPrompt;
+	useEffect(() => {
+		socketHandlerRef.current = (message) => {
+			if (message.type === "events") {
+				for (const event of message.events) handleReadEvent(event);
+			}
+			handleNextPromptMessage(message);
+			handleSocketMessage(message);
+		};
+	}, [handleSocketMessage, handleReadEvent, handleNextPromptMessage]);
 
 	const sidebarSessions = useMemo(
 		() =>
@@ -339,6 +369,15 @@ function RemoteWorkspace() {
 					<SessionHeader
 						session={chat.headerSession ?? undefined}
 						sessionState={chat.chatState ?? undefined}
+						additionalActions={
+							chat.activeProject ? (
+								<NextPromptSettingsButton
+									config={nextPrompt.config}
+									models={chat.modelScope.availableModels}
+									unavailable={nextPrompt.unavailable}
+								/>
+							) : undefined
+						}
 						onNewChat={
 							isNarrow
 								? () => chat.startDraft(chat.activeProjectId || undefined)
@@ -444,6 +483,8 @@ function RemoteWorkspace() {
 									/>
 								) : null}
 								<ChatComposer
+									nextPrompt={nextPrompt.text}
+									onNextPromptDismiss={nextPrompt.dismiss}
 									value={chat.readOnly ? "" : chat.composer}
 									onChange={chat.handleComposerChange}
 									muted={chat.readOnly}
@@ -476,7 +517,7 @@ function RemoteWorkspace() {
 										chat.readOnly ||
 										chat.sending ||
 										!chat.activeProjectId ||
-										(chat.hasIdentifiedSession && !chat.runtimeReady)
+										!chat.historyReady
 									}
 									running={active && !chat.readOnly}
 									onStop={chat.readOnly ? undefined : () => void chat.stop()}
@@ -499,10 +540,7 @@ function RemoteWorkspace() {
 									modelLoading={chat.modelLoading}
 									modelError={chat.modelError ?? fatalError}
 									modelDisabled={
-										chat.readOnly ||
-										(chat.hasIdentifiedSession
-											? !chat.runtimeReady
-											: !chat.activeProjectId)
+										chat.readOnly || !chat.historyReady || !chat.activeProjectId
 									}
 									onModelMenuOpen={() => {
 										if (chat.hasIdentifiedSession)
@@ -526,10 +564,10 @@ function RemoteWorkspace() {
 									thinkingLevels={chat.composerThinkingLevels}
 									selectedThinkingLevel={chat.composerSelectedThinkingLevel}
 									thinkingDisabled={
-										chat.hasIdentifiedSession
-											? !chat.runtimeReady || chat.thinkingLevels.length === 0
-											: !chat.activeProjectId ||
-												chat.composerThinkingLevels.length === 0
+										chat.readOnly ||
+										!chat.historyReady ||
+										!chat.activeProjectId ||
+										chat.composerThinkingLevels.length === 0
 									}
 									onThinkingChange={(level) => {
 										if (level) void chat.changeThinking(level);

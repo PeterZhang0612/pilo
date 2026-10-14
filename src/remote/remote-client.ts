@@ -1,4 +1,10 @@
+import type {
+	NextPromptModel,
+	NextPromptSettings,
+	NextPromptRequest,
+} from "@/lib/next-prompt";
 import { describeDevice } from "@/lib/device-name";
+import type { SessionReadState } from "@/lib/session-read-state";
 import type { RemoteAccessAddress } from "@/lib/remote";
 import type { ChatSessionRuntimeState } from "@/lib/chat-session-client";
 import type {
@@ -24,6 +30,9 @@ import type {
 
 export const REMOTE_TOKEN_KEY = "pilo.remote.device-token.v1";
 export const REMOTE_SEQUENCE_KEY = "pilo.remote.sequence.v1";
+
+const FOREGROUND_RESUME_MIN_HIDDEN_MS = 1_500;
+const SOCKET_PROBE_TIMEOUT_MS = 5_000;
 
 async function decodeError(response: Response) {
 	try {
@@ -211,6 +220,24 @@ export function searchRemoteSessions(
 	);
 }
 
+export function loadRemoteSessionReadStates(token: string) {
+	return remoteFetch<SessionReadState[]>(token, "/api/v1/sessions/read-state", {
+		cache: "no-store",
+	});
+}
+
+export function markRemoteSessionRead(
+	token: string,
+	projectId: string,
+	sessionPath: string,
+	revision: number,
+) {
+	return remoteFetch<SessionReadState>(token, "/api/v1/sessions/read-state", {
+		method: "POST",
+		body: JSON.stringify({ projectId, sessionPath, revision }),
+	});
+}
+
 export function loadRemoteExternalActivity(token: string, projectId: string) {
 	const query = new URLSearchParams({ projectId });
 	return remoteFetch<SessionExternalActivity[]>(
@@ -243,6 +270,43 @@ export function saveRemoteModelScope(
 	return remoteFetch<ProjectModelScope>(token, "/api/v1/models/scope", {
 		method: "POST",
 		body: JSON.stringify({ projectId, models }),
+	});
+}
+
+export function loadRemoteNextPromptSettings(
+	token: string,
+	connectionId: string,
+) {
+	const query = new URLSearchParams({ connectionId });
+	return remoteFetch<NextPromptSettings>(
+		token,
+		`/api/v1/next-prompt/settings?${query.toString()}`,
+	);
+}
+
+export function saveRemoteNextPromptSettings(
+	token: string,
+	connectionId: string,
+	enabled: boolean,
+	model: NextPromptModel | null,
+) {
+	return remoteFetch<NextPromptSettings>(
+		token,
+		"/api/v1/next-prompt/settings",
+		{
+			method: "POST",
+			body: JSON.stringify({ connectionId, enabled, model }),
+		},
+	);
+}
+
+export function requestRemoteNextPrompt(
+	token: string,
+	request: NextPromptRequest,
+) {
+	return remoteFetch<void>(token, "/api/v1/next-prompt/request", {
+		method: "POST",
+		body: JSON.stringify(request),
 	});
 }
 
@@ -394,15 +458,67 @@ export function connectRemoteEvents(
 	url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
 	if (after && after > 0) url.searchParams.set("after", String(after));
 	const socket = new WebSocket(url, ["pilo", `pilo-token.${token}`]);
+	let hiddenAt = document.visibilityState === "hidden" ? Date.now() : null;
+	let probeTimer: number | undefined;
+	const clearProbe = () => {
+		if (probeTimer !== undefined) window.clearTimeout(probeTimer);
+		probeTimer = undefined;
+	};
+	const disconnected = () => {
+		clearProbe();
+		onStatus(false);
+	};
+	const reconnect = () => {
+		disconnected();
+		socket.close();
+	};
+	const handleVisibilityChange = () => {
+		if (document.visibilityState === "hidden") {
+			hiddenAt = Date.now();
+			clearProbe();
+			return;
+		}
+		const suspendedAt = hiddenAt;
+		hiddenAt = null;
+		if (
+			suspendedAt === null ||
+			Date.now() - suspendedAt < FOREGROUND_RESUME_MIN_HIDDEN_MS
+		)
+			return;
+		if (
+			socket.readyState !== WebSocket.OPEN &&
+			socket.readyState !== WebSocket.CONNECTING
+		) {
+			disconnected();
+			return;
+		}
+		// A healthy socket must not lose pending input assistance on foreground.
+		probeTimer = window.setTimeout(reconnect, SOCKET_PROBE_TIMEOUT_MS);
+		if (socket.readyState === WebSocket.CONNECTING) return;
+		try {
+			socket.send(JSON.stringify({ type: "ping" }));
+		} catch {
+			reconnect();
+		}
+	};
 	socket.addEventListener("open", () => onStatus(true));
-	socket.addEventListener("close", () => onStatus(false));
-	socket.addEventListener("error", () => onStatus(false));
+	socket.addEventListener("close", disconnected);
+	socket.addEventListener("error", disconnected);
 	socket.addEventListener("message", (event) => {
 		try {
-			onMessage(JSON.parse(String(event.data)) as PiloClientEventMessage);
+			const message: unknown = JSON.parse(String(event.data));
+			// Any server frame proves this connection is still delivering messages.
+			clearProbe();
+			if (isRecord(message) && message.type === "pong") return;
+			onMessage(message as PiloClientEventMessage);
 		} catch {
 			// Ignore malformed server frames. Reconnect/snapshot logic handles gaps.
 		}
 	});
-	return () => socket.close();
+	document.addEventListener("visibilitychange", handleVisibilityChange);
+	return () => {
+		document.removeEventListener("visibilitychange", handleVisibilityChange);
+		clearProbe();
+		socket.close();
+	};
 }

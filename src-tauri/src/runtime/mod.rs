@@ -6,6 +6,7 @@ pub(crate) mod debug_trace;
 mod events;
 mod git;
 mod host_paths;
+mod next_prompt;
 mod parallel;
 mod pi_event_adapters;
 mod pi_events;

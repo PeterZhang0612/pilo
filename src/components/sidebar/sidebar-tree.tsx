@@ -317,16 +317,15 @@ export function SidebarTree({
 															}
 														>
 															{projectSessionSummary ? (
-																<>
-																	<SessionRowGlide>
-																		{projectSessionSummary.visible.map(
-																			renderSession,
-																		)}
-																	</SessionRowGlide>
+																<SessionRowGlide>
+																	{projectSessionSummary.visible.map(
+																		renderSession,
+																	)}
 																	{projectSessionSummary.hiddenCount > 0 ? (
 																		<button
 																			type="button"
-																			className="flex w-full items-center gap-1.5 rounded-md border border-transparent px-2 py-1 text-left text-xs text-sidebar-foreground-muted transition-colors hover:bg-sidebar-hover hover:text-sidebar-hover-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sidebar-ring"
+																			data-session-row=""
+																			className="relative flex w-full items-center gap-1.5 rounded-md border border-transparent bg-transparent px-2 py-1 text-left text-xs text-sidebar-foreground-muted transition-colors hover:bg-sidebar-hover group-hover/glide:hover:bg-transparent hover:text-sidebar-hover-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sidebar-ring"
 																			onClick={() =>
 																				onOpenProjectSessionsView(project.id)
 																			}
@@ -340,7 +339,7 @@ export function SidebarTree({
 																			</span>
 																		</button>
 																	) : null}
-																</>
+																</SessionRowGlide>
 															) : null}
 														</SortableProjectBlock>
 													);

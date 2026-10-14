@@ -1,5 +1,6 @@
 import {
 	createConversationState,
+	isAssistantBatchAction,
 	reduceConversation,
 } from "./conversation-reducer.ts";
 import type {
@@ -52,21 +53,6 @@ export function coalesceConversationActions(
 	return result;
 }
 
-function isAssistantBatchAction(action: ConversationAction) {
-	return (
-		action.type === "assistant_message_start" ||
-		action.type === "assistant_text_delta" ||
-		action.type === "assistant_text_snapshot" ||
-		action.type === "assistant_thinking_start" ||
-		action.type === "assistant_thinking_delta" ||
-		action.type === "assistant_thinking_end" ||
-		action.type === "tool_execution_start" ||
-		action.type === "tool_execution_update" ||
-		action.type === "tool_execution_end" ||
-		action.type === "assistant_turn_end"
-	);
-}
-
 function activeAssistantIndex(state: ConversationState) {
 	const activeId = state.active?.assistantMessageId;
 	if (!activeId) return -1;
@@ -89,7 +75,11 @@ function reduceActiveAssistantRun(
 ): ConversationState {
 	const assistantIndex = activeAssistantIndex(state);
 	const assistantMessage = state.messages[assistantIndex];
-	if (assistantIndex < 0 || assistantMessage?.role !== "assistant") {
+	if (
+		state.pendingUsers[0]?.previousTurn ||
+		assistantIndex < 0 ||
+		assistantMessage?.role !== "assistant"
+	) {
 		return actions.reduce(
 			(next, action) => reduceConversation(next, action, context),
 			state,

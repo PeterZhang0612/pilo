@@ -51,6 +51,15 @@ pub struct SessionIndexEntry {
     pub title_override: Option<String>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionReadState {
+    pub project_id: String,
+    pub session_path: String,
+    pub completed_revision: u64,
+    pub read_revision: u64,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionUiStateUpdate {

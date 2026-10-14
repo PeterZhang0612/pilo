@@ -53,6 +53,22 @@ pub struct ExtensionUiRequestPayload {
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum RuntimeEvent {
+    SessionTurnCompleted {
+        #[serde(rename = "projectId")]
+        project_id: String,
+        #[serde(rename = "sessionPath")]
+        session_path: String,
+        #[serde(rename = "completionId")]
+        completion_id: String,
+    },
+    SessionReadStateChanged {
+        state: crate::domain::SessionReadState,
+        #[serde(rename = "completionId", skip_serializing_if = "Option::is_none")]
+        completion_id: Option<String>,
+    },
+    NextPromptSettingsChanged {
+        settings: crate::domain::NextPromptSettings,
+    },
     ProjectModelScopeChanged {
         scope: crate::domain::ProjectModelScope,
     },

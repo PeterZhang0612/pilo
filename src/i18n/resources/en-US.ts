@@ -82,6 +82,13 @@ const enUS = {
 		notifications: "Notifications",
 		shortcuts: "Shortcuts",
 		connections: "Connections",
+		nextPrompt: "Next prompt prediction",
+		nextPromptDescription:
+			"Predicts a short next message after a reply. Uses an extra model call and sends a limited conversation to the selected model. Shared by this connection.",
+		nextPromptModel: "Prediction model",
+		nextPromptFollowModel: "Follow chat model",
+		nextPromptUnavailable:
+			"Prediction is unavailable. Check the selected model, credentials, and Pi version.",
 		sessionNaming: "Session naming",
 		remote: "Remote",
 		remoteWebUi: "Remote WebUI",
@@ -374,6 +381,8 @@ const enUS = {
 	},
 	chat: {
 		todayPrompt: "What would you like to work on today?",
+		acceptNextPrompt: "Use suggestion",
+		adoptNextPrompt: "Use suggestion: {{text}}",
 		composerPlaceholder: "Message Pi, @ to mention files",
 		addAttachment: "Add attachment",
 		removeAttachment: "Remove {{name}}",
@@ -439,6 +448,9 @@ const enUS = {
 		saveImage: "Save image",
 		openOriginalImage: "Open original image (new tab)",
 		closeImage: "Close",
+		zoomInImage: "Zoom in on image",
+		zoomOutImage: "Zoom out on image",
+		resetImageZoom: "Reset image zoom ({{percent}}%)",
 		viewImage: "View image {{name}}",
 		imagePreviewReleased:
 			"Image preview was released; reopen the session to load it",

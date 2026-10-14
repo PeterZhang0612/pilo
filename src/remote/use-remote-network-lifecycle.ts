@@ -1,16 +1,10 @@
-import { useEffect, useRef, useState } from "react";
-
-const FOREGROUND_RESUME_MIN_HIDDEN_MS = 1_500;
+import { useEffect, useState } from "react";
 
 export function useRemoteNetworkLifecycle() {
 	const [browserOnline, setBrowserOnline] = useState(() => navigator.onLine);
 	const [recoveryGeneration, setRecoveryGeneration] = useState(0);
-	const hiddenAtRef = useRef<number | null>(null);
 
 	useEffect(() => {
-		if (document.visibilityState === "hidden") {
-			hiddenAtRef.current = Date.now();
-		}
 		const requestRecovery = () =>
 			setRecoveryGeneration((generation) => generation + 1);
 
@@ -21,23 +15,10 @@ export function useRemoteNetworkLifecycle() {
 			setBrowserOnline(true);
 			requestRecovery();
 		};
+		// Foreground recovery probes the existing socket in connectRemoteEvents.
 		const handleVisibilityChange = () => {
-			if (document.visibilityState === "hidden") {
-				hiddenAtRef.current = Date.now();
-				return;
-			}
-
-			const hiddenAt = hiddenAtRef.current;
-			hiddenAtRef.current = null;
-			const online = navigator.onLine;
-			setBrowserOnline(online);
-			if (
-				online &&
-				hiddenAt !== null &&
-				Date.now() - hiddenAt >= FOREGROUND_RESUME_MIN_HIDDEN_MS
-			) {
-				requestRecovery();
-			}
+			if (document.visibilityState === "visible")
+				setBrowserOnline(navigator.onLine);
 		};
 
 		window.addEventListener("offline", handleOffline);

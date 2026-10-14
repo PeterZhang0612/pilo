@@ -69,6 +69,14 @@ pub(super) fn initialize_schema(db: &SqliteConnection) -> Result<(), String> {
            model_id TEXT NOT NULL,
            updated_at_ms INTEGER NOT NULL
          );
+         CREATE TABLE IF NOT EXISTS connection_next_prompt_settings (
+           connection_id TEXT PRIMARY KEY REFERENCES connections(id) ON DELETE CASCADE,
+           enabled INTEGER NOT NULL DEFAULT 0 CHECK(enabled IN (0,1)),
+           provider TEXT,
+           model_id TEXT,
+           updated_at_ms INTEGER NOT NULL,
+           CHECK((provider IS NULL AND model_id IS NULL) OR (provider IS NOT NULL AND model_id IS NOT NULL))
+         );
          CREATE TABLE IF NOT EXISTS projects (
            id TEXT PRIMARY KEY,
            connection_id TEXT NOT NULL REFERENCES connections(id) ON DELETE CASCADE,
@@ -116,6 +124,18 @@ pub(super) fn initialize_schema(db: &SqliteConnection) -> Result<(), String> {
            pinned INTEGER NOT NULL DEFAULT 0,
            title_override TEXT,
            updated_at_ms INTEGER NOT NULL
+         );
+         CREATE TABLE IF NOT EXISTS session_read_revision (
+           id INTEGER PRIMARY KEY CHECK(id=1),
+           revision INTEGER NOT NULL
+         );
+         INSERT OR IGNORE INTO session_read_revision(id,revision) VALUES(1,0);
+         CREATE TABLE IF NOT EXISTS session_read_state (
+           project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+           session_path TEXT NOT NULL,
+           completed_revision INTEGER NOT NULL DEFAULT 0,
+           read_revision INTEGER NOT NULL DEFAULT 0,
+           PRIMARY KEY(project_id, session_path)
          );
          CREATE TABLE IF NOT EXISTS remote_host_config (
            id INTEGER PRIMARY KEY CHECK(id=1),

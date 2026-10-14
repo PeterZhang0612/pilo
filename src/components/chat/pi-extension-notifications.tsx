@@ -50,7 +50,7 @@ export function PiExtensionNotifications({
 							type="button"
 							variant="ghost"
 							size="icon"
-							className="-my-0.5 -mr-1 size-6 shrink-0 rounded-md text-muted-foreground hover:bg-hover hover:text-foreground active:scale-[0.92] transition-[background-color,color,scale] duration-150 ease-out"
+							className="-my-1 size-7 shrink-0 rounded-md text-muted-foreground hover:bg-hover hover:text-foreground active:scale-[0.92] transition-[background-color,color,scale] duration-150 ease-out"
 							aria-label={t("chat.closePluginNotifications")}
 							onClick={() => onDismiss(notification.id)}
 						>

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, atomic::Ordering};
 
 use serde_json::{Value, json};
 use tokio::{
@@ -19,6 +19,18 @@ use crate::runtime::{
 
 const RUNTIME_EVENT_BATCH_MS: u64 = 16;
 
+fn observe_input_assistance(state: &StateCell, data: &Value) {
+    if data.get("type").and_then(Value::as_str) == Some("extension_ui_request")
+        && data.get("method").and_then(Value::as_str) == Some("setWidget")
+        && data.get("widgetKey").and_then(Value::as_str) == Some("pilo.next-prompt.ready.v1")
+    {
+        state.next_prompt_ready.store(
+            data.get("widgetLines") == Some(&json!(["ready"])),
+            Ordering::Release,
+        );
+    }
+}
+
 pub(super) fn spawn_event_task<S: RuntimeEventSink>(
     client: Arc<ServerClient>,
     sink: S,
@@ -37,7 +49,7 @@ pub(super) fn spawn_event_task<S: RuntimeEventSink>(
         flush_tick.tick().await;
         loop {
             let received = tokio::select! {
-                _ = flush_tick.tick() => {
+                _ = flush_tick.tick(), if !buffered_runtime_events.is_empty() => {
                     flush_runtime_events(&sink, &mut buffered_runtime_events);
                     continue;
                 }
@@ -94,9 +106,11 @@ pub(super) fn spawn_event_task<S: RuntimeEventSink>(
             if event.stream_id != stream_id {
                 continue;
             }
+            let was_empty = buffered_runtime_events.is_empty();
             match event.event.as_str() {
                 "pi.rpc" => {
                     let data = event.data.clone();
+                    observe_input_assistance(&state, &data);
                     trace_pi_transport_event(&stream_id, &data);
                     dispatch_runtime_events(
                         &sink,
@@ -116,6 +130,7 @@ pub(super) fn spawn_event_task<S: RuntimeEventSink>(
                     };
                     match serde_json::from_slice::<Value>(bytes) {
                         Ok(data) => {
+                            observe_input_assistance(&state, &data);
                             trace_pi_transport_event(&stream_id, &data);
                             dispatch_runtime_events(
                                 &sink,
@@ -193,6 +208,9 @@ pub(super) fn spawn_event_task<S: RuntimeEventSink>(
                     break;
                 }
                 _ => {}
+            }
+            if was_empty && !buffered_runtime_events.is_empty() {
+                flush_tick.reset();
             }
         }
         flush_runtime_events(&sink, &mut buffered_runtime_events);

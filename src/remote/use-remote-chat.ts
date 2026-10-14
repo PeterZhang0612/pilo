@@ -308,6 +308,9 @@ export function useRemoteChat({
 		setDraftThinkingLevel,
 		refreshAgentConfig,
 		loadDraftCatalog,
+		historyModel,
+		historyThinkingLevel,
+		applyHistoryMetadata,
 	} = agentConfig;
 	const routeUiKey = activeProjectId
 		? chatUiStateKey(activeProjectId, routeSessionId)
@@ -412,6 +415,7 @@ export function useRemoteChat({
 		isExternalOpenTurn,
 		runtimeTurnOpen,
 		refreshAgentConfig,
+		onHistoryMetadata: applyHistoryMetadata,
 		handleExpiredAuth,
 		setFatalError,
 		setConversation,
@@ -421,6 +425,7 @@ export function useRemoteChat({
 	const {
 		historyPrefix,
 		loadingConversation,
+		historyReady,
 		historyIndexStale,
 		requestHistoryRange,
 		retryHistory,
@@ -467,9 +472,25 @@ export function useRemoteChat({
 				sessionPath: selectedSession?.sessionPath,
 				noSession: draftTemporary,
 			};
+			const targetSessionKey = activeSessionKey;
 			await client.startChat(input).catch(() => undefined);
-			await client.startChat(input);
-			setRuntimeReady(true);
+			await client.startChat(input).finally(async () => {
+				if (
+					draftTemporary &&
+					activeSessionKeyRef.current !== targetSessionKey
+				) {
+					await client
+						.stopChat(targetSessionKey, "temporary_approval_abandoned")
+						.catch((error) => {
+							console.warn(
+								"Failed to stop abandoned temporary approval",
+								error,
+							);
+						});
+				}
+			});
+			if (activeSessionKeyRef.current === targetSessionKey)
+				setRuntimeReady(true);
 		},
 		[
 			activeProjectId,
@@ -532,6 +553,15 @@ export function useRemoteChat({
 		[activeProjectId, client, routeKey],
 	);
 
+	const releaseTemporaryRuntime = useCallback(() => {
+		if (!draftTemporary || !activeSessionKey || !client) return;
+		void client
+			.stopChat(activeSessionKey, "temporary_chat_left")
+			.catch((error) => {
+				console.warn("Failed to stop abandoned temporary chat", error);
+			});
+	}, [activeSessionKey, client, draftTemporary]);
+
 	const {
 		startDraft,
 		toggleTemporaryChat,
@@ -552,6 +582,7 @@ export function useRemoteChat({
 		projectDraftCache,
 		queuedSubmissionsRef,
 		autoTitleRequestedRef,
+		releaseTemporaryRuntime,
 		refreshProjectSessions,
 		setSelectedSessionPath,
 		setIdentifiedDraftSessionId,
@@ -593,23 +624,50 @@ export function useRemoteChat({
 			? await client.chatState(targetSessionKey)
 			: null;
 		if (runtime?.snapshot.state === "running" && runtime.initialized) {
-			if (!selectedSession && !identifiedDraftSessionId) {
+			if (draftTemporary && !isActiveSession()) {
+				throw new Error("temporary session is closing");
+			}
+			if (!agentState || (!selectedSession && !identifiedDraftSessionId)) {
 				const state = await targetRpc<PiAgentState>({ type: "get_state" });
 				if (isActiveSession()) {
 					setAgentState(state);
-					identifyDraftSession(state);
+					if (!selectedSession) identifyDraftSession(state);
 				}
 			}
 			return;
 		}
-		await client.startChat({
-			projectId: activeProjectId,
-			sessionKey: targetSessionKey,
-			sessionPath:
-				selectedSession?.sessionPath ??
-				(identifiedDraftSessionId ? agentState?.sessionFile : undefined),
-			noSession: draftTemporary,
-		});
+		await client
+			.startChat({
+				projectId: activeProjectId,
+				sessionKey: targetSessionKey,
+				sessionPath:
+					selectedSession?.sessionPath ??
+					(identifiedDraftSessionId ? agentState?.sessionFile : undefined),
+				noSession: draftTemporary,
+			})
+			.catch((error: unknown) => {
+				if (
+					isActiveSession() &&
+					error instanceof Error &&
+					error.message.includes("read-only observer mode")
+				) {
+					setReadOnly(true);
+				}
+				throw error;
+			})
+			.finally(async () => {
+				// Leaving while startup is pending can precede creation of the runtime.
+				if (draftTemporary && !isActiveSession()) {
+					await client
+						.stopChat(targetSessionKey, "temporary_start_abandoned")
+						.catch((error) => {
+							console.warn("Failed to stop abandoned temporary startup", error);
+						});
+				}
+			});
+		if (draftTemporary && !isActiveSession()) {
+			throw new Error("temporary session is closing");
+		}
 		if (isActiveSession()) setRuntimeReady(true);
 		// Carry the draft run-config onto the freshly started session, matching the
 		// Desktop `prepareRuntimeConfiguration` step for new chats. Selected sessions
@@ -627,12 +685,11 @@ export function useRemoteChat({
 				level: draftThinkingLevel,
 			}).catch(() => undefined);
 		}
-		if (!selectedSession) {
-			const state = await targetRpc<PiAgentState>({ type: "get_state" });
-			if (isActiveSession()) {
-				setAgentState(state);
-				identifyDraftSession(state);
-			}
+		// Hydrate real state before callers mutate model/thinking settings.
+		const state = await targetRpc<PiAgentState>({ type: "get_state" });
+		if (isActiveSession()) {
+			setAgentState(state);
+			if (!selectedSession) identifyDraftSession(state);
 		}
 		window.setTimeout(() => {
 			if (isActiveSession()) void refreshAgentConfig();
@@ -640,8 +697,7 @@ export function useRemoteChat({
 	}, [
 		activeProjectId,
 		activeSessionKey,
-		activeSessionKeyRef,
-		agentState?.sessionFile,
+		agentState,
 		client,
 		draftModel,
 		draftThinkingLevel,
@@ -655,12 +711,41 @@ export function useRemoteChat({
 		selectedSession,
 	]);
 
+	const refreshActiveAgentConfig = useCallback(
+		async (liveRuntime = true) => {
+			const targetSessionKey = activeSessionKey;
+			try {
+				if (liveRuntime && !readOnly) await ensureDraftRuntime();
+				if (activeSessionKeyRef.current !== targetSessionKey) return;
+				await refreshAgentConfig(liveRuntime);
+			} catch (error) {
+				if (
+					activeSessionKeyRef.current === targetSessionKey &&
+					!handleExpiredAuth(error)
+				) {
+					setFatalError(error instanceof Error ? error.message : String(error));
+				}
+			}
+		},
+		[
+			activeSessionKey,
+			ensureDraftRuntime,
+			handleExpiredAuth,
+			readOnly,
+			refreshAgentConfig,
+			setFatalError,
+		],
+	);
+
 	const suggestions = useRemoteChatSuggestions({
 		client,
 		activeProjectId,
+		activeSessionKey,
+		activeSessionKeyRef,
+		runtimeReady: runtimeReady && historyReady,
 		readOnly,
 		ensureDraftRuntime,
-		rpc,
+		rpcForSession,
 	});
 	const {
 		composerSuggestions,
@@ -687,18 +772,19 @@ export function useRemoteChat({
 		? thinkingLevels
 		: (draftModel?.thinkingLevels ?? []);
 	const composerSelectedThinkingLevel = selectedSession
-		? (agentState?.thinkingLevel ?? null)
+		? (agentState?.thinkingLevel ?? historyThinkingLevel)
 		: draftThinkingLevel;
 
 	const { tryHandleComposerCommand } = useRemoteChatCommands({
 		client,
 		activeProjectId,
 		activeSessionKey,
+		activeSessionKeyRef,
 		clearComposer,
 		ensureDraftRuntime,
 		handleExpiredAuth,
 		loadExtensionCommandNames,
-		rpc,
+		rpcForSession,
 		startDraft,
 		setFatalError,
 	});
@@ -740,7 +826,6 @@ export function useRemoteChat({
 		setAgentState,
 		setDraftModel,
 		setDraftThinkingLevel,
-		rpc,
 		rpcForSession,
 	});
 
@@ -774,6 +859,7 @@ export function useRemoteChat({
 			compacting ||
 			sending ||
 			readOnly,
+		ensureDraftRuntime,
 		rpcForSession,
 		refreshProjectSessions,
 		onForkSessionCreated: (sessionId, projectId) => {
@@ -802,15 +888,21 @@ export function useRemoteChat({
 
 	const selectedModel = useMemo(() => {
 		if (!hasIdentifiedSession) return draftModel;
-		const current = agentState?.model;
+		const current = agentState?.model ?? historyModel;
 		if (!current) return null;
 		return (
 			models.find(
 				(model) =>
 					model.provider === current.provider && model.id === current.id,
-			) ?? null
+			) ?? current
 		);
-	}, [agentState?.model, draftModel, hasIdentifiedSession, models]);
+	}, [
+		agentState?.model,
+		draftModel,
+		hasIdentifiedSession,
+		historyModel,
+		models,
+	]);
 
 	return {
 		// route / selection
@@ -876,6 +968,7 @@ export function useRemoteChat({
 		readOnly,
 		runtimeReady,
 		loadingConversation,
+		historyReady,
 		historyIndexStale,
 		forkingMessageId: fork.forkingMessageId,
 		forkDisabled:
@@ -899,7 +992,7 @@ export function useRemoteChat({
 		stop,
 		changeModel,
 		changeThinking,
-		refreshAgentConfig,
+		refreshAgentConfig: refreshActiveAgentConfig,
 		loadDraftCatalog,
 		abortPiRetry,
 		handleForkAssistant: fork.handleForkAssistant,

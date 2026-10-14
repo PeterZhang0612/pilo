@@ -15,7 +15,8 @@ use runtime::{
         connection_health_get, connection_naming_model_get, connection_naming_model_list,
         connection_naming_model_set, connection_pi_probe, connection_settings_update,
         connection_shown_in_home_set, local_connection_get, local_connection_test,
-        local_pick_project_directory, parallel_agent_create, parallel_agent_list,
+        local_pick_project_directory, next_prompt_request, next_prompt_settings_get,
+        next_prompt_settings_set, parallel_agent_create, parallel_agent_list,
         parallel_agent_remove, parallel_agent_send, parallel_agent_stop, project_add,
         project_discover, project_fs_mkdir, project_fs_read_dir, project_fs_read_file,
         project_fs_read_image, project_fs_remove, project_fs_rename, project_fs_search,
@@ -29,11 +30,12 @@ use runtime::{
         runtime_abort_pi, runtime_get_pi_state, runtime_restart_pi, runtime_send_rpc,
         runtime_stop_pi, runtime_subscribe_events, session_delete, session_external_activity,
         session_generate_title, session_history, session_history_image, session_list,
-        session_reconcile, session_search, session_update_ui_state, session_watch_start,
-        session_watch_stop, ssh_connection_list, ssh_connection_password_get,
-        ssh_connection_remove, ssh_connection_save, ssh_connection_test, ssh_connection_test_draft,
-        system_font_families, terminal_close, terminal_resize, terminal_write, wsl_connection_list,
-        wsl_connection_remove, wsl_connection_save, wsl_connection_test, wsl_list_distributions,
+        session_mark_read, session_read_states, session_reconcile, session_search,
+        session_update_ui_state, session_watch_start, session_watch_stop, ssh_connection_list,
+        ssh_connection_password_get, ssh_connection_remove, ssh_connection_save,
+        ssh_connection_test, ssh_connection_test_draft, system_font_families, terminal_close,
+        terminal_resize, terminal_write, wsl_connection_list, wsl_connection_remove,
+        wsl_connection_save, wsl_connection_test, wsl_list_distributions,
     },
 };
 use std::{fs::OpenOptions, io::Write};
@@ -153,6 +155,9 @@ pub fn run() {
             project_model_cache_set,
             project_model_scope_get,
             project_model_scope_set,
+            next_prompt_settings_get,
+            next_prompt_settings_set,
+            next_prompt_request,
             project_add,
             project_refresh,
             project_touch,
@@ -186,6 +191,8 @@ pub fn run() {
             project_fs_search,
             project_mcp_server_approve,
             session_list,
+            session_read_states,
+            session_mark_read,
             session_external_activity,
             session_generate_title,
             session_reconcile,
@@ -227,7 +234,10 @@ pub fn run() {
             runtime::initialize_server_resource_dir(app.path().resource_dir()?);
             initialize_macos_notification_application(app);
             initialize_windows_notification_application(app);
+            app.state::<runtime::RuntimeEventBus>()
+                .initialize_session_reads(app.handle())?;
             desktop_window::create_main_window(app)?;
+            app.state::<PiloRuntime>().chat_sessions.start_idle_reaper();
 
             let remote_app = app.handle().clone();
             tauri::async_runtime::spawn(async move {
