@@ -231,6 +231,7 @@ pub fn run() {
         .setup(|app| {
             use tauri::Manager;
 
+            runtime::initialize_server_resource_dir(app.path().resource_dir()?);
             initialize_macos_notification_application(app);
             initialize_windows_notification_application(app);
             app.state::<runtime::RuntimeEventBus>()

@@ -173,12 +173,13 @@ fn current_platform_resolves_its_staged_server_runtime() {
 fn installed_runtime_candidates_cover_bundle_layouts() {
     let name = "pilo-server-linux-x86_64";
     assert_eq!(
-        installed_server_candidates(Path::new("/install/Pilo.exe"), name)[0],
+        installed_server_candidates(Path::new("/install/Pilo.exe"), None, name)[0],
         Path::new("/install/runtime/pilo-server-linux-x86_64")
     );
     assert_eq!(
         installed_server_candidates(
             Path::new("/Applications/Pilo.app/Contents/MacOS/pilo"),
+            None,
             name
         )[1],
         Path::new(
@@ -186,8 +187,20 @@ fn installed_runtime_candidates_cover_bundle_layouts() {
         )
     );
     assert_eq!(
-        installed_server_candidates(Path::new("/usr/bin/pilo"), name)[2],
-        Path::new("/usr/bin/../lib/pilo/runtime/pilo-server-linux-x86_64")
+        installed_server_candidates(
+            Path::new("/usr/bin/pilo"),
+            Some(Path::new("/usr/lib/Pilo")),
+            name
+        )[0],
+        Path::new("/usr/lib/Pilo/runtime/pilo-server-linux-x86_64")
+    );
+    assert_eq!(
+        installed_server_candidates(
+            Path::new("/tmp/.mount_Pilo/usr/bin/pilo"),
+            Some(Path::new("/tmp/.mount_Pilo/usr/lib/Pilo")),
+            name
+        )[0],
+        Path::new("/tmp/.mount_Pilo/usr/lib/Pilo/runtime/pilo-server-linux-x86_64")
     );
 }
 

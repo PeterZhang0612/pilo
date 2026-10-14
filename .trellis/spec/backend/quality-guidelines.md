@@ -59,3 +59,36 @@ them (`#[allow(...)]` only with a comment explaining why).
   `src-tauri/Cargo.toml`.
 - `pnpm tauri dev` and desktop-window/installer verification must run on Windows.
   WSL is for code, `cargo check`, and static validation only.
+
+### Bundled server resource paths
+
+- Initialize the server resource directory from `app.path().resource_dir()` in
+  Tauri setup, before restoring connections or starting server prewarming.
+- `server_binary` checks explicit `PILO_SERVER_PATH` / `PILO_SERVER_LINUX_PATH`
+  overrides first, then `<resource_dir>/runtime/<resource_name>`, portable/macOS
+  fallback locations, and staged development resources. Missing files keep the
+  existing `bundled pilo-server runtime ... is missing` error.
+- Linux resource directories use Tauri's product name, not the executable stem:
+  the deb installs `/usr/bin/pilo` with resources under `/usr/lib/Pilo/runtime`.
+  AppImage resources live under its mount directory. Do not lowercase the
+  product name or infer `/usr/lib/pilo` from the executable.
+- Regression coverage must include the case-sensitive deb/rpm layout and the
+  AppImage mount layout, alongside Windows portable and macOS bundle paths.
+
+### Linux AppImage finalization
+
+- Run `scripts/finalize-linux-appimage.sh <AppImage> <AppDir> <runtime-dir>
+  <AppImage-output-plugin>` after Tauri bundling and before collecting assets.
+  It restores all four original server binaries into the prepared AppDir and
+  removes `libwayland-client.so*`, which conflicts with host Mesa/EGL.
+- Never run linuxdeploy over restored server resources: its ELF patching makes
+  the static PIE Linux runtimes segfault even for `--fingerprint`. Repack with
+  the AppImage output plugin alone, using the copy cached by Tauri.
+- Verify the final extracted image contains byte-identical runtimes, excludes
+  the Wayland client, and runs the native x64 server with the original
+  fingerprint. Missing inputs, changed bytes, or server failure must stop CI.
+- Re-sign the final AppImage with `pnpm tauri signer sign` after replacement;
+  Tauri's initial `.sig` covers the pre-finalization bytes and is stale.
+- Run `python3 tests/test-linux-appimage.py` for portable orchestration tests.
+  These use a fixture packer; Linux CI must also run final-artifact verification,
+  and desktop testing must validate UI and Pi connections on the target host.
