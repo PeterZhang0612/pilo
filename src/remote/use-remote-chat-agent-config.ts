@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { ChatSessionRuntimeState } from "@/components/chat/chat-page-utils";
 import type {
@@ -8,9 +8,13 @@ import type {
 	PiThinkingLevel,
 } from "@/lib/pi-runtime";
 import type { ProjectPiModels } from "@/lib/pi-models";
-import { reconcilePiModelCatalog } from "@/lib/pi-model-selection";
-import { runtimeErrorMessage } from "@/lib/pi-runtime";
-import type { SessionIndexEntry } from "@/lib/sessions";
+import {
+	findMatchingPiModel,
+	getPiModelThinkingLevels,
+	reconcilePiModelCatalog,
+} from "@/lib/pi-model-selection";
+import { PI_THINKING_LEVELS, runtimeErrorMessage } from "@/lib/pi-runtime";
+import type { SessionHistory, SessionIndexEntry } from "@/lib/sessions";
 import type { RemoteRpc } from "./use-remote-chat-transport";
 import type { WebPiloClient } from "./web-pilo-client";
 
@@ -33,6 +37,10 @@ export function useRemoteChatAgentConfig({
 	const [chatState, setChatState] = useState<ChatSessionRuntimeState | null>(
 		null,
 	);
+	const [historyMetadata, setHistoryMetadata] = useState<Pick<
+		SessionHistory,
+		"model" | "thinkingLevel" | "name" | "stats"
+	> | null>(null);
 	const [models, setModels] = useState<PiModel[]>([]);
 	const [modelsLoaded, setModelsLoaded] = useState(false);
 	// 仅用于 composer 的模型刷新按钮；与 Desktop 的 modelLoadState 对齐，
@@ -47,6 +55,33 @@ export function useRemoteChatAgentConfig({
 	const draftCatalogRequestRef = useRef(0);
 	const configKey = selectedSession?.sessionPath ?? draftId;
 	const configIdentityRef = useRef({ projectId: activeProjectId, configKey });
+
+	const applyHistoryMetadata = useCallback((history: SessionHistory) => {
+		setAgentState(null);
+		setChatState(null);
+		// Keep only metadata, not the replay events or image payloads.
+		setHistoryMetadata({
+			model: history.model,
+			thinkingLevel: history.thinkingLevel,
+			name: history.name,
+			stats: history.stats,
+		});
+	}, []);
+	const historyModel = useMemo<PiModel | null>(() => {
+		const model = historyMetadata?.model;
+		if (!model) return null;
+		return (
+			findMatchingPiModel(models, model) ?? {
+				...model,
+				name: model.id,
+				reasoning: false,
+			}
+		);
+	}, [historyMetadata, models]);
+	const historyThinkingLevel =
+		PI_THINKING_LEVELS.find(
+			(level) => level === historyMetadata?.thinkingLevel,
+		) ?? null;
 
 	const refreshAgentConfig = useCallback(
 		async (liveRuntime = true) => {
@@ -150,6 +185,10 @@ export function useRemoteChatAgentConfig({
 	/* oxlint-disable react/set-state-in-effect -- Reset catalog identity before resolving another project/session. */
 	useEffect(() => {
 		configIdentityRef.current = { projectId: activeProjectId, configKey };
+		setAgentState(null);
+		setChatState(null);
+		setHistoryMetadata(null);
+		setThinkingLevels([]);
 		setCatalog(null);
 		setModels([]);
 		setModelsLoaded(false);
@@ -176,15 +215,29 @@ export function useRemoteChatAgentConfig({
 	return {
 		agentState,
 		setAgentState,
-		chatState,
+		chatState:
+			chatState ??
+			(historyMetadata
+				? {
+						name: historyMetadata.name ?? undefined,
+						tokens: historyMetadata.stats?.tokens,
+						cost: historyMetadata.stats?.cost,
+						contextTokens: historyMetadata.stats?.contextTokens,
+					}
+				: null),
 		setChatState,
+		historyModel,
+		historyThinkingLevel,
+		applyHistoryMetadata,
 		models,
 		setModels,
 		modelLoading,
 		modelsLoaded,
 		modelError,
 		catalog,
-		thinkingLevels,
+		thinkingLevels: agentState
+			? thinkingLevels
+			: [...getPiModelThinkingLevels(historyModel)],
 		setThinkingLevels,
 		draftModel,
 		setDraftModel,

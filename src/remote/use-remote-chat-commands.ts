@@ -1,21 +1,22 @@
-import { useCallback } from "react";
+import { type RefObject, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
 import type { ChatSubmission } from "@/lib/chat-submission";
 import type { PiCompactionResult } from "@/lib/pi-runtime";
-import type { RemoteRpc } from "./use-remote-chat-transport";
+import type { RemoteSessionRpc } from "./use-remote-chat-transport";
 import type { WebPiloClient } from "./web-pilo-client";
 
 type UseRemoteChatCommandsOptions = {
 	client: WebPiloClient | null;
 	activeProjectId: string;
 	activeSessionKey: string | null;
+	activeSessionKeyRef: RefObject<string | null>;
 	clearComposer: () => void;
 	ensureDraftRuntime: () => Promise<void>;
 	handleExpiredAuth: (error: unknown) => boolean;
 	loadExtensionCommandNames: () => Promise<Set<string> | null>;
-	rpc: RemoteRpc;
+	rpcForSession: RemoteSessionRpc;
 	startDraft: (projectId?: string) => void;
 	setFatalError: (message: string | null) => void;
 };
@@ -24,11 +25,12 @@ export function useRemoteChatCommands({
 	client,
 	activeProjectId,
 	activeSessionKey,
+	activeSessionKeyRef,
 	clearComposer,
 	ensureDraftRuntime,
 	handleExpiredAuth,
 	loadExtensionCommandNames,
-	rpc,
+	rpcForSession,
 	startDraft,
 	setFatalError,
 }: UseRemoteChatCommandsOptions) {
@@ -45,12 +47,16 @@ export function useRemoteChatCommands({
 				return true;
 			}
 			if (!client || !activeSessionKey) return false;
+			const targetSessionKey = activeSessionKey;
+			const isActiveSession = () =>
+				activeSessionKeyRef.current === targetSessionKey;
 			if (commandName === "compact") {
 				const customInstructions = command.slice("/compact".length).trim();
 				clearComposer();
 				try {
 					await ensureDraftRuntime();
-					const result = await rpc<PiCompactionResult>(
+					const result = await rpcForSession<PiCompactionResult>(
+						targetSessionKey,
 						{
 							type: "compact",
 							...(customInstructions ? { customInstructions } : {}),
@@ -61,7 +67,7 @@ export function useRemoteChatCommands({
 						description: `${result.tokensBefore.toLocaleString()} → ${result.estimatedTokensAfter.toLocaleString()} tokens`,
 					});
 				} catch (error) {
-					if (!handleExpiredAuth(error)) {
+					if (!handleExpiredAuth(error) && isActiveSession()) {
 						setFatalError(
 							error instanceof Error ? error.message : String(error),
 						);
@@ -70,16 +76,18 @@ export function useRemoteChatCommands({
 				return true;
 			}
 			const extensionNames = await loadExtensionCommandNames();
+			// A switched-away command must not clear or submit the new session's draft.
+			if (!isActiveSession()) return true;
 			if (!extensionNames || !extensionNames.has(commandName)) return false;
 			clearComposer();
 			try {
 				await ensureDraftRuntime();
-				await client.sendChatCommand(activeSessionKey, {
+				await client.sendChatCommand(targetSessionKey, {
 					type: "prompt",
 					message: command,
 				});
 			} catch (error) {
-				if (!handleExpiredAuth(error)) {
+				if (!handleExpiredAuth(error) && isActiveSession()) {
 					setFatalError(error instanceof Error ? error.message : String(error));
 				}
 			}
@@ -88,12 +96,13 @@ export function useRemoteChatCommands({
 		[
 			activeProjectId,
 			activeSessionKey,
+			activeSessionKeyRef,
 			clearComposer,
 			client,
 			ensureDraftRuntime,
 			handleExpiredAuth,
 			loadExtensionCommandNames,
-			rpc,
+			rpcForSession,
 			startDraft,
 			t,
 			setFatalError,

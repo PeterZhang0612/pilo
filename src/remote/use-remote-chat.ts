@@ -308,6 +308,9 @@ export function useRemoteChat({
 		setDraftThinkingLevel,
 		refreshAgentConfig,
 		loadDraftCatalog,
+		historyModel,
+		historyThinkingLevel,
+		applyHistoryMetadata,
 	} = agentConfig;
 	const routeUiKey = activeProjectId
 		? chatUiStateKey(activeProjectId, routeSessionId)
@@ -412,6 +415,7 @@ export function useRemoteChat({
 		isExternalOpenTurn,
 		runtimeTurnOpen,
 		refreshAgentConfig,
+		onHistoryMetadata: applyHistoryMetadata,
 		handleExpiredAuth,
 		setFatalError,
 		setConversation,
@@ -421,6 +425,7 @@ export function useRemoteChat({
 	const {
 		historyPrefix,
 		loadingConversation,
+		historyReady,
 		historyIndexStale,
 		requestHistoryRange,
 		retryHistory,
@@ -622,11 +627,11 @@ export function useRemoteChat({
 			if (draftTemporary && !isActiveSession()) {
 				throw new Error("temporary session is closing");
 			}
-			if (!selectedSession && !identifiedDraftSessionId) {
+			if (!agentState || (!selectedSession && !identifiedDraftSessionId)) {
 				const state = await targetRpc<PiAgentState>({ type: "get_state" });
 				if (isActiveSession()) {
 					setAgentState(state);
-					identifyDraftSession(state);
+					if (!selectedSession) identifyDraftSession(state);
 				}
 			}
 			return;
@@ -639,6 +644,16 @@ export function useRemoteChat({
 					selectedSession?.sessionPath ??
 					(identifiedDraftSessionId ? agentState?.sessionFile : undefined),
 				noSession: draftTemporary,
+			})
+			.catch((error: unknown) => {
+				if (
+					isActiveSession() &&
+					error instanceof Error &&
+					error.message.includes("read-only observer mode")
+				) {
+					setReadOnly(true);
+				}
+				throw error;
 			})
 			.finally(async () => {
 				// Leaving while startup is pending can precede creation of the runtime.
@@ -670,12 +685,11 @@ export function useRemoteChat({
 				level: draftThinkingLevel,
 			}).catch(() => undefined);
 		}
-		if (!selectedSession) {
-			const state = await targetRpc<PiAgentState>({ type: "get_state" });
-			if (isActiveSession()) {
-				setAgentState(state);
-				identifyDraftSession(state);
-			}
+		// Hydrate real state before callers mutate model/thinking settings.
+		const state = await targetRpc<PiAgentState>({ type: "get_state" });
+		if (isActiveSession()) {
+			setAgentState(state);
+			if (!selectedSession) identifyDraftSession(state);
 		}
 		window.setTimeout(() => {
 			if (isActiveSession()) void refreshAgentConfig();
@@ -683,7 +697,7 @@ export function useRemoteChat({
 	}, [
 		activeProjectId,
 		activeSessionKey,
-		agentState?.sessionFile,
+		agentState,
 		client,
 		draftModel,
 		draftThinkingLevel,
@@ -726,9 +740,12 @@ export function useRemoteChat({
 	const suggestions = useRemoteChatSuggestions({
 		client,
 		activeProjectId,
+		activeSessionKey,
+		activeSessionKeyRef,
+		runtimeReady: runtimeReady && historyReady,
 		readOnly,
 		ensureDraftRuntime,
-		rpc,
+		rpcForSession,
 	});
 	const {
 		composerSuggestions,
@@ -755,18 +772,19 @@ export function useRemoteChat({
 		? thinkingLevels
 		: (draftModel?.thinkingLevels ?? []);
 	const composerSelectedThinkingLevel = selectedSession
-		? (agentState?.thinkingLevel ?? null)
+		? (agentState?.thinkingLevel ?? historyThinkingLevel)
 		: draftThinkingLevel;
 
 	const { tryHandleComposerCommand } = useRemoteChatCommands({
 		client,
 		activeProjectId,
 		activeSessionKey,
+		activeSessionKeyRef,
 		clearComposer,
 		ensureDraftRuntime,
 		handleExpiredAuth,
 		loadExtensionCommandNames,
-		rpc,
+		rpcForSession,
 		startDraft,
 		setFatalError,
 	});
@@ -870,15 +888,21 @@ export function useRemoteChat({
 
 	const selectedModel = useMemo(() => {
 		if (!hasIdentifiedSession) return draftModel;
-		const current = agentState?.model;
+		const current = agentState?.model ?? historyModel;
 		if (!current) return null;
 		return (
 			models.find(
 				(model) =>
 					model.provider === current.provider && model.id === current.id,
-			) ?? null
+			) ?? current
 		);
-	}, [agentState?.model, draftModel, hasIdentifiedSession, models]);
+	}, [
+		agentState?.model,
+		draftModel,
+		hasIdentifiedSession,
+		historyModel,
+		models,
+	]);
 
 	return {
 		// route / selection
@@ -944,6 +968,7 @@ export function useRemoteChat({
 		readOnly,
 		runtimeReady,
 		loadingConversation,
+		historyReady,
 		historyIndexStale,
 		forkingMessageId: fork.forkingMessageId,
 		forkDisabled:

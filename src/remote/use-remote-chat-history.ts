@@ -22,6 +22,7 @@ import {
 import { replayConversationEvents } from "@/lib/conversation-replay";
 import type { ConversationState } from "@/lib/conversation-types";
 import type {
+	SessionHistory,
 	SessionHistoryFingerprint,
 	SessionHistoryResult,
 	SessionIndexEntry,
@@ -38,6 +39,7 @@ type UseRemoteChatHistoryOptions = {
 	isExternalOpenTurn: (projectId: string, sessionPath: string) => boolean;
 	runtimeTurnOpen: boolean;
 	refreshAgentConfig: (liveRuntime?: boolean) => Promise<void>;
+	onHistoryMetadata: (history: SessionHistory) => void;
 	handleExpiredAuth: (error: unknown) => boolean;
 	setFatalError: (message: string | null) => void;
 	setConversation: Dispatch<SetStateAction<ConversationState>>;
@@ -54,6 +56,7 @@ export function useRemoteChatHistory({
 	isExternalOpenTurn,
 	runtimeTurnOpen,
 	refreshAgentConfig,
+	onHistoryMetadata,
 	handleExpiredAuth,
 	setFatalError,
 	setConversation,
@@ -186,21 +189,24 @@ export function useRemoteChatHistory({
 					reducerContext,
 				);
 				state = alignHistoryMessages(state, directory, windowStart);
-				// Restore the live tail before startChat or incoming events can create a new reply.
+				// Restore the live tail before incoming events can create a new reply.
 				if (liveTurnOpenRef.current) state = markExternalTurnLive(state);
 				setConversation(state);
-				return client.startChat({
-					projectId: activeProjectId,
-					sessionKey:
-						activeSessionKey ?? sessionKey(activeProjectId, selectedSessionId),
-					sessionPath: selectedSessionPath,
-				});
+				onHistoryMetadata(result.history);
+				// The shared event stream already observes running sessions; viewing
+				// history must not start a Pi process just to attach to an idle session.
+				return client.chatState(
+					activeSessionKey ?? sessionKey(activeProjectId, selectedSessionId),
+				);
 			})
-			.then(() => {
+			.then((runtime) => {
 				if (cancelled) return;
-				setRuntimeReady(true);
+				const ready = Boolean(
+					runtime?.initialized && runtime.snapshot.state === "running",
+				);
+				setRuntimeReady(ready);
 				setConversationLoad({ key: selectedLoadKey, status: "ready" });
-				void refreshAgentConfig();
+				void refreshAgentConfig(ready);
 			})
 			.catch((error) => {
 				if (cancelled || handleExpiredAuth(error)) return;
@@ -225,6 +231,7 @@ export function useRemoteChatHistory({
 		activeSessionKey,
 		handleExpiredAuth,
 		refreshAgentConfig,
+		onHistoryMetadata,
 		resyncKey,
 		historyRetryKey,
 		selectedLoadKey,
@@ -344,6 +351,10 @@ export function useRemoteChatHistory({
 		historyPrefix,
 		fingerprint: historyFingerprint,
 		loadingConversation,
+		historyReady:
+			!selectedLoadKey ||
+			(conversationLoad.key === selectedLoadKey &&
+				conversationLoad.status === "ready"),
 		historyIndexStale: Boolean(
 			!liveTurnOpen &&
 			selectedSession &&

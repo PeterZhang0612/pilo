@@ -488,7 +488,7 @@ function RemoteWorkspace() {
 										chat.readOnly ||
 										chat.sending ||
 										!chat.activeProjectId ||
-										(chat.hasIdentifiedSession && !chat.runtimeReady)
+										!chat.historyReady
 									}
 									running={active && !chat.readOnly}
 									onStop={chat.readOnly ? undefined : () => void chat.stop()}
@@ -511,10 +511,7 @@ function RemoteWorkspace() {
 									modelLoading={chat.modelLoading}
 									modelError={chat.modelError ?? fatalError}
 									modelDisabled={
-										chat.readOnly ||
-										(chat.hasIdentifiedSession
-											? !chat.runtimeReady
-											: !chat.activeProjectId)
+										chat.readOnly || !chat.historyReady || !chat.activeProjectId
 									}
 									onModelMenuOpen={() => {
 										if (chat.hasIdentifiedSession)
@@ -538,10 +535,10 @@ function RemoteWorkspace() {
 									thinkingLevels={chat.composerThinkingLevels}
 									selectedThinkingLevel={chat.composerSelectedThinkingLevel}
 									thinkingDisabled={
-										chat.hasIdentifiedSession
-											? !chat.runtimeReady || chat.thinkingLevels.length === 0
-											: !chat.activeProjectId ||
-												chat.composerThinkingLevels.length === 0
+										chat.readOnly ||
+										!chat.historyReady ||
+										!chat.activeProjectId ||
+										chat.composerThinkingLevels.length === 0
 									}
 									onThinkingChange={(level) => {
 										if (level) void chat.changeThinking(level);
