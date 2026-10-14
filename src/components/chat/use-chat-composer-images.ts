@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { i18n } from "@/i18n";
 import { userErrorMessage } from "@/lib/app-error";
 import { cacheLocalChatImages } from "@/lib/chat-image-media";
+import { randomId } from "@/lib/utils";
 import {
 	MAX_CHAT_IMAGE_BYTES,
 	MAX_CHAT_IMAGE_COUNT,
@@ -32,7 +33,7 @@ function readImage(file: File, mimeType: string) {
 				return;
 			}
 			resolve({
-				id: crypto.randomUUID(),
+				id: randomId(),
 				name:
 					file.name ||
 					`${i18n.t("chat.imageClipboard")}.${mimeType.split("/")[1] ?? "png"}`,

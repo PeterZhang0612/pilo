@@ -439,6 +439,9 @@ const enUS = {
 		saveImage: "Save image",
 		openOriginalImage: "Open original image (new tab)",
 		closeImage: "Close",
+		zoomInImage: "Zoom in on image",
+		zoomOutImage: "Zoom out on image",
+		resetImageZoom: "Reset image zoom ({{percent}}%)",
 		viewImage: "View image {{name}}",
 		imagePreviewReleased:
 			"Image preview was released; reopen the session to load it",

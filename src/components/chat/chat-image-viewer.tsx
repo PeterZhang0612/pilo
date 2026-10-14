@@ -14,6 +14,7 @@ import { useTranslation } from "react-i18next";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Download, ExternalLink, ImageOff, X } from "lucide-react";
 
+import { ChatImageViewport } from "@/components/chat/chat-image-viewport";
 import {
 	chatImageCacheKey,
 	getLocalChatImageUrl,
@@ -224,26 +225,14 @@ export const ChatImageLightbox = memo(function ChatImageLightbox() {
 							</DialogPrimitive.Close>
 						</div>
 					</div>
-					{/* oxlint-disable jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions -- 点击空白处关闭；键盘关闭已由 Dialog 的 Escape 处理，此元素不是交互控件。 */}
-					<div
-						className="flex min-h-0 flex-1 items-center justify-center"
-						onClick={(event) => {
-							if (event.target === event.currentTarget)
-								closeChatImageLightbox();
-						}}
-					>
-						{state ? (
-							<DialogPrimitive.Description asChild>
-								<img
-									src={state.url}
-									alt={state.name || t("chat.image")}
-									draggable={false}
-									decoding="async"
-									className="max-h-full max-w-full select-none rounded-md object-contain shadow-2xl"
-								/>
-							</DialogPrimitive.Description>
-						) : null}
-					</div>
+					{state ? (
+						<ChatImageViewport
+							key={state.url}
+							url={state.url}
+							name={state.name || t("chat.image")}
+							onClose={closeChatImageLightbox}
+						/>
+					) : null}
 				</DialogPrimitive.Content>
 			</DialogPrimitive.Portal>
 		</DialogPrimitive.Root>

@@ -340,7 +340,10 @@ export function ChatComposer({
 								size="icon"
 								className={CHAT_COMPOSER_ATTACHMENT_BUTTON_CLASS_NAME}
 								aria-label={t("chat.addAttachment")}
-								onClick={() => fileInputRef.current?.click()}
+								onClick={() => {
+									textareaRef.current?.blur();
+									fileInputRef.current?.click();
+								}}
 							>
 								<Plus className="size-4" />
 							</Button>
