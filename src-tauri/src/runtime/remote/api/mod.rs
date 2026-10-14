@@ -136,6 +136,14 @@ pub(crate) fn router(
             "/api/v1/models/scope",
             get(handlers::model_scope_get).post(handlers::model_scope_set),
         )
+        .route(
+            "/api/v1/next-prompt/settings",
+            get(handlers::next_prompt_settings_get).post(handlers::next_prompt_settings_set),
+        )
+        .route(
+            "/api/v1/next-prompt/request",
+            post(handlers::next_prompt_request),
+        )
         .route("/api/v1/chat/start", post(handlers::chat_start))
         .route("/api/v1/chat/stop", post(handlers::chat_stop))
         .route("/api/v1/chat/state", get(handlers::chat_state))

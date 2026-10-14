@@ -1,8 +1,9 @@
 use std::sync::{
     Arc, Mutex as StdMutex,
-    atomic::{AtomicU8, AtomicU64, Ordering},
+    atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering},
 };
 
+use pilo_protocol::BuiltinExtension;
 use serde_json::{Value, json};
 use tokio::task::JoinHandle;
 
@@ -19,17 +20,23 @@ static STREAM_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 mod event_stream;
 
 use event_stream::spawn_event_task;
-struct StateCell(AtomicU8);
+struct StateCell {
+    process: AtomicU8,
+    next_prompt_ready: AtomicBool,
+}
 
 impl Default for StateCell {
     fn default() -> Self {
-        Self(AtomicU8::new(state_to_u8(PiProcessState::Stopped)))
+        Self {
+            process: AtomicU8::new(state_to_u8(PiProcessState::Stopped)),
+            next_prompt_ready: AtomicBool::new(false),
+        }
     }
 }
 
 impl StateCell {
     fn get(&self) -> PiProcessState {
-        match self.0.load(Ordering::Acquire) {
+        match self.process.load(Ordering::Acquire) {
             1 => PiProcessState::Starting,
             2 => PiProcessState::Running,
             3 => PiProcessState::Stopping,
@@ -39,7 +46,10 @@ impl StateCell {
     }
 
     fn set(&self, state: PiProcessState) {
-        self.0.store(state_to_u8(state), Ordering::Release);
+        self.process.store(state_to_u8(state), Ordering::Release);
+        if state != PiProcessState::Running {
+            self.next_prompt_ready.store(false, Ordering::Release);
+        }
     }
 }
 
@@ -62,6 +72,7 @@ pub struct PiLaunchOptions {
     pub disable_extension_discovery: bool,
     pub disable_context_files: bool,
     pub extensions: Vec<String>,
+    pub builtin_extensions: Vec<BuiltinExtension>,
     pub provider: Option<String>,
     pub model: Option<String>,
     pub thinking: Option<String>,
@@ -94,6 +105,7 @@ impl SessionSnapshotReader {
 }
 
 pub struct ServerPiSession {
+    builtin_extensions: Vec<BuiltinExtension>,
     generation: u64,
     snapshot_metadata: Arc<StdMutex<PiSessionSnapshot>>,
     state: Arc<StateCell>,
@@ -105,20 +117,7 @@ pub struct ServerPiSession {
 
 impl Default for ServerPiSession {
     fn default() -> Self {
-        Self {
-            generation: 0,
-            snapshot_metadata: Arc::new(StdMutex::new(PiSessionSnapshot {
-                generation: 0,
-                state: PiProcessState::Stopped,
-                connection: None,
-                project_id: None,
-            })),
-            state: Arc::new(StateCell::default()),
-            launch: None,
-            client: None,
-            stream_id: None,
-            event_task: None,
-        }
+        Self::with_builtin_extensions(Vec::new())
     }
 }
 
@@ -147,6 +146,32 @@ impl Drop for ServerPiSession {
 }
 
 impl ServerPiSession {
+    pub(crate) fn with_builtin_extensions(builtin_extensions: Vec<BuiltinExtension>) -> Self {
+        Self {
+            builtin_extensions,
+            generation: 0,
+            snapshot_metadata: Arc::new(StdMutex::new(PiSessionSnapshot {
+                generation: 0,
+                state: PiProcessState::Stopped,
+                connection: None,
+                project_id: None,
+            })),
+            state: Arc::new(StateCell::default()),
+            launch: None,
+            client: None,
+            stream_id: None,
+            event_task: None,
+        }
+    }
+
+    pub(crate) fn builtin_extensions(&self) -> &[BuiltinExtension] {
+        &self.builtin_extensions
+    }
+
+    pub(crate) fn next_prompt_ready(&self) -> bool {
+        self.state.next_prompt_ready.load(Ordering::Acquire)
+    }
+
     fn schedule_cleanup(&mut self) {
         if let Some(task) = self.event_task.take() {
             task.abort();
@@ -200,6 +225,7 @@ impl ServerPiSession {
             return Err("Pi process is already active".to_owned());
         }
 
+        self.builtin_extensions = options.builtin_extensions.clone();
         // A failed generation may still own a server stream. Do not overwrite it.
         self.schedule_cleanup();
         let client = servers.client(&project.connection).await?;
@@ -248,6 +274,7 @@ impl ServerPiSession {
                     "noSession": options.no_session,
                     "disableResources": options.disable_resources,
                     "extensions": options.extensions,
+                    "builtinExtensions": options.builtin_extensions,
                     "provider": options.provider,
                     "model": options.model,
                     "thinking": options.thinking,

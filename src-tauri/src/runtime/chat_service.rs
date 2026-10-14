@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use pilo_protocol::BuiltinExtension;
+
 use crate::domain::Project;
 
 use super::{
@@ -15,6 +17,7 @@ pub(crate) struct ChatSessionRequest {
     pub session_path: Option<String>,
     pub no_session: bool,
     pub extensions: Vec<String>,
+    pub builtin_extensions: Vec<BuiltinExtension>,
 }
 
 fn get_project(paths: &HostPaths, project_id: &str) -> Result<Project, String> {
@@ -30,6 +33,21 @@ async fn resolve_launch(
     let project = get_project(paths, &request.project_id)?;
     let profile =
         pi_workspace::resolve_pi_runtime_with_paths(paths, &project, request.extensions.clone())?;
+    let mut builtin_extensions = profile.builtin_extensions;
+    // Probes are throwaway sessions; only the normal chat path loads prediction.
+    if !request
+        .builtin_extensions
+        .iter()
+        .any(|extension| matches!(extension, BuiltinExtension::ModelCatalog))
+    {
+        builtin_extensions.push(BuiltinExtension::NextPrompt);
+    }
+    for extension in &request.builtin_extensions {
+        if !matches!(extension, BuiltinExtension::ModelCatalog) {
+            return Err("unsupported client-selected builtin extension".to_owned());
+        }
+        builtin_extensions.push(extension.clone());
+    }
     reject_external_session_owner(runtime, &profile.project, request.session_path.as_deref())
         .await?;
     Ok((
@@ -38,6 +56,7 @@ async fn resolve_launch(
             session_path: request.session_path.clone(),
             no_session: request.no_session,
             extensions: profile.extensions,
+            builtin_extensions,
             disable_builtin_tools: profile.disable_builtin_tools,
             disable_extension_discovery: profile.disable_extension_discovery,
             disable_context_files: profile.disable_context_files,

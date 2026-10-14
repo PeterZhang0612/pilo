@@ -1,5 +1,7 @@
 mod command;
 mod environment;
+mod extensions;
+pub use extensions::runtime_directory;
 mod fs_ops;
 mod output;
 mod runtime_streams;
@@ -86,9 +88,11 @@ struct ServerState {
     terminals: Arc<StdMutex<HashMap<String, TerminalSession>>>,
     login_path: Arc<OnceCell<String>>,
     toolchain: Arc<OnceCell<ToolchainInfo>>,
+    extensions_dir: Arc<std::path::PathBuf>,
 }
 
 pub async fn serve_stdio() -> Result<(), Box<dyn std::error::Error>> {
+    let extensions_dir = extensions::deploy()?;
     eprintln!(
         "[runtime-diagnostics] server started pid={} version={SERVER_VERSION} maxInFlight={MAX_IN_FLIGHT_REQUESTS}",
         std::process::id()
@@ -108,6 +112,7 @@ pub async fn serve_stdio() -> Result<(), Box<dyn std::error::Error>> {
         terminals: Arc::new(StdMutex::new(HashMap::new())),
         login_path: Arc::new(OnceCell::new()),
         toolchain: Arc::new(OnceCell::new()),
+        extensions_dir: Arc::new(extensions_dir),
     };
 
     let (writer_done_tx, mut writer_done_rx) = tokio::sync::oneshot::channel();

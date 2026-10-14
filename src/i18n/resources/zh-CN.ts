@@ -95,6 +95,12 @@ const zhCN = {
 		notifications: "通知",
 		shortcuts: "快捷键",
 		connections: "连接",
+		nextPrompt: "下一句话预测",
+		nextPromptDescription:
+			"回复结束后预测一句短消息。会额外调用模型，并发送有限对话给所选模型；此连接的客户端共享设置。",
+		nextPromptModel: "预测模型",
+		nextPromptFollowModel: "跟随聊天模型",
+		nextPromptUnavailable: "预测暂不可用，请检查所选模型、凭据和 Pi 版本。",
 		sessionNaming: "会话命名",
 		remote: "远程",
 		remoteWebUi: "远程访问",
@@ -376,6 +382,8 @@ const zhCN = {
 	chat: {
 		...enUS.chat,
 		todayPrompt: "今天要做点什么？",
+		acceptNextPrompt: "采用建议",
+		adoptNextPrompt: "采用建议：{{text}}",
 		composerPlaceholder: "给 Pi 发消息，@ 提及文件",
 		addAttachment: "添加附件",
 		removeAttachment: "移除 {{name}}",

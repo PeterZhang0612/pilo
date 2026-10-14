@@ -168,7 +168,10 @@ export function useChatComposerInput({
 				Math.min(maxHeight, panel.clientHeight - surroundingHeight),
 			);
 		}
-		const contentHeight = textarea.scrollHeight + border;
+		// Placeholder predictions must not resize an empty draft.
+		const contentHeight = textarea.value
+			? textarea.scrollHeight + border
+			: textarea.rows * lineHeight + padding + border;
 		textarea.style.height = `${Math.max(minHeight, Math.min(contentHeight, maxHeight))}px`;
 		textarea.style.overflowY = contentHeight > maxHeight ? "auto" : "hidden";
 	}, []);

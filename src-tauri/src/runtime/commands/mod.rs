@@ -1,6 +1,8 @@
 mod appearance;
 mod connections;
+mod next_prompt;
 mod projects;
+pub use next_prompt::{next_prompt_request, next_prompt_settings_get, next_prompt_settings_set};
 mod remote;
 mod runtime;
 mod session_reads;

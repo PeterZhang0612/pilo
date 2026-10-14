@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { isImeComposingKeyboardEvent } from "@/lib/ime";
 import { useTranslation } from "react-i18next";
 import { Plus, X } from "lucide-react";
 
@@ -88,6 +89,8 @@ type ChatComposerProps = {
 	onSuggestionTrigger?: (trigger: "@" | "/" | null, query: string) => void;
 	historyKey?: string | null;
 	className?: string;
+	nextPrompt?: string | null;
+	onNextPromptDismiss?: () => void;
 	/** 桌面专属的快捷键提示与自动聚焦；Remote WebUI 传 false。 */
 	desktopShortcuts?: boolean;
 };
@@ -136,6 +139,8 @@ export function ChatComposer({
 	onSuggestionTrigger,
 	historyKey,
 	className,
+	nextPrompt,
+	onNextPromptDismiss,
 	desktopShortcuts = true,
 }: ChatComposerProps) {
 	const { t } = useTranslation();
@@ -183,6 +188,22 @@ export function ChatComposer({
 		historyKey,
 		desktopShortcuts,
 	});
+
+	const ghostText =
+		!value &&
+		!attachments.length &&
+		!disabled &&
+		!running &&
+		!compacting &&
+		!sendingNow
+			? nextPrompt
+			: null;
+	const adoptNextPrompt = () => {
+		if (!ghostText) return;
+		onNextPromptDismiss?.();
+		onChange(ghostText);
+		textareaRef.current?.focus();
+	};
 
 	return (
 		<ChatComposerRoot className={className}>
@@ -275,6 +296,7 @@ export function ChatComposer({
 					enterKeyHint={sendMessageShortcut === "enter" ? "send" : "enter"}
 					value={value}
 					onChange={(event) => {
+						onNextPromptDismiss?.();
 						onFieldChange(
 							event.target.value,
 							event.target.selectionStart ?? event.target.value.length,
@@ -283,8 +305,38 @@ export function ChatComposer({
 					onSelect={syncCaret}
 					onClick={syncCaret}
 					onKeyUp={syncCaret}
-					onKeyDown={handleKeyDown}
-					onPaste={handlePaste}
+					onKeyDown={(event) => {
+						if (!suggestionMenuOpen && !isImeComposingKeyboardEvent(event)) {
+							// Esc also invalidates a prediction that has not returned yet.
+							if (event.key === "Escape") onNextPromptDismiss?.();
+						}
+						if (
+							ghostText &&
+							!suggestionMenuOpen &&
+							!isImeComposingKeyboardEvent(event)
+						) {
+							if (
+								event.key === "Tab" &&
+								!event.shiftKey &&
+								!event.ctrlKey &&
+								!event.metaKey &&
+								!event.altKey
+							) {
+								event.preventDefault();
+								adoptNextPrompt();
+								return;
+							}
+							if (event.key === "Escape") {
+								event.preventDefault();
+								return;
+							}
+						}
+						handleKeyDown(event);
+					}}
+					onPaste={(event) => {
+						onNextPromptDismiss?.();
+						handlePaste(event);
+					}}
 					disabled={disabled || sendingNow}
 					rows={2}
 					style={
@@ -293,14 +345,37 @@ export function ChatComposer({
 							fontFamily: `var(--pilo-mobile-font-family, ${getPageFontFamilyStack(readingFontFamily)})`,
 						} as CSSProperties
 					}
-					placeholder={composerPlaceholder}
+					aria-label={composerPlaceholder}
+					placeholder={ghostText || composerPlaceholder}
 					className={cn(
 						CHAT_COMPOSER_TEXTAREA_CLASS_NAME,
-						showFocusHint && "pr-16",
+						ghostText ? "pr-20" : showFocusHint && "pr-16",
 					)}
 				/>
 
-				{showFocusHint ? (
+				{ghostText ? (
+					<Button
+						type="button"
+						variant="ghost"
+						size="sm"
+						onClick={adoptNextPrompt}
+						className="absolute right-2 top-1.5 h-7 px-2 text-xs text-muted-foreground pointer-coarse:min-h-11"
+						aria-label={t("chat.adoptNextPrompt", { text: ghostText })}
+						aria-keyshortcuts="Tab"
+					>
+						<span className="flex items-center gap-1.5 pointer-coarse:hidden">
+							<span aria-hidden="true">→</span>
+							<kbd className="rounded border border-border/70 bg-muted/50 px-1 py-px font-mono text-2xs">
+								Tab
+							</kbd>
+						</span>
+						<span className="hidden pointer-coarse:inline">
+							{t("chat.acceptNextPrompt")}
+						</span>
+					</Button>
+				) : null}
+
+				{showFocusHint && !ghostText ? (
 					<div
 						className="pointer-events-none absolute right-2 top-1.5 z-10 flex items-center gap-0.5 font-mono text-2xs text-muted-foreground opacity-70 transition-opacity group-focus-within:opacity-0"
 						aria-hidden="true"
@@ -341,6 +416,7 @@ export function ChatComposer({
 								className={CHAT_COMPOSER_ATTACHMENT_BUTTON_CLASS_NAME}
 								aria-label={t("chat.addAttachment")}
 								onClick={() => {
+									onNextPromptDismiss?.();
 									textareaRef.current?.blur();
 									fileInputRef.current?.click();
 								}}
@@ -361,7 +437,14 @@ export function ChatComposer({
 						modelDisabled={modelDisabled}
 						onModelMenuOpen={onModelMenuOpen}
 						onModelRefresh={onModelRefresh}
-						onModelChange={onModelChange}
+						onModelChange={
+							onModelChange
+								? (model) => {
+										onNextPromptDismiss?.();
+										onModelChange(model);
+									}
+								: undefined
+						}
 						thinkingLevels={thinkingLevels}
 						selectedThinkingLevel={selectedThinkingLevel}
 						thinkingLoading={thinkingLoading}
@@ -395,7 +478,10 @@ export function ChatComposer({
 						sendMode={sendMode}
 						onSendModeChange={setSendMode}
 						submitBlocked={compacting || sendingNow}
-						onPrimary={submit}
+						onPrimary={() => {
+							onNextPromptDismiss?.();
+							submit();
+						}}
 					/>
 				</div>
 			</ChatComposerSurface>

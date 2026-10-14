@@ -140,6 +140,15 @@ async fn event_socket(
                             break "pong send failed";
                         }
                     }
+                    Some(Ok(Message::Text(text))) => {
+                        // Browser WebSockets cannot send native Ping frames.
+                        if let Ok(message) = serde_json::from_str::<Value>(&text)
+                            && message.get("type").and_then(Value::as_str) == Some("ping")
+                            && send_ws_json(&mut socket, &json!({ "type": "pong" })).await.is_err()
+                        {
+                            break "pong send failed";
+                        }
+                    }
                     _ => {}
                 }
             }

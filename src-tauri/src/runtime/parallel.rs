@@ -136,6 +136,7 @@ impl ParallelAgentManager {
                     // anchor and surface them in ordinary chat history.
                     no_session: project.connection.pi_runtime == PiRuntime::Local,
                     extensions: profile.extensions,
+                    builtin_extensions: profile.builtin_extensions,
                     disable_builtin_tools: profile.disable_builtin_tools,
                     disable_extension_discovery: profile.disable_extension_discovery,
                     disable_context_files: profile.disable_context_files,

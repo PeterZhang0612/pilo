@@ -5,6 +5,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
+mod pi_extensions;
+pub use pi_extensions::{BuiltinExtension, SshWorkspaceConfig};
+
 mod wire {
     include!(concat!(env!("OUT_DIR"), "/pilo.protocol.rs"));
 }

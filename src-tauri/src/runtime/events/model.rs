@@ -66,6 +66,9 @@ pub enum RuntimeEvent {
         #[serde(rename = "completionId", skip_serializing_if = "Option::is_none")]
         completion_id: Option<String>,
     },
+    NextPromptSettingsChanged {
+        settings: crate::domain::NextPromptSettings,
+    },
     ProjectModelScopeChanged {
         scope: crate::domain::ProjectModelScope,
     },

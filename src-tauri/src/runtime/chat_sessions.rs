@@ -12,6 +12,7 @@ use std::{
     },
 };
 
+use pilo_protocol::BuiltinExtension;
 use serde::Serialize;
 use tokio::sync::{Mutex, oneshot};
 
@@ -40,6 +41,7 @@ pub struct ChatSessionLaunch {
     pub session_path: Option<String>,
     pub no_session: bool,
     pub extensions: Vec<String>,
+    pub builtin_extensions: Vec<BuiltinExtension>,
     pub disable_builtin_tools: bool,
     pub disable_extension_discovery: bool,
     pub disable_context_files: bool,
@@ -202,7 +204,8 @@ impl ChatSessions {
             let process = if let Some(process) = registry.processes.get(session_key) {
                 Arc::clone(process)
             } else {
-                let session = ServerPiSession::default();
+                let session =
+                    ServerPiSession::with_builtin_extensions(launch.builtin_extensions.clone());
                 registry
                     .snapshots
                     .insert(session_key.to_owned(), session.snapshot_reader());
@@ -238,6 +241,10 @@ impl ChatSessions {
         }
         if process.no_session != launch.no_session {
             return Err("session persistence mode changed while running".to_owned());
+        }
+        if process.session.lock().await.builtin_extensions() != launch.builtin_extensions.as_slice()
+        {
+            return Err("session builtin extensions changed while running".to_owned());
         }
         if process.extensions != launch.extensions {
             return Err("session extensions changed while running".to_owned());

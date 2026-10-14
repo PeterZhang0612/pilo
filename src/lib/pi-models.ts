@@ -3,7 +3,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { createChatSessionClient } from "@/lib/chat-session-client";
 import {
 	PI_MODEL_CATALOG_COMMAND,
-	PI_MODEL_CATALOG_EXTENSION_SOURCE,
 	PI_MODEL_CATALOG_TITLE,
 } from "@/lib/pi-model-catalog-extension";
 import {
@@ -410,12 +409,12 @@ export function refreshProjectPiModels(
 	// noSession 是必须的：探测只读模型列表和默认思考等级，不需要持久会话。
 	// 否则 ensure() 会对无 sessionPath 的进程发 new_session，让 Pi 落盘一个
 	// 空会话文件，被 watcher 索引后侧栏凭空多出一条会话。
-	// extensions 让 pilo-server 以 --extension 只给这个探测进程加载目录扩展，
+	// builtinExtensions 让 pilo-server 从固定目录只为这个探测进程加载目录扩展，
 	// 不影响用户正常的 Pi 会话；扩展不可用时回退到逐模型 RPC 链。
 	const client = createChatSessionClient(projectId, sessionKey, undefined, {
 		noSession: true,
 		owner: "model_probe",
-		extensions: [PI_MODEL_CATALOG_EXTENSION_SOURCE],
+		builtinExtensions: [{ id: "model-catalog" }],
 	});
 	const refresh = (async () => {
 		try {

@@ -138,6 +138,7 @@ pub async fn chat_session_prepare(
     session_path: Option<String>,
     no_session: bool,
     extensions: Option<Vec<String>>,
+    builtin_extensions: Option<Vec<pilo_protocol::BuiltinExtension>>,
 ) -> Result<PiSessionSnapshot, String> {
     chat_service::prepare(
         &HostPaths::from_app(&app)?,
@@ -149,6 +150,7 @@ pub async fn chat_session_prepare(
             session_path,
             no_session,
             extensions: extensions.unwrap_or_default(),
+            builtin_extensions: builtin_extensions.unwrap_or_default(),
         },
     )
     .await
@@ -166,6 +168,7 @@ pub async fn chat_session_start(
     session_path: Option<String>,
     no_session: bool,
     extensions: Option<Vec<String>>,
+    builtin_extensions: Option<Vec<pilo_protocol::BuiltinExtension>>,
 ) -> Result<PiSessionSnapshot, String> {
     chat_service::start(
         &HostPaths::from_app(&app)?,
@@ -177,6 +180,7 @@ pub async fn chat_session_start(
             session_path,
             no_session,
             extensions: extensions.unwrap_or_default(),
+            builtin_extensions: builtin_extensions.unwrap_or_default(),
         },
     )
     .await
@@ -249,6 +253,7 @@ pub async fn project_start_pi(
             &profile.project,
             PiLaunchOptions {
                 extensions: profile.extensions,
+                builtin_extensions: profile.builtin_extensions,
                 disable_builtin_tools: profile.disable_builtin_tools,
                 disable_extension_discovery: profile.disable_extension_discovery,
                 disable_context_files: profile.disable_context_files,

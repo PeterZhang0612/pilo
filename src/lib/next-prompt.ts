@@ -1,0 +1,78 @@
+import type { PiloRuntimeEvent } from "@/lib/pi-runtime";
+
+export type NextPromptModel = { provider: string; id: string };
+export type NextPromptSettings = {
+	connectionId: string;
+	enabled: boolean;
+	model: NextPromptModel | null;
+	updatedAtMs: number;
+};
+export type NextPromptRequest = {
+	sessionKey: string;
+	sessionId: string;
+	requestId: string;
+	generation: number;
+	revision: number;
+	cancel?: boolean;
+};
+export type NextPromptResult = {
+	requestId: string;
+	sessionId: string;
+	leafId: string | null;
+	revision: number;
+	text: string | null;
+	status: "ready" | "empty" | "cancelled" | "unavailable";
+};
+
+export function decodeNextPromptResult(
+	event: PiloRuntimeEvent,
+): NextPromptResult | null {
+	if (
+		event.type !== "extension_ui_request" ||
+		event.method !== "setWidget" ||
+		event.widgetKey !== "pilo.next-prompt.v1" ||
+		event.widgetLines?.length !== 1
+	)
+		return null;
+	const line = event.widgetLines[0];
+	if (line.length > 4096) return null;
+	try {
+		const value: unknown = JSON.parse(line);
+		if (!value || typeof value !== "object") return null;
+		const result = value as Record<string, unknown>;
+		if (
+			typeof result.requestId !== "string" ||
+			result.requestId.length > 128 ||
+			typeof result.sessionId !== "string" ||
+			result.sessionId.length > 256 ||
+			!(result.leafId === null || typeof result.leafId === "string") ||
+			typeof result.revision !== "number" ||
+			!Number.isSafeInteger(result.revision) ||
+			result.revision < 0 ||
+			!(
+				result.text === null ||
+				(typeof result.text === "string" &&
+					result.text.length > 0 &&
+					result.text.length <= 160 &&
+					!/[\r\n`]/u.test(result.text))
+			) ||
+			!(
+				result.status === "ready" ||
+				result.status === "empty" ||
+				result.status === "cancelled" ||
+				result.status === "unavailable"
+			)
+		)
+			return null;
+		return {
+			requestId: result.requestId,
+			sessionId: result.sessionId,
+			leafId: result.leafId,
+			revision: result.revision,
+			text: result.text,
+			status: result.status,
+		};
+	} catch {
+		return null;
+	}
+}

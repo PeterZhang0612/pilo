@@ -1,4 +1,9 @@
 import type {
+	NextPromptModel,
+	NextPromptSettings,
+	NextPromptRequest,
+} from "@/lib/next-prompt";
+import type {
 	PiloClient,
 	PiloClientBootstrap,
 	PiloClientEventOptions,
@@ -33,6 +38,9 @@ import {
 	loadRemoteProjectImage,
 	loadRemoteExternalActivity,
 	loadRemoteModels,
+	loadRemoteNextPromptSettings,
+	saveRemoteNextPromptSettings,
+	requestRemoteNextPrompt,
 	loadRemoteModelScope,
 	saveRemoteModelScope,
 	loadRemoteSessions,
@@ -122,6 +130,27 @@ export class WebPiloClient implements PiloClient {
 		sessionPath: string,
 	): Promise<SessionDeleteResult> {
 		return deleteRemoteSession(this.token, projectId, sessionPath);
+	}
+
+	loadNextPromptSettings(connectionId: string): Promise<NextPromptSettings> {
+		return loadRemoteNextPromptSettings(this.token, connectionId);
+	}
+
+	saveNextPromptSettings(
+		connectionId: string,
+		enabled: boolean,
+		model: NextPromptModel | null,
+	): Promise<NextPromptSettings> {
+		return saveRemoteNextPromptSettings(
+			this.token,
+			connectionId,
+			enabled,
+			model,
+		);
+	}
+
+	requestNextPrompt(request: NextPromptRequest): Promise<void> {
+		return requestRemoteNextPrompt(this.token, request);
 	}
 
 	startChat(input: PiloClientStartChatInput): Promise<PiSessionSnapshot> {

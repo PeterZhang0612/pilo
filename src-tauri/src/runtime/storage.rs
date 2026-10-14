@@ -1,5 +1,7 @@
 mod connections;
+mod next_prompt;
 mod projects;
+pub(crate) use next_prompt::*;
 mod remote;
 mod schema;
 mod session_reads;

@@ -1,5 +1,7 @@
 mod connection;
+mod next_prompt;
 mod project;
+pub use next_prompt::{NextPromptModel, NextPromptRequest, NextPromptSettings};
 mod remote;
 mod session;
 

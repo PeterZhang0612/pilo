@@ -10,7 +10,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use pilo_protocol::{Envelope, MAX_BINARY_PAYLOAD_BYTES};
+use pilo_protocol::{BuiltinExtension, Envelope, MAX_BINARY_PAYLOAD_BYTES};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::{
@@ -179,6 +179,8 @@ pub(crate) struct PiStartParams {
     /// explicit `--extension` flags for this process only.
     #[serde(default)]
     extensions: Vec<String>,
+    #[serde(default)]
+    builtin_extensions: Vec<BuiltinExtension>,
     #[serde(default)]
     provider: Option<String>,
     #[serde(default)]
@@ -393,6 +395,36 @@ pub(crate) async fn pi_start(state: &ServerState, params: PiStartParams) -> Resu
             path.to_string_lossy().into_owned(),
         ]);
     }
+    let mut ssh_workspace_config = None;
+    let mut builtin_names = std::collections::HashSet::new();
+    for extension in &params.builtin_extensions {
+        let filename = crate::extensions::filename(extension);
+        if !builtin_names.insert(filename) {
+            return Err("duplicate Pi builtin extension".to_owned());
+        }
+        if let BuiltinExtension::SshWorkspace { config } = extension {
+            if !config.remote_cwd.starts_with('/')
+                || config.remote_cwd.contains('\0')
+                || config.ssh_args.is_empty()
+                || config.ssh_args.iter().any(|arg| arg.contains('\0'))
+                || config.ssh_environment.iter().any(|(key, value)| {
+                    key.is_empty() || key.contains(['=', '\0']) || value.contains('\0')
+                })
+            {
+                return Err("invalid SSH workspace configuration".to_owned());
+            }
+            ssh_workspace_config =
+                Some(serde_json::to_string(config).map_err(|error| error.to_string())?);
+        }
+        args.extend([
+            "--extension".to_owned(),
+            state
+                .extensions_dir
+                .join(filename)
+                .to_string_lossy()
+                .into_owned(),
+        ]);
+    }
     if let Some(provider) = params.provider.as_ref() {
         args.extend(["--provider".to_owned(), provider.clone()]);
     }
@@ -412,6 +444,11 @@ pub(crate) async fn pi_start(state: &ServerState, params: PiStartParams) -> Resu
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
+    // Never inherit another launcher/session's workspace configuration.
+    command.env_remove("PILO_SSH_WORKSPACE_CONFIG");
+    if let Some(config) = ssh_workspace_config {
+        command.env("PILO_SSH_WORKSPACE_CONFIG", config);
+    }
     #[cfg(unix)]
     command.process_group(0);
     // Wait for old output tasks before allowing a replacement to publish any events.

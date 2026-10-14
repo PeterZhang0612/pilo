@@ -5,6 +5,8 @@ import type {
 	ChatUiState,
 	ChatUiStatePatch,
 } from "@/components/app/chat-ui-state-cache";
+import { useNextPrompt } from "@/components/chat/use-next-prompt";
+import { tauriPiloClient } from "@/lib/tauri-pilo-client";
 import { ChatComposer } from "@/components/chat/chat-composer";
 import { ConversationColumn } from "@/components/chat/chat-conversation-column";
 import {
@@ -341,6 +343,24 @@ function ChatPageImpl(props: ChatPageProps) {
 		extensionNotifications,
 		dismissExtensionNotification,
 	} = piFeatures;
+	const nextPrompt = useNextPrompt({
+		client: tauriPiloClient,
+		connectionId: session.projectRecord.connection.id,
+		sessionKey: client.sessionKey,
+		sessionId: sessionState?.sessionId ?? null,
+		draft,
+		hasAttachments: composerImages.length > 0,
+		active,
+		busy: runtimeBusy || compacting || Boolean(retryState),
+		blocked:
+			Boolean(session.externalRunning || extensionDialog) ||
+			historyPending ||
+			modelChanging ||
+			recoveryState.status === "failed" ||
+			recoveryState.status === "reconnecting",
+		model: selectedModel,
+		subscribe: true,
+	});
 	const handleCommandsTrigger = useCallback(() => {
 		if (!session.externalRunning) void loadCommands();
 	}, [loadCommands, session.externalRunning]);
@@ -573,6 +593,8 @@ function ChatPageImpl(props: ChatPageProps) {
 										/>
 									) : null}
 									<ChatComposer
+										nextPrompt={nextPrompt.text}
+										onNextPromptDismiss={nextPrompt.dismiss}
 										value={session.externalRunning ? "" : draft}
 										historyKey={session.projectRecord.id}
 										placeholder={

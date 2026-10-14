@@ -29,6 +29,7 @@ export type ChatSessionClientOptions = {
 	owner?: string;
 	/** Inline Pi extension sources loaded via --extension for this process only. */
 	extensions?: string[];
+	builtinExtensions?: { id: "model-catalog" }[];
 };
 
 function traceChatClient(
@@ -121,6 +122,7 @@ function createRegisteredChatSessionClient(
 				sessionPath: resumePath,
 				noSession,
 				extensions: options.extensions,
+				builtinExtensions: options.builtinExtensions,
 			}).finally(() => {
 				pendingPrepare = undefined;
 			});
@@ -139,6 +141,7 @@ function createRegisteredChatSessionClient(
 				sessionPath: resumePath,
 				noSession,
 				extensions: options.extensions,
+				builtinExtensions: options.builtinExtensions,
 			}).finally(() => {
 				pendingEnsure = undefined;
 			});

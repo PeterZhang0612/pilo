@@ -1,3 +1,8 @@
+import type {
+	NextPromptModel,
+	NextPromptSettings,
+	NextPromptRequest,
+} from "@/lib/next-prompt";
 import { invoke } from "@tauri-apps/api/core";
 
 import {
@@ -147,6 +152,28 @@ export class TauriPiloClient implements PiloClient {
 			projectId,
 			models,
 		});
+	}
+
+	loadNextPromptSettings(connectionId: string): Promise<NextPromptSettings> {
+		return invoke<NextPromptSettings>("next_prompt_settings_get", {
+			connectionId,
+		});
+	}
+
+	saveNextPromptSettings(
+		connectionId: string,
+		enabled: boolean,
+		model: NextPromptModel | null,
+	): Promise<NextPromptSettings> {
+		return invoke<NextPromptSettings>("next_prompt_settings_set", {
+			connectionId,
+			enabled,
+			model,
+		});
+	}
+
+	requestNextPrompt(request: NextPromptRequest): Promise<void> {
+		return invoke<void>("next_prompt_request", { request });
 	}
 
 	startChat(input: PiloClientStartChatInput): Promise<PiSessionSnapshot> {

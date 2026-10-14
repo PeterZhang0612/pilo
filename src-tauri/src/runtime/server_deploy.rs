@@ -54,10 +54,18 @@ pub(super) async fn spawn_server(
                     .map_err(|error| format!("failed to locate Pilo executable: {error}"))?;
                 let mut command = Command::new(executable);
                 command.arg("--pilo-server");
+                command.env(
+                    "PILO_SERVER_RUNTIME_DIR",
+                    pilo_server::runtime_directory().map_err(|error| error.to_string())?,
+                );
                 return spawn_piped_server(command, &connection.name, false);
             }
             let target = ServerTarget::current()?;
-            let command = Command::new(server_binary(target)?);
+            let mut command = Command::new(server_binary(target)?);
+            command.env(
+                "PILO_SERVER_RUNTIME_DIR",
+                pilo_server::runtime_directory().map_err(|error| error.to_string())?,
+            );
             spawn_piped_server(command, &connection.name, false)
         }
         ConnectionKind::Wsl { .. } => spawn_wsl_server(connection, force_redeploy).await,
@@ -81,7 +89,7 @@ async fn spawn_wsl_server(
         "--exec",
         "/bin/sh",
         "-c",
-        &format!("exec \"$HOME/{SERVER_REMOTE_DIR}/pilo-server\""),
+        &format!("PILO_SERVER_RUNTIME_DIR=\"$HOME/{SERVER_REMOTE_DIR}\" exec \"$HOME/{SERVER_REMOTE_DIR}/pilo-server\""),
     ]);
     spawn_piped_server(command, &connection.name, reused_deployment)
 }
@@ -97,7 +105,7 @@ async fn spawn_ssh_server(
     let reused_deployment = deploy_server_ssh(connection, server_target, force_redeploy).await?;
     let mut command = ssh_command(connection)?;
     command.arg(wrap_posix_script(&format!(
-        "exec \"$HOME/{SERVER_REMOTE_DIR}/pilo-server\""
+        "PILO_SERVER_RUNTIME_DIR=\"$HOME/{SERVER_REMOTE_DIR}\" exec \"$HOME/{SERVER_REMOTE_DIR}/pilo-server\""
     )));
     spawn_piped_server(command, &connection.name, reused_deployment)
 }

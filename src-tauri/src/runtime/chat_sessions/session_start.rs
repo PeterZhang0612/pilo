@@ -83,6 +83,7 @@ impl ChatSessions {
                     session_path,
                     no_session: process.no_session,
                     extensions: process.extensions.clone(),
+                    builtin_extensions: session.builtin_extensions().to_vec(),
                     disable_builtin_tools: process.disable_builtin_tools,
                     disable_extension_discovery: process.disable_extension_discovery,
                     disable_context_files: process.disable_context_files,

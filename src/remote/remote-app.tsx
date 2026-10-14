@@ -9,6 +9,8 @@ import {
 } from "@/components/app/app-chat-state";
 import { runtimeActivityFromStates } from "@/components/app/app-session-index-model";
 import { useSyncedSessionUnread } from "@/components/app/use-synced-session-unread";
+import { NextPromptSettingsButton } from "@/components/settings/next-prompt-settings";
+import { useNextPrompt } from "@/components/chat/use-next-prompt";
 import { ChatComposer } from "@/components/chat/chat-composer";
 import { ConversationColumn } from "@/components/chat/chat-conversation-column";
 import { RemoteConversationViewport } from "./remote-conversation-viewport";
@@ -216,15 +218,31 @@ function RemoteWorkspace() {
 		},
 	);
 
+	const nextPrompt = useNextPrompt({
+		client: connection.client,
+		connectionId: chat.activeProject?.connection.id ?? "",
+		sessionKey: chat.activeSessionKey,
+		sessionId: chat.identifiedSessionId ?? null,
+		draft: chat.composer,
+		hasAttachments: chat.images.length > 0,
+		active: networkState === "connected",
+		busy: active || chat.sending || chat.compacting || Boolean(chat.retryState),
+		blocked:
+			chat.readOnly || !chat.historyReady || Boolean(chat.extensionDialog),
+		model: chat.selectedModel,
+		refreshKey: `${connection.resyncKey}:${connection.snapshotRefreshKey}`,
+	});
 	const { handleSocketMessage } = chat;
+	const { handleMessage: handleNextPromptMessage } = nextPrompt;
 	useEffect(() => {
 		socketHandlerRef.current = (message) => {
 			if (message.type === "events") {
 				for (const event of message.events) handleReadEvent(event);
 			}
+			handleNextPromptMessage(message);
 			handleSocketMessage(message);
 		};
-	}, [handleSocketMessage, handleReadEvent]);
+	}, [handleSocketMessage, handleReadEvent, handleNextPromptMessage]);
 
 	const sidebarSessions = useMemo(
 		() =>
@@ -351,6 +369,15 @@ function RemoteWorkspace() {
 					<SessionHeader
 						session={chat.headerSession ?? undefined}
 						sessionState={chat.chatState ?? undefined}
+						additionalActions={
+							chat.activeProject ? (
+								<NextPromptSettingsButton
+									config={nextPrompt.config}
+									models={chat.modelScope.availableModels}
+									unavailable={nextPrompt.unavailable}
+								/>
+							) : undefined
+						}
 						onNewChat={
 							isNarrow
 								? () => chat.startDraft(chat.activeProjectId || undefined)
@@ -456,6 +483,8 @@ function RemoteWorkspace() {
 									/>
 								) : null}
 								<ChatComposer
+									nextPrompt={nextPrompt.text}
+									onNextPromptDismiss={nextPrompt.dismiss}
 									value={chat.readOnly ? "" : chat.composer}
 									onChange={chat.handleComposerChange}
 									muted={chat.readOnly}

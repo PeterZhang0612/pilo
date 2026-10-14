@@ -51,6 +51,45 @@ impl ChatSessions {
         Some(process)
     }
 
+    pub(crate) async fn send_input_assistance(
+        &self,
+        session_key: &str,
+        project_id: &str,
+        generation: u64,
+        cancel: bool,
+        command: Value,
+    ) -> Result<(), String> {
+        let process = self
+            .registry
+            .lock()
+            .await
+            .processes
+            .get(session_key)
+            .cloned()
+            .ok_or_else(|| "prediction session is not running".to_owned())?;
+        let session = process.session.lock().await;
+        let snapshot = session.snapshot();
+        if process.closed.load(Ordering::Acquire)
+            || process.project_id != project_id
+            || snapshot.generation != generation
+            || snapshot.state != PiProcessState::Running
+            || !process.initialized.load(Ordering::Acquire)
+            || !session.next_prompt_ready()
+            || !session
+                .builtin_extensions()
+                .contains(&pilo_protocol::BuiltinExtension::NextPrompt)
+            || (!cancel
+                && (process.active_turn.load(Ordering::Acquire)
+                    || process.compacting.load(Ordering::Acquire)))
+        {
+            return Err("prediction session is no longer idle or available".to_owned());
+        }
+        // This registered extension command is not an Agent turn or an idle-cache touch.
+        tokio::time::timeout(std::time::Duration::from_secs(2), session.send_rpc(command))
+            .await
+            .map_err(|_| "prediction transport timed out".to_owned())?
+    }
+
     pub async fn send(&self, session_key: &str, mut command: Value) -> Result<(), String> {
         let command_type = command
             .get("type")
