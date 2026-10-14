@@ -191,6 +191,24 @@ jobs:
         shell: bash
         run: pnpm tauri build --no-bundle
 
+      - name: Test Linux AppImage finalization
+        if: runner.os == 'Linux'
+        run: python3 tests/test-linux-appimage.py
+
+      - name: Finalize and sign Linux AppImage
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUNDLE_DIR='target/release/bundle/appimage'
+          APPIMAGE=$(find "$BUNDLE_DIR" -maxdepth 1 -type f -name '*.AppImage' -print -quit)
+          PRODUCT_NAME=$(jq -r '.productName' src-tauri/tauri.conf.json)
+          TOOLS_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/tauri"
+          bash scripts/finalize-linux-appimage.sh \
+            "$APPIMAGE" "$BUNDLE_DIR/${PRODUCT_NAME}.AppDir" \
+            src-tauri/resources "$TOOLS_DIR/linuxdeploy-plugin-appimage.AppImage"
+          pnpm tauri signer sign "$APPIMAGE"
+
       - name: Prepare Windows installed assets
         if: runner.os == 'Windows' && matrix.install_mode == 'installed'
         shell: pwsh

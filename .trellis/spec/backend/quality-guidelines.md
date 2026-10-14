@@ -74,3 +74,21 @@ them (`#[allow(...)]` only with a comment explaining why).
   product name or infer `/usr/lib/pilo` from the executable.
 - Regression coverage must include the case-sensitive deb/rpm layout and the
   AppImage mount layout, alongside Windows portable and macOS bundle paths.
+
+### Linux AppImage finalization
+
+- Run `scripts/finalize-linux-appimage.sh <AppImage> <AppDir> <runtime-dir>
+  <AppImage-output-plugin>` after Tauri bundling and before collecting assets.
+  It restores all four original server binaries into the prepared AppDir and
+  removes `libwayland-client.so*`, which conflicts with host Mesa/EGL.
+- Never run linuxdeploy over restored server resources: its ELF patching makes
+  the static PIE Linux runtimes segfault even for `--fingerprint`. Repack with
+  the AppImage output plugin alone, using the copy cached by Tauri.
+- Verify the final extracted image contains byte-identical runtimes, excludes
+  the Wayland client, and runs the native x64 server with the original
+  fingerprint. Missing inputs, changed bytes, or server failure must stop CI.
+- Re-sign the final AppImage with `pnpm tauri signer sign` after replacement;
+  Tauri's initial `.sig` covers the pre-finalization bytes and is stale.
+- Run `python3 tests/test-linux-appimage.py` for portable orchestration tests.
+  These use a fixture packer; Linux CI must also run final-artifact verification,
+  and desktop testing must validate UI and Pi connections on the target host.
