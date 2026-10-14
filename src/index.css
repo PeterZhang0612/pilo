@@ -900,10 +900,8 @@
 		--text-sm: 1rem;
 		--text-base: calc(1rem * 16 / 14);
 		--text-lg: calc(1rem * 18 / 14);
-		--text-xl: calc(1rem * 20 / 14);
 		--text-2xl: calc(1rem * 24 / 14);
 		--text-3xl: calc(1rem * 30 / 14);
-		--text-4xl: calc(1rem * 36 / 14);
 	}
 
 	:root[data-remote-webui] body {
