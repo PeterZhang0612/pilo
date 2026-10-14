@@ -123,3 +123,34 @@ GUI 验证需授权且分平台：Windows 侧 `pnpm tauri dev` 验证桌面；We
 - `cargo fmt --all --check`、`cargo check`、`cargo clippy --all-targets --all-features -- -D warnings`：通过；扩展 JS 修改后已重跑。另 `cargo check --workspace` 与 `cargo clippy --workspace --all-targets --all-features -- -D warnings` 通过，覆盖 Server/Protocol 自身 targets。Clippy 编译 targets 不代表执行测试。
 - 本任务 23 个 TS/TSX/JS 文件 scoped `oxfmt --check` 与最终 `git diff --check` 通过，tests diff 为空。
 - 用户另行批准仅格式化 `scripts/dev.mjs`，已执行 scoped oxfmt；随后完整 `pnpm check` 与 `git diff --check` 通过。格式化只调整 spawnSync 调用换行，保留原业务逻辑。真实功能/跨环境验证仍待授权，未提交。
+
+## 验收记录（2026-10-14）
+
+本节晚于上面的过程记录，以本节为最终验收结论。
+
+### 本机自动验收（macOS，只读）
+
+| 检查 | 结果 |
+| --- | --- |
+| `pnpm check`（oxfmt --check + oxlint --deny-warnings） | 通过：379 文件格式正确，lint 无告警 |
+| `pnpm build`（tsc + Vite 桌面/WebUI + PWA + sw） | 通过 |
+| `cargo fmt --all --check` | 通过 |
+| `cargo check --workspace` | 通过 |
+| `cargo clippy --workspace --all-targets --all-features -- -D warnings` | 通过 |
+| `pnpm test:unit` | 通过：175 passed / 0 failed |
+| `cargo test --workspace` | 通过：138 passed / 0 failed |
+
+### 单元测试覆盖
+
+本任务未新增测试，`tests/` 下无针对预测或内置扩展部署的用例；验收依据为上述检查链与运行验收。
+
+### 运行验收（用户确认）
+
+用户确认已完成运行验收，包括桌面与 WebUI 的预测交互、以及 Local / WSL / SSH 三环境的内置扩展实际部署。PRD 的 AC1–AC11 全部通过。
+
+### 与验收项的对应
+
+- AC1–AC4（预测内容、默认关闭与设置共享、跨端同步与 Connection 隔离、关闭后不发起与迟到结果丢弃）：运行验收覆盖。
+- AC5–AC8（单次调用与后台生成、Tab/触屏采用与输入不回归、切会话/fork/设置变化后旧结果不出现、失败不阻塞主聊天）：运行验收覆盖。
+- AC9–AC10（固定部署与复用、缺失补齐、不保留临时源码路径；Local/WSL/SSH 按需加载与两 SSH Session 隔离）：由 Local / WSL / SSH 实际部署验收覆盖。
+- AC11（桌面与 WebUI 均可配置使用、窄屏入口与 Ghost Text 不遮挡）：运行验收覆盖。
