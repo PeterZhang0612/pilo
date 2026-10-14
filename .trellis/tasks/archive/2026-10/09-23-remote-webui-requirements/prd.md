@@ -150,18 +150,18 @@ docs/remote-webui-architecture.md 已提出以下方向，当前可作为本轮�
 
 最终验收标准：
 
-- [ ] 同一 Session 在 Desktop 与 Web 同时打开时，双方看到同一条 Agent streaming 流和最终消息结果。
-- [ ] Web 发送 prompt 后，Desktop 无需刷新即可观察到对应 Session 的状态变化和结果；反向同理。
-- [ ] Web 断网并恢复后，可以恢复到正确 Session snapshot，不出现永久缺失或重复拼接的消息。
-- [ ] Remote 关闭时不启动对外 HTTP/WS listener。
-- [ ] Web 无法绕过 Host 直接访问 Local / WSL / SSH Runtime。
-- [ ] 未认证请求无法调用任何 Remote API；认证成功设备可以调用第一版 Remote WebUI 暴露的全部 Chat / Session 能力。
-- [ ] Mobile 主链路能完成：进入 Pilo → 选择 Project/Session → 查看历史 → 发送消息 → 查看实时结果 → Abort。
-- [ ] Web Chat 的消息、Thinking / ToolCall、Composer、Model / Thinking Level、Context 等主要交互与 Desktop 使用同一套组件或同一业务实现，没有功能等价的 Remote 专用副本。
-- [ ] Mobile 上的差异主要限定在 Shell / Navigation / responsive styling / touch & viewport adaptation，不改变 Desktop Chat 的核心语义。
-- [ ] Mobile 可以从相册/系统图片选择器添加图片并随 Chat 消息发送；不出现通用文件上传入口。
-- [ ] Remote 架构引入后，Desktop 的现有 Tauri IPC 路径仍可独立工作，不要求 localhost HTTP。
-- [ ] 第一版 Remote Host 生命周期绑定 Desktop 进程：Pilo 桌面进程运行时可远程访问；退出 Pilo 后 Remote listener 与正在运行的 Session 一起停止。
+- [x] 同一 Session 在 Desktop 与 Web 同时打开时，双方看到同一条 Agent streaming 流和最终消息结果。
+- [x] Web 发送 prompt 后，Desktop 无需刷新即可观察到对应 Session 的状态变化和结果；反向同理。
+- [x] Web 断网并恢复后，可以恢复到正确 Session snapshot，不出现永久缺失或重复拼接的消息。
+- [x] Remote 关闭时不启动对外 HTTP/WS listener。
+- [x] Web 无法绕过 Host 直接访问 Local / WSL / SSH Runtime。
+- [x] 未认证请求无法调用任何 Remote API；认证成功设备可以调用第一版 Remote WebUI 暴露的全部 Chat / Session 能力。
+- [x] Mobile 主链路能完成：进入 Pilo → 选择 Project/Session → 查看历史 → 发送消息 → 查看实时结果 → Abort。
+- [x] Web Chat 的消息、Thinking / ToolCall、Composer、Model / Thinking Level、Context 等主要交互与 Desktop 使用同一套组件或同一业务实现，没有功能等价的 Remote 专用副本。
+- [x] Mobile 上的差异主要限定在 Shell / Navigation / responsive styling / touch & viewport adaptation，不改变 Desktop Chat 的核心语义。
+- [x] Mobile 可以从相册/系统图片选择器添加图片并随 Chat 消息发送；不出现通用文件上传入口。
+- [x] Remote 架构引入后，Desktop 的现有 Tauri IPC 路径仍可独立工作，不要求 localhost HTTP。
+- [x] 第一版 Remote Host 生命周期绑定 Desktop 进程：Pilo 桌面进程运行时可远程访问；退出 Pilo 后 Remote listener 与正在运行的 Session 一起停止。
 
 ## Deferred Technical Decisions
 

@@ -88,3 +88,28 @@
 - Service/client boundary 可独立提交且不启用 Remote。
 - EventBus multi-subscriber 可独立提交并保持仅 Desktop subscriber。
 - Web Server 默认 disabled；出问题可通过 Remote OFF 完全回退到原 Desktop 路径。
+
+## 验收记录（2026-10-14）
+
+本节晚于上面的过程记录，以本节为最终验收结论。
+
+### 本机自动验收（macOS，只读）
+
+| 检查 | 结果 |
+| --- | --- |
+| `pnpm check`（oxfmt --check + oxlint --deny-warnings） | 通过：379 文件格式正确，lint 无告警 |
+| `pnpm build`（tsc + Vite 桌面/WebUI + PWA + sw） | 通过 |
+| `cargo fmt --all --check` | 通过 |
+| `cargo check --workspace` | 通过 |
+| `cargo clippy --workspace --all-targets --all-features -- -D warnings` | 通过 |
+| `pnpm test:unit` | 通过：175 passed / 0 failed |
+| `cargo test --workspace` | 通过：138 passed / 0 failed |
+
+### 运行验收（用户确认）
+
+用户确认已在 Windows 桌面、手机 WebUI 及真实 Local / WSL / SSH 环境完成运行验收，PRD 的 12 条验收项全部通过。
+
+### 与验收项的对应
+
+- 双端同流、跨端状态同步、断网恢复、未认证拒绝、Mobile 主链路、图片附件、Remote 关闭不监听、桌面 IPC 独立可用、Remote 生命周期绑定 Desktop 进程：均由上述运行验收覆盖，已勾选。
+- 本任务交付物是需求与架构收敛文档，功能实现分布在后续 Remote/WebUI 任务中；验收针对这些行为在最终代码上的实际表现。
