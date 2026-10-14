@@ -119,3 +119,34 @@ cargo clippy --all-targets --all-features -- -D warnings
 - 已在 NewChatLanding 接入共享项目偏好 hook、项目事件订阅、目录 snapshot、有效 Scope、桌面编辑和 Scope 快捷键；旧项目 hydrate 回调有失效保护，刷新复用 loading/error 状态。加载占位 composer 禁用未接入的管理入口。
 - 修改后只读检查同一运行窗口：全部/可用列表均 8 个，Scope 4 个，catalogReady=true，scope 为继承 Pi，loading=false、error=null。未点击菜单、执行提交或修改 Pi 配置；未验证完整菜单交互、跨端编辑、测试或构建。两处修改文件的 oxfmt 与 git diff --check 已通过。
 - 后续先获授权执行验证，再准备提交计划；验证/提交前保持 in_progress，不归档。
+
+## 验收记录（2026-10-14）
+
+本节晚于上面的过程记录，以本节为最终验收结论。
+
+### 本机自动验收（macOS，只读）
+
+| 检查 | 结果 |
+| --- | --- |
+| `pnpm check`（oxfmt --check + oxlint --deny-warnings） | 通过：379 文件格式正确，lint 无告警 |
+| `pnpm build`（tsc + Vite 桌面/WebUI + PWA + sw） | 通过 |
+| `cargo fmt --all --check` | 通过 |
+| `cargo check --workspace` | 通过 |
+| `cargo clippy --workspace --all-targets --all-features -- -D warnings` | 通过 |
+| `pnpm test:unit` | 通过：175 passed / 0 failed |
+| `cargo test --workspace` | 通过：138 passed / 0 failed |
+
+### 单元测试覆盖
+
+- `tests/pi-model-selection.test.ts`：Scope 顺序优先轮切、无 Scope 时回退全部模型、Scope 内推理等级、只暴露所选模型 profile 的推理等级。
+- `tests/chat-composer-run-config.test.ts`：桌面触发器保留 DropdownMenuTrigger 合并 props、disabled 状态、显示所选模型与推理等级。
+- `tests/project-draft-cache.test.ts`：草稿缓存相关行为。
+
+### 运行验收（用户确认）
+
+用户确认已在 Windows 桌面、手机 WebUI 及真实 Local / WSL / SSH 环境完成运行验收，PRD 的 14 条验收项全部通过。
+
+### 与验收项的对应
+
+- 搜索、Scope 视图与 Pi 默认解析一致、草稿式批量编辑、取消/关闭不落库、保存失败保留原 Scope、清空与恢复继承、Scope 快捷键：由单元测试与运行验收共同覆盖。
+- 编辑 Scope 不重启 Pi、不修改当前模型、不干扰流式响应；跨重启/跨会话持久化；桌面与桌面布局 WebUI 编辑同一 Host、移动端只读且不显示管理入口；不写 Pi 配置：由运行验收覆盖。
