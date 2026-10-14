@@ -71,6 +71,11 @@ re-styling them.
 
 ## Styling
 
+The visual system - token meanings, the closed type ramp, radius and shadow
+rules, and the named design rules - is documented in
+[`docs/DESIGN.md`](../../../docs/DESIGN.md). Read it before changing colors,
+spacing, type sizes, or control heights.
+
 - Tailwind utility classes only; design tokens via CSS variables
   (`bg-background`, `text-muted-foreground`, `ring-ring`, …). No hardcoded colors.
 - Use `size-4` (not `h-4 w-4`) for square icons.
