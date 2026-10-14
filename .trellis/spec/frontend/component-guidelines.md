@@ -105,8 +105,18 @@ actions go there and appear only for persisted sessions (`session && !session.te
   and disables copying. WebUI already supplies the Pi identity through
   `headerSession` (identified draft or indexed session); do not duplicate it in
   `chatState`, which can still belong to the previous session during switching.
-  Check displayed and copied values after the first message on both clients,
-  and immediately after switching WebUI sessions before history/RPC completes.
+  Desktop `refreshSessionState(agentState?: PiAgentState)` must publish
+  `sessionId` / `sessionFile` / `sessionName` before awaiting session stats;
+  delayed or failed stats must not hide a known identity. Pass the already-read
+  agent state at turn startup and runtime reattachment, rather than waiting for
+  auto-title generation or turn completion. `applyHistoryMetadata` must preserve
+  the previous runtime `sessionId` / `sessionPath`: history can finish after
+  reattachment and otherwise erase the live identity, exposing the draft ID
+  again while the indexed path remains visible.
+  Check displayed and copied values during the first reply (before it ends),
+  after restoring an active draft runtime, and after history arrives on desktop.
+  Also check both clients after the first message and immediately after
+  switching WebUI sessions before history/RPC completes.
 - Rename and open-in-new-window remain gated by `ChatSession.sessionPath` plus
   their callbacks, not the live runtime path. Their desktop handlers use the
   opened entry's identity/path; identifying a draft updates `piSessionId` but

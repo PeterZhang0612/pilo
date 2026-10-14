@@ -24,6 +24,7 @@ import {
 } from "@/lib/pi-model-selection";
 import {
 	PI_THINKING_LEVELS,
+	type PiAgentState,
 	type PiModel,
 	type PiThinkingLevel,
 } from "@/lib/pi-runtime";
@@ -88,12 +89,14 @@ export function useChatSessionState({
 			}
 			setThinkingLevels([...getPiModelThinkingLevels(historicalModel)]);
 			const stats = result.stats;
-			setSessionState({
+			setSessionState((previous) => ({
+				sessionId: previous?.sessionId,
+				sessionPath: previous?.sessionPath,
 				name: result.name ?? undefined,
 				tokens: stats?.tokens,
 				cost: stats?.cost,
 				contextTokens: stats?.contextTokens,
-			});
+			}));
 		},
 		[
 			session.projectRecord.id,
@@ -103,13 +106,28 @@ export function useChatSessionState({
 		],
 	);
 
-	const refreshSessionState = useCallback(async () => {
-		const requestId = ++sessionStateRequestRef.current;
-		const state = await readCurrentPiSessionState(client);
-		if (requestId < sessionStateAppliedRef.current) return;
-		sessionStateAppliedRef.current = requestId;
-		setSessionState((previous) => mergeRefreshedSessionState(previous, state));
-	}, [client]);
+	const refreshSessionState = useCallback(
+		async (agentState?: PiAgentState) => {
+			const requestId = ++sessionStateRequestRef.current;
+			const currentAgentState = agentState ?? (await client.getPiAgentState());
+			if (requestId < sessionStateAppliedRef.current) return;
+			sessionStateAppliedRef.current = requestId;
+			// Publish identity before stats, which may be delayed or fail mid-turn.
+			setSessionState((previous) => ({
+				...previous,
+				sessionId: currentAgentState.sessionId,
+				sessionPath: currentAgentState.sessionFile,
+				name: currentAgentState.sessionName,
+			}));
+			const state = await readCurrentPiSessionState(client, currentAgentState);
+			if (requestId < sessionStateAppliedRef.current) return;
+			sessionStateAppliedRef.current = requestId;
+			setSessionState((previous) =>
+				mergeRefreshedSessionState(previous, state),
+			);
+		},
+		[client],
+	);
 
 	const refreshSessionStats = useCallback(async () => {
 		const requestId = ++sessionStateRequestRef.current;

@@ -56,7 +56,7 @@ type UseChatRuntimeOptions = {
 	restoreSubmission: (submission: ChatSubmission) => void;
 	recoverSubmission: (submission: ChatSubmission) => void;
 	prepareRuntimeConfiguration: (agentState: PiAgentState) => Promise<void>;
-	refreshSessionState: () => Promise<void>;
+	refreshSessionState: (agentState?: PiAgentState) => Promise<void>;
 	refreshSessionStats: () => Promise<void>;
 };
 
@@ -264,6 +264,7 @@ export function useChatRuntime({
 			turn.generation = snapshot.generation;
 			const agentState = await client.getPiAgentState();
 			if (activeTurnRef.current !== turn) return;
+			void refreshSessionState(agentState).catch(() => undefined);
 			if (agentState.sessionId && !session.temporary) {
 				turn.notificationSessionId = agentState.sessionId;
 				identifiedRef.current?.(agentState.sessionId);
@@ -319,6 +320,7 @@ export function useChatRuntime({
 			recoverSubmission,
 			releaseActiveTurn,
 			prepareRuntimeConfiguration,
+			refreshSessionState,
 			requestAutoTitle,
 			runtimeListenerRef,
 			session.temporary,
