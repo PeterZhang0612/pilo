@@ -80,12 +80,19 @@ share `useNextPrompt`, `useNextPromptSettings`, settings fields and `ChatCompose
   characters, including escape expansion. Preserve first user intent and latest
   summary when they fit, then add recent entries within the remaining budget.
 - One call: 128 max tokens, `maxRetries: 0`, AbortController timeout 5 seconds.
+  Race the model result against the deadline: abort alone does not settle a
+  provider Promise. A timeout publishes `unavailable` to every waiting request
+  without waiting for provider shutdown; late resolution/rejection cannot publish
+  again. A client cancel aborts without publishing. A request whose settled snapshot no longer
+  matches (no settle, busy, session/leaf changed) is answered `cancelled`
+  instead of leaving the client to its own timer.
   Prompt follows Claude Prompt Suggestion Generator v2, with attribution/MIT
   notice inside the script. No obvious next step means silence, not forced continue.
 - Jobs deduplicate by Session ID + leaf ID + settings revision + resolved model
   identity. Up to 32 request IDs share one pending/completed job; cancel removes
   only that ID and aborts when no subscribers remain. New run, model selection,
-  session navigation/shutdown resets the job and invalidates subscribed results.
+  session navigation/compaction/shutdown resets the job and invalidates
+  subscribed results.
 - `setWidget("pilo.next-prompt.v1", [JSON.stringify(result)])` carries
   `{ requestId, sessionId, leafId: string | null, revision, text: string | null,
   status: "ready" | "empty" | "cancelled" | "unavailable" }`. This is a private
@@ -133,7 +140,8 @@ share `useNextPrompt`, `useNextPromptSettings`, settings fields and `ChatCompose
   Other keyboard behavior is preserved; point/touch adoption only fills the draft.
 - Shared settings fields use cached Host catalogs, preserve unknown configured
   identities, and do not spawn a model probe. Desktop has a Connection settings
-  tab; WebUI keeps its settings popover in the session header. Neither composer
+  tab; both ends expose the shared session-header settings popover (the
+  unavailable hint lives inside it). Neither composer
   displays a prediction settings icon. Use coarse-pointer 44px targets and the
   existing viewport/safe-area layout.
 
@@ -198,8 +206,13 @@ log SSH config, model credentials, prediction context or suggestion body.
 
 ## 6. Tests Required (When Explicitly Authorized)
 
-No tests were added/modified for this implementation. Assertion points for future
-verification are not claims that these behaviors have been run:
+`tests/pi-next-prompt.test.ts` is included in `pnpm test:unit`. Its isolated Pi
+mock verifies timeout completion when abort is ignored, shared subscribers,
+completed timeout reuse, late success/failure suppression, per-request and final
+subscriber cancellation, compaction invalidation and normal timer cleanup.
+
+Remaining assertion points for future verification are not claims that these
+behaviors have been run:
 
 - Storage: defaults, paired model fields, monotonic concurrent UPSERT revisions,
   Connection cascade, unknown/invalid identities and preserving model on disable.

@@ -7,6 +7,7 @@ import {
 	Palette,
 	Plug,
 	SlidersHorizontal,
+	TextCursorInput,
 	Type,
 } from "lucide-react";
 
@@ -73,7 +74,7 @@ const SETTINGS_TABS = [
 		id: "next-prompt" as const,
 		section: "project",
 		labelKey: "settings.nextPrompt",
-		icon: Type,
+		icon: TextCursorInput,
 	},
 	{
 		id: "session-naming" as const,

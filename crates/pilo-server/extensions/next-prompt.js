@@ -169,6 +169,7 @@ export default function (pi) {
 		"agent_start",
 		"session_before_switch",
 		"session_before_fork",
+		"session_before_compact",
 		"session_before_tree",
 		"session_shutdown",
 		"model_select",
@@ -238,8 +239,11 @@ export default function (pi) {
 				!ctx.isIdle() ||
 				settled.sessionId !== request.sessionId ||
 				settled.leafId !== ctx.sessionManager.getLeafId()
-			)
+			) {
+				// A stale completion still answers its client instead of timing out.
+				publish(request.requestId, null, "cancelled");
 				return;
+			}
 			if (
 				typeof ctx.modelRegistry.streamSimple !== "function" ||
 				typeof ctx.sessionManager.buildSessionProjection !== "function" ||
@@ -281,34 +285,46 @@ export default function (pi) {
 				text: null,
 				status: "empty",
 				publish,
+				timedOut: false,
 				...settled,
 			};
 			job = current;
 			// Do not await the model call here: the RPC command must return promptly.
 			void (async () => {
-				const timeout = setTimeout(() => current.controller.abort(), 5000);
+				let timeout;
+				const timeoutResult = new Promise((resolve) => {
+					timeout = setTimeout(() => {
+						// Settle even when the provider ignores abort.
+						current.timedOut = true;
+						current.controller.abort();
+						resolve(null);
+					}, 5000);
+				});
 				try {
 					// The provider-neutral path also resolves Pi virtual model routes.
-					const response = await ctx.modelRegistry
-						.streamSimple(
-							model,
-							{
-								systemPrompt: PROMPT,
-								messages: [
-									{
-										role: "user",
-										content: contextText(ctx),
-										timestamp: Date.now(),
-									},
-								],
-							},
-							{
-								signal: current.controller.signal,
-								maxTokens: 128,
-								maxRetries: 0,
-							},
-						)
-						.result();
+					const response = await Promise.race([
+						ctx.modelRegistry
+							.streamSimple(
+								model,
+								{
+									systemPrompt: PROMPT,
+									messages: [
+										{
+											role: "user",
+											content: contextText(ctx),
+											timestamp: Date.now(),
+										},
+									],
+								},
+								{
+									signal: current.controller.signal,
+									maxTokens: 128,
+									maxRetries: 0,
+								},
+							)
+							.result(),
+						timeoutResult,
+					]);
 					if (!current.controller.signal.aborted) {
 						current.text = suggestion(response);
 						current.status = current.text ? "ready" : "empty";
@@ -320,9 +336,11 @@ export default function (pi) {
 				} finally {
 					clearTimeout(timeout);
 					current.done = true;
+					// A client cancel aborts silently; a timeout answers unavailable.
+					if (current.timedOut) current.status = "unavailable";
 					if (
 						job === current &&
-						!current.controller.signal.aborted &&
+						(!current.controller.signal.aborted || current.timedOut) &&
 						ctx.isIdle() &&
 						ctx.sessionManager.getSessionId() === current.sessionId &&
 						ctx.sessionManager.getLeafId() === current.leafId

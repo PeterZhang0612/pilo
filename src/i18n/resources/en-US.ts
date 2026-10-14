@@ -82,13 +82,13 @@ const enUS = {
 		notifications: "Notifications",
 		shortcuts: "Shortcuts",
 		connections: "Connections",
-		nextPrompt: "Next prompt prediction",
+		nextPrompt: "Prompt suggestions",
 		nextPromptDescription:
-			"Predicts a short next message after a reply. Uses an extra model call and sends a limited conversation to the selected model. Shared by this connection.",
-		nextPromptModel: "Prediction model",
+			"Offers optional follow-up suggestions after replies. Uses an extra model call with part of the conversation. Settings are shared on this connection.",
+		nextPromptModel: "Suggestion model",
 		nextPromptFollowModel: "Follow chat model",
 		nextPromptUnavailable:
-			"Prediction is unavailable. Check the selected model, credentials, and Pi version.",
+			"Prompt suggestions are unavailable. Check your model configuration and Pi version.",
 		sessionNaming: "Session naming",
 		remote: "Remote",
 		remoteWebUi: "Remote WebUI",

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { listConnectionCatalog } from "@/lib/connections";
 import { connectionLabel } from "@/lib/projects";
@@ -35,15 +36,16 @@ function ConnectionSettings({
 		};
 	}, [config.handleEvent]);
 	return (
-		<SettingsSection title={connectionLabel(connection)}>
-			<div className="p-3">
-				<NextPromptSettingsFields config={config} models={models} />
-			</div>
-		</SettingsSection>
+		<NextPromptSettingsFields
+			config={config}
+			models={models}
+			connectionName={connectionLabel(connection)}
+		/>
 	);
 }
 
 export function ConnectionNextPromptSettings() {
+	const { t } = useTranslation();
 	const [catalog, setCatalog] = useState<{
 		connections: Connection[];
 		models: Map<string, PiModel[]>;
@@ -78,18 +80,23 @@ export function ConnectionNextPromptSettings() {
 	}, []);
 	return (
 		<div className={SETTINGS_CONTAINER_CLASS}>
+			<p className="text-xs leading-5 text-muted-foreground">
+				{t("settings.nextPromptDescription")}
+			</p>
 			{error ? (
 				<p role="alert" className="text-sm text-destructive">
 					{error}
 				</p>
 			) : null}
-			{catalog.connections.map((connection) => (
-				<ConnectionSettings
-					key={connection.id}
-					connection={connection}
-					models={catalog.models.get(connection.id) ?? []}
-				/>
-			))}
+			<SettingsSection title={t("settings.nextPromptModel")}>
+				{catalog.connections.map((connection) => (
+					<ConnectionSettings
+						key={connection.id}
+						connection={connection}
+						models={catalog.models.get(connection.id) ?? []}
+					/>
+				))}
+			</SettingsSection>
 		</div>
 	);
 }
