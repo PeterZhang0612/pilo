@@ -112,3 +112,33 @@ Windows 桌面 / 手机 / 真实网络无法执行时，明确报告未验证；
 - 迁移为加法，不删除旧配置列或设备数据；需要回退时关闭 Remote 服务使临时批次失效，再回退本任务代码，不回滚用户无关修改。
 - 配置、后端和 UI 必须一起提交，不能发布契约不匹配的中间状态。
 - 提交前列出本任务文件与用户既有修改，按 git-commit / Trellis 流程取得确认；本任务本轮不提交、不推送、不升版本。
+
+## 验收记录（2026-10-14）
+
+本节晚于上面的过程记录，以本节为最终验收结论。
+
+### 本机自动验收（macOS，只读）
+
+| 检查 | 结果 |
+| --- | --- |
+| `pnpm check`（oxfmt --check + oxlint --deny-warnings） | 通过：379 文件格式正确，lint 无告警 |
+| `pnpm build`（tsc + Vite 桌面/WebUI + PWA + sw） | 通过 |
+| `cargo fmt --all --check` | 通过 |
+| `cargo check --workspace` | 通过 |
+| `cargo clippy --workspace --all-targets --all-features -- -D warnings` | 通过 |
+| `pnpm test:unit` | 通过：175 passed / 0 failed |
+| `cargo test --workspace` | 通过：138 passed / 0 failed |
+
+### 单元测试覆盖
+
+- `tests/remote-addresses.test.ts`：二维码入口默认 LAN 且不丢已有地址、新空行不入库、trim 保留地址 ID 与 legacy 名称、LAN/loopback 用 HTTP 而公网主机用 HTTPS、legacy 列表无 LAN 时使用剩余地址、按 id/URL/name 而非序列化比较地址列表。
+- `tests/remote-pairing-model.test.ts`：单地址扫码自动选中当前 origin、多地址扫码等待显式选择、目标页保留显式选择、自动与显式选择都不会认证其他 origin。
+
+### 运行验收（用户确认）
+
+用户确认已在 Windows 桌面、手机 WebUI 及三个真实 origin 完成端到端验收，PRD 的 AC1–AC12 全部通过。
+
+### 与验收项的对应
+
+- AC1 / AC7 / AC9 / AC11（选择页与跳转、fragment 凭证、旧配置迁移、单二维码固定 LAN）：单元测试 + 运行验收共同覆盖。
+- AC2 / AC3 / AC4 / AC5 / AC6 / AC8 / AC10 / AC12（免重复扫码、不可达地址、设备记录与独立吊销、配额幂等与并发、secret 失效、未授权访客、重启后行为、requestId 重试证明）：由运行验收覆盖，含真实网络下的三 origin 与吊销/过期场景。
