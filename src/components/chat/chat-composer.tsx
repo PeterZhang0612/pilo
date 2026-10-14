@@ -214,7 +214,7 @@ export function ChatComposer({
 								type="button"
 								variant="ghost"
 								size="sm"
-								className="ml-auto h-7 shrink-0 px-2 text-xs text-muted-foreground pointer-coarse:h-11"
+								className="ml-auto -mr-2 h-7 shrink-0 px-2 text-xs text-muted-foreground pointer-coarse:h-11"
 								onClick={onAbortRetry}
 							>
 								{t("chat.stopRetry")}

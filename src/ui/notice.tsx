@@ -85,7 +85,9 @@ export function NoticeCardHeader({
 		<div className="flex items-center justify-between border-b border-border/40 px-3 py-1.5">
 			<span className="font-medium text-foreground/80">{title}</span>
 			{count === undefined ? null : (
-				<span className="tabular-nums">{count}</span>
+				<span className="min-w-7 shrink-0 text-center tabular-nums">
+					{count}
+				</span>
 			)}
 		</div>
 	);
