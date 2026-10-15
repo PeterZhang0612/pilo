@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useSyncExternalStore } from "react";
 import { ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -8,6 +8,9 @@ import vscodeIcon from "@/assets/editors/vscode.svg";
 import {
 	openProjectInEditor,
 	PROJECT_EDITORS,
+	readProjectEditor,
+	subscribeProjectEditor,
+	writeProjectEditor,
 	type ProjectEditor,
 } from "@/lib/project-editor";
 import type { Project } from "@/lib/projects";
@@ -48,14 +51,17 @@ function ProjectEditorIcon({ editor }: { editor: ProjectEditor }) {
 
 export function ProjectEditorMenu({ project }: { project: Project }) {
 	const { t } = useTranslation();
-	const [selectedEditor, setSelectedEditor] = useState<
-		(typeof PROJECT_EDITORS)[number]
-	>(PROJECT_EDITORS[0]);
+	const selectedEditor = useSyncExternalStore(
+		subscribeProjectEditor,
+		readProjectEditor,
+	);
+	const pointerSelectionRef = useRef(false);
 	const openLabel = t("chat.openProjectWithEditor", {
 		editor: selectedEditor.name,
 	});
 
 	function handleOpen(editor: (typeof PROJECT_EDITORS)[number]) {
+		writeProjectEditor(editor.id);
 		void openProjectInEditor(project, editor.id).catch(() => {
 			toast.error(t("chat.openProjectInEditorFailed", { editor: editor.name }));
 		});
@@ -91,17 +97,28 @@ export function ProjectEditorMenu({ project }: { project: Project }) {
 						<ChevronDown className="size-2.5" />
 					</Button>
 				</DropdownMenuTrigger>
-				<DropdownMenuContent align="end" className="w-40 min-w-40">
+				<DropdownMenuContent
+					align="end"
+					className="w-40 min-w-40"
+					onPointerDownCapture={() => {
+						pointerSelectionRef.current = true;
+					}}
+					onKeyDownCapture={() => {
+						pointerSelectionRef.current = false;
+					}}
+					onCloseAutoFocus={(event) => {
+						// Do not refocus the arrow after a pointer selection launches another app.
+						if (pointerSelectionRef.current) event.preventDefault();
+						pointerSelectionRef.current = false;
+					}}
+				>
 					<DropdownMenuRadioGroup value={selectedEditor.id}>
 						{PROJECT_EDITORS.map((editor) => (
 							<DropdownMenuRadioItem
 								key={editor.id}
 								value={editor.id}
 								className="gap-2.5 [&_svg]:size-4 [@media(pointer:coarse)]:min-h-11"
-								onSelect={() => {
-									setSelectedEditor(editor);
-									handleOpen(editor);
-								}}
+								onSelect={() => handleOpen(editor)}
 							>
 								<ProjectEditorIcon editor={editor.id} />
 								{editor.name}

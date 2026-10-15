@@ -11,6 +11,53 @@ export const PROJECT_EDITORS = [
 
 export type ProjectEditor = (typeof PROJECT_EDITORS)[number]["id"];
 
+const STORAGE_KEY = "pilo.projectEditor.v1";
+const editorListeners = new Set<() => void>();
+let unsavedEditor: (typeof PROJECT_EDITORS)[number] | undefined;
+
+export function readProjectEditor(): (typeof PROJECT_EDITORS)[number] {
+	if (typeof window === "undefined") return PROJECT_EDITORS[0];
+	if (unsavedEditor) return unsavedEditor;
+	try {
+		const stored = window.localStorage.getItem(STORAGE_KEY);
+		return (
+			PROJECT_EDITORS.find((editor) => editor.id === stored) ??
+			PROJECT_EDITORS[0]
+		);
+	} catch {
+		return PROJECT_EDITORS[0];
+	}
+}
+
+export function subscribeProjectEditor(listener: () => void): () => void {
+	if (typeof window === "undefined") return () => {};
+	const target = window;
+	const handleStorage = (event: StorageEvent) => {
+		if (event.key === STORAGE_KEY || event.key === null) {
+			unsavedEditor = undefined;
+			listener();
+		}
+	};
+	editorListeners.add(listener);
+	target.addEventListener("storage", handleStorage);
+	return () => {
+		editorListeners.delete(listener);
+		target.removeEventListener("storage", handleStorage);
+	};
+}
+
+export function writeProjectEditor(editor: ProjectEditor): void {
+	if (typeof window === "undefined") return;
+	unsavedEditor = PROJECT_EDITORS.find((item) => item.id === editor);
+	try {
+		window.localStorage.setItem(STORAGE_KEY, editor);
+		unsavedEditor = undefined;
+	} catch {
+		// Keep the choice shared in memory even when persistence is unavailable.
+	}
+	for (const listener of editorListeners) listener();
+}
+
 function encodePath(path: string): string {
 	return path.split("/").map(encodeURIComponent).join("/");
 }
