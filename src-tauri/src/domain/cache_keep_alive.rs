@@ -24,6 +24,8 @@ pub struct CacheKeepAliveStatus {
     pub expires_at_ms: u64,
     pub next_warm_at_ms: Option<u64>,
     pub request_count: u64,
+    #[serde(default)]
+    pub input_tokens: Option<u64>,
     pub cache_read_tokens: u64,
     pub cache_write_tokens: u64,
     pub output_tokens: u64,

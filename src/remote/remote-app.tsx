@@ -505,7 +505,10 @@ function RemoteWorkspace() {
 												}
 											/>
 										) : null}
-										<CacheKeepAliveNotice status={cacheKeepAliveStatus} />
+										<CacheKeepAliveNotice
+											key={chat.activeSessionKey}
+											status={cacheKeepAliveStatus}
+										/>
 										<ChatComposer
 											nextPrompt={nextPrompt.text}
 											onNextPromptDismiss={nextPrompt.dismiss}

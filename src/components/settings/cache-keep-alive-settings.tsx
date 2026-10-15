@@ -1,6 +1,6 @@
 import { type FocusEvent, type KeyboardEvent, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Timer } from "lucide-react";
+import { Plus } from "lucide-react";
 
 import {
 	defaultCacheKeepAliveSettings,
@@ -17,12 +17,6 @@ import {
 	CommandInput,
 	CommandItem,
 	CommandList,
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogHeader,
-	DialogTitle,
-	DialogTrigger,
 	Input,
 	Popover,
 	PopoverContent,
@@ -30,6 +24,7 @@ import {
 	Switch,
 } from "@/ui";
 import { cn } from "@/lib/utils";
+import { menuSurfaceStyle } from "@/ui/menu-styles";
 import {
 	SETTINGS_CONTROL_CLASS,
 	SETTINGS_TEXT_BUTTON_CLASS,
@@ -56,7 +51,7 @@ function ModelSettingsRow({
 		ttl: string;
 		duration: string;
 	} | null>(null);
-	const ttl = draft?.ttl ?? String(settings.cacheTtlSeconds);
+	const ttl = draft?.ttl ?? String(settings.cacheTtlSeconds / 60);
 	const duration =
 		draft?.duration ?? String(settings.idleKeepAliveSeconds / 60);
 	const commit = async (enabled = settings.enabled) => {
@@ -74,7 +69,7 @@ function ModelSettingsRow({
 			enabled,
 			...(valid
 				? {
-						cacheTtlSeconds: Number(ttl),
+						cacheTtlSeconds: Math.round(Number(ttl) * 60),
 						idleKeepAliveSeconds: Math.round(Number(duration) * 60),
 					}
 				: {}),
@@ -140,13 +135,13 @@ function ModelSettingsRow({
 			<td className="px-3 py-1">
 				<Input
 					ref={ttlInputRef}
-					name="cacheTtlSeconds"
+					name="cacheTtlMinutes"
 					type="number"
-					inputMode="numeric"
+					inputMode="decimal"
 					required
-					min={10}
-					max={86400}
-					step={1}
+					min={10 / 60}
+					max={1440}
+					step="any"
 					value={ttl}
 					onChange={(event) => setDraft({ ttl: event.target.value, duration })}
 					disabled={disabling}
@@ -249,39 +244,52 @@ export function CacheKeepAliveSettingsFields({
 		<SettingsSection
 			title={connectionName ?? t("settings.cacheKeepAliveModels")}
 			actions={
-				<Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+				<Popover modal open={pickerOpen} onOpenChange={setPickerOpen}>
 					<PopoverTrigger asChild>
 						<Button
 							ref={addButtonRef}
 							type="button"
 							variant="ghost"
 							size="sm"
-							className={cn(SETTINGS_TEXT_BUTTON_CLASS, "w-auto")}
+							className={cn(
+								SETTINGS_TEXT_BUTTON_CLASS,
+								"w-auto text-muted-foreground hover:text-foreground data-[state=open]:bg-hover data-[state=open]:text-foreground [@media(pointer:coarse)]:min-h-11",
+							)}
 							disabled={config.loading || adding}
 						>
-							<Plus className="size-3.5" aria-hidden="true" />
+							<Plus className="size-3.5" strokeWidth={1.5} aria-hidden="true" />
 							{t("settings.cacheKeepAliveAddModel")}
 						</Button>
 					</PopoverTrigger>
 					<PopoverContent
 						align="end"
-						className="w-80 max-w-[calc(100vw-2rem)] p-0"
+						className="w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border-0 bg-background p-0 text-foreground shadow-none"
+						style={menuSurfaceStyle}
 					>
-						<Command>
+						<Command className="h-auto rounded-xl bg-background text-foreground">
 							<CommandInput
 								aria-label={t("chat.searchModels")}
 								placeholder={t("chat.searchModels")}
-								wrapperClassName="h-10 px-3"
+								className="text-input-foreground placeholder:text-input-placeholder"
+								wrapperClassName="m-2 h-8 shrink-0 rounded-md border border-input-border bg-input-field px-2.5 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring [@media(pointer:coarse)]:h-11 [&>svg]:me-2 [&>svg]:size-3.5 [&>svg]:text-muted-foreground [&>svg]:opacity-100 [&>svg]:stroke-[1.5]"
 							/>
-							<CommandList aria-label={t("settings.cacheKeepAliveModel")}>
-								<CommandEmpty>{t("chat.noModelMatches")}</CommandEmpty>
+							<CommandList
+								aria-label={t("settings.cacheKeepAliveModel")}
+								className="space-y-0.5 p-1 pt-0"
+								containerClassName="max-h-none"
+								viewportClassName="max-h-[min(18rem,calc(var(--radix-popover-content-available-height)-4.5rem))] overscroll-contain"
+							>
+								<CommandEmpty className="px-3 py-6 text-center text-xs text-muted-foreground">
+									{t("chat.noModelMatches")}
+								</CommandEmpty>
 								{available.map(([key, model]) => (
 									<CommandItem
 										key={key}
 										value={key}
 										keywords={[model.name, model.id, model.provider]}
 										disabled={adding}
-										className="gap-2 px-3 py-2"
+										className="min-h-8 gap-3 rounded-lg px-3 py-1.5 [@media(pointer:coarse)]:min-h-11"
+										title={`${model.name || model.id} · ${model.provider} · ${model.id}`}
 										onSelect={() => {
 											if (adding) return;
 											setAdding(true);
@@ -341,7 +349,7 @@ export function CacheKeepAliveSettingsFields({
 								</th>
 								<th scope="col" className="px-3 py-2 text-start font-medium">
 									{t("settings.cacheKeepAliveTtlLabel")} (
-									{t("settings.cacheKeepAliveSeconds")})
+									{t("settings.cacheKeepAliveMinutes")})
 								</th>
 								<th scope="col" className="px-3 py-2 text-start font-medium">
 									{t("settings.cacheKeepAliveDurationLabel")} (
@@ -403,44 +411,5 @@ export function CacheKeepAliveSettingsFields({
 				</p>
 			) : null}
 		</SettingsSection>
-	);
-}
-
-export function CacheKeepAliveSettingsButton(
-	props: Parameters<typeof CacheKeepAliveSettingsFields>[0],
-) {
-	const { t } = useTranslation();
-	const [open, setOpen] = useState(false);
-	return (
-		<Dialog open={open} onOpenChange={setOpen}>
-			<DialogTrigger asChild>
-				<Button
-					variant="ghost"
-					size="icon"
-					className="size-7"
-					aria-label={t("settings.cacheKeepAlive")}
-					title={t("settings.cacheKeepAlive")}
-				>
-					<Timer className="size-4" />
-				</Button>
-			</DialogTrigger>
-			<DialogContent className="w-[calc(100vw-4rem)] max-w-3xl max-h-[85dvh] overflow-y-auto overscroll-contain">
-				<DialogHeader>
-					<DialogTitle>{t("settings.cacheKeepAlive")}</DialogTitle>
-					<DialogDescription>
-						{t("settings.cacheKeepAliveScope")}
-					</DialogDescription>
-				</DialogHeader>
-				{open ? (
-					<CacheKeepAliveSettingsFields
-						{...props}
-						key={JSON.stringify([props.connectionId, props.sessionKey])}
-					/>
-				) : null}
-				<p className="text-xs leading-5 text-muted-foreground">
-					{t("settings.cacheKeepAliveCostHint")}
-				</p>
-			</DialogContent>
-		</Dialog>
 	);
 }

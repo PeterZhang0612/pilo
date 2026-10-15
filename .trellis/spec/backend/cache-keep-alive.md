@@ -23,7 +23,9 @@ chat status notices. Owners: `runtime/cache_keep_alive.rs`,
 - `ChatSessionState.cacheKeepAlive` is nullable. Widget
   `pilo.cache-keep-alive.v1` contains one JSON line with readiness,
   status/reason, provider/model, expiry/next-request timestamps, request count,
-  cache read/write tokens, output tokens and nullable estimated cost.
+  nullable cumulative uncached `inputTokens`, cache read/write tokens, output
+  tokens and nullable estimated cost. Older Widgets may omit `inputTokens`;
+  the Host defaults it to null.
 
 ## 3. Contracts
 
@@ -54,6 +56,13 @@ chat status notices. Owners: `runtime/cache_keep_alive.rs`,
   activation, focus or reconnect. Do not replay stale Widget JSON as truth.
   Never write notices into conversation history, send desktop notifications or
   emit a toast on every refresh. Settings-dialog polling is read-only.
+  Usage copy shows the cumulative token cache hit rate, not raw cache-read
+  tokens: `cacheReadTokens / (inputTokens + cacheReadTokens + cacheWriteTokens)`.
+  Missing input usage or a zero denominator displays `—`, never an assumed 100%.
+  The shared notice has a manual close button (44px on coarse pointers), no
+  auto-dismiss timer. Closing only hides it for the mounted session view;
+  status refreshes never reopen it and background warming continues unchanged.
+  Both entry points key the notice by runtime session key to isolate dismissal.
 - Costs are estimates from provider usage. Missing usage or an interrupted request
   makes the cumulative estimate unknown rather than claiming a zero-cost call.
 

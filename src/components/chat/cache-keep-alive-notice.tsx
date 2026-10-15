@@ -1,15 +1,20 @@
-import { Timer } from "lucide-react";
+import { Timer, X } from "lucide-react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import type { CacheKeepAliveStatus } from "@/lib/cache-keep-alive";
-import { NoticeCard, NoticeIcon } from "@/ui";
+import {
+	cacheKeepAliveHitRate,
+	type CacheKeepAliveStatus,
+} from "@/lib/cache-keep-alive";
+import { Button, NoticeCard, NoticeIcon } from "@/ui";
 
 export function CacheKeepAliveStatusContent({
 	status,
 }: {
 	status: CacheKeepAliveStatus;
 }) {
-	const { t } = useTranslation();
+	const { t, i18n } = useTranslation();
+	const hitRate = cacheKeepAliveHitRate(status);
 	let text;
 	switch (status.reason) {
 		case "warmed":
@@ -58,13 +63,19 @@ export function CacheKeepAliveStatusContent({
 	}
 	if (!status.ready) text = t("settings.cacheKeepAliveUnsupported");
 	return (
-		<div className="min-w-0 space-y-1 text-xs leading-5 text-muted-foreground">
+		<div className="min-w-0 flex-1 space-y-1 text-xs leading-5 text-muted-foreground">
 			<p>{text}</p>
 			{status.requestCount > 0 ? (
 				<p>
 					{t("settings.cacheKeepAliveUsage", {
 						count: status.requestCount,
-						tokens: status.cacheReadTokens,
+						hitRate:
+							hitRate === null
+								? "—"
+								: new Intl.NumberFormat(i18n.language, {
+										style: "percent",
+										maximumFractionDigits: 1,
+									}).format(hitRate),
 						cost: status.cost === null ? "—" : `$${status.cost.toFixed(6)}`,
 					})}
 				</p>
@@ -78,7 +89,10 @@ export function CacheKeepAliveNotice({
 }: {
 	status: CacheKeepAliveStatus | null;
 }) {
+	const { t } = useTranslation();
+	const [dismissed, setDismissed] = useState(false);
 	if (
+		dismissed ||
 		!status ||
 		["disabled", "waiting_request", "running", "context_changed"].includes(
 			status.reason,
@@ -96,6 +110,16 @@ export function CacheKeepAliveNotice({
 				tone={status.status === "unavailable" ? "warning" : "info"}
 			/>
 			<CacheKeepAliveStatusContent status={status} />
+			<Button
+				type="button"
+				variant="ghost"
+				size="icon"
+				className="-my-1 size-7 shrink-0 text-muted-foreground pointer-coarse:size-11"
+				aria-label={t("common.close")}
+				onClick={() => setDismissed(true)}
+			>
+				<X className="size-3.5" />
+			</Button>
 		</NoticeCard>
 	);
 }

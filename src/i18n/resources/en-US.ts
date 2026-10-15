@@ -85,8 +85,6 @@ const enUS = {
 		cacheKeepAlive: "Cache keep-alive",
 		cacheKeepAliveEnabled: "Enable keep-alive",
 		cacheKeepAliveEnabledHint: "Starts with your next conversation turn.",
-		cacheKeepAliveScope:
-			"Model settings are shared across sessions on this connection.",
 		cacheKeepAliveDescription:
 			"Refreshes before the cache expires, even when you switch sessions.",
 		cacheKeepAliveModel: "Model",
@@ -104,7 +102,7 @@ const enUS = {
 		cacheKeepAliveDurationLabel: "Keep alive",
 		cacheKeepAliveSeconds: "s",
 		cacheKeepAliveMinutes: "min",
-		cacheKeepAliveTtl: "Cache TTL (seconds)",
+		cacheKeepAliveTtl: "Cache TTL (minutes)",
 		cacheKeepAliveTtlHint:
 			"Use the provider’s actual TTL. This does not change provider settings.",
 		cacheKeepAliveDuration: "Keep-alive duration (minutes)",
@@ -116,7 +114,7 @@ const enUS = {
 		cacheKeepAliveScheduled: "Next refresh: {{time}}",
 		cacheKeepAliveWindowEnding:
 			"The current cache covers the remaining idle window. No further refresh is needed.",
-		cacheKeepAliveWarmed: "Cache refreshed. Next refresh: {{time}}",
+		cacheKeepAliveWarmed: "Refreshed · Next {{time}}",
 		cacheKeepAliveWarming: "Refreshing cache…",
 		cacheKeepAliveExpired: "Stopped: the cache refresh deadline was missed.",
 		cacheKeepAliveWindowEnded: "The idle keep-alive window has ended.",
@@ -130,8 +128,7 @@ const enUS = {
 		cacheKeepAliveDisabled: "Cache keep-alive is disabled.",
 		cacheKeepAliveWaiting:
 			"Waiting for the next normal turn to establish a cache.",
-		cacheKeepAliveUsage:
-			"This process: {{count}} refresh requests · {{tokens}} cached tokens read · estimated cost {{cost}}",
+		cacheKeepAliveUsage: "{{count}} total · {{hitRate}} hit rate · ~{{cost}}",
 		nextPrompt: "Prompt suggestions",
 		nextPromptDescription:
 			"Offers optional follow-up suggestions after replies. Uses an extra model call with part of the conversation. Settings are shared on this connection.",

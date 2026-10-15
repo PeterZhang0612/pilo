@@ -24,7 +24,6 @@ import { ChatInterruptedTurnNotice } from "@/components/chat/chat-interrupted-tu
 import { piSessionSuggestions } from "@/components/chat/chat-composer-suggestions";
 import { PiExtensionNotifications } from "@/components/chat/pi-extension-notifications";
 import { PiExtensionUiDialog } from "@/components/chat/pi-extension-ui-dialog";
-import { CacheKeepAliveSettingsButton } from "@/components/settings/cache-keep-alive-settings";
 import { SessionHeader } from "@/components/chat/chat-session-header";
 import { ChatFindLayer } from "@/components/chat/chat-find-bar";
 import type { ChatSession } from "@/components/chat/chat-page-utils";
@@ -491,17 +490,6 @@ function ChatPageImpl(props: ChatPageProps) {
 						<div className="@container flex h-full min-w-0 flex-col bg-background">
 							<SessionHeader
 								session={session}
-								additionalActions={
-									!session.temporary ? (
-										<CacheKeepAliveSettingsButton
-											client={tauriPiloClient}
-											connectionId={session.projectRecord.connection.id}
-											models={modelScope.availableModels}
-											initialModel={selectedModel}
-											sessionKey={client.sessionKey}
-										/>
-									) : null
-								}
 								sessionState={sessionState ?? undefined}
 								onOpenChanges={onOpenChanges}
 								onOpenTerminal={onOpenTerminal}
@@ -616,7 +604,10 @@ function ChatPageImpl(props: ChatPageProps) {
 												}
 											/>
 										) : null}
-										<CacheKeepAliveNotice status={cacheKeepAlive.status} />
+										<CacheKeepAliveNotice
+											key={client.sessionKey}
+											status={cacheKeepAlive.status}
+										/>
 										<ChatComposer
 											nextPrompt={nextPrompt.text}
 											onNextPromptDismiss={nextPrompt.dismiss}

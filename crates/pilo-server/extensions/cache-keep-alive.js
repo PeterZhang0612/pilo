@@ -39,6 +39,7 @@ export default function (pi) {
 	let controller;
 	let normalRun = false;
 	let requestCount = 0;
+	let inputTokens = 0;
 	let cacheReadTokens = 0;
 	let cacheWriteTokens = 0;
 	let outputTokens = 0;
@@ -56,6 +57,7 @@ export default function (pi) {
 				expiresAtMs,
 				nextWarmAtMs,
 				requestCount,
+				inputTokens,
 				cacheReadTokens,
 				cacheWriteTokens,
 				outputTokens,
@@ -204,6 +206,10 @@ export default function (pi) {
 				return stop("request_failed", true);
 			}
 			const usage = response.usage;
+			inputTokens =
+				inputTokens !== null && Number.isFinite(usage?.input)
+					? inputTokens + usage.input
+					: null;
 			cacheReadTokens += usage?.cacheRead ?? 0;
 			cacheWriteTokens += usage?.cacheWrite ?? 0;
 			outputTokens += usage?.output ?? 0;
