@@ -174,6 +174,7 @@ export function useChatRuntimeEvents({
 			status: AgentNotificationStatus,
 			errorMessage?: string,
 		) => {
+			if (turn.suppressResultNotification) return;
 			// 标题生成和 React 状态更新都可能晚于 turn 结束，通知不依赖渲染时序。
 			let title = (await turn.sessionTitleReady) ?? turn.sessionTitle;
 			if (
@@ -188,6 +189,8 @@ export function useChatRuntimeEvents({
 					title = state.sessionName?.trim() || title;
 				}
 			}
+			// 手动打断可能发生在等待标题或状态期间。
+			if (turn.suppressResultNotification) return;
 			await notifyAgentResult({
 				status,
 				projectId: turn.projectId,
@@ -397,6 +400,10 @@ export function useChatRuntimeEvents({
 
 			switch (event.type) {
 				case "assistant_message_end":
+					if (event.stopReason === "aborted") {
+						releaseActiveTurn(turn);
+						break;
+					}
 					if (event.stopReason === "error" || event.errorMessage?.trim()) {
 						if (desktopNotifications) {
 							void notifyTurnResult(
@@ -408,11 +415,7 @@ export function useChatRuntimeEvents({
 						releaseActiveTurn(turn);
 						break;
 					}
-					if (
-						desktopNotifications &&
-						event.stopReason !== "aborted" &&
-						!event.errorMessage?.trim()
-					) {
+					if (desktopNotifications) {
 						void notifyTurnResult(turn, "completed");
 					}
 					releaseActiveTurn(turn);

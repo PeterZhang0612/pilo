@@ -345,6 +345,7 @@ export function useChatRuntimeQueue({
 			);
 			if (!clientMessageId) clearDraft();
 			turn.preserveQueuedOnRelease = true;
+			turn.suppressResultNotification = true;
 
 			try {
 				let runtimeStopped = false;
@@ -387,7 +388,8 @@ export function useChatRuntimeQueue({
 				});
 				releaseActiveTurn(turn, { preserveQueued: true });
 
-				const nextTurnPromise = beginTurn(submission);
+				// Draft sends were cleared before abort; queued sends must keep the draft.
+				const nextTurnPromise = beginTurn(submission, { preserveDraft: true });
 				const nextTurn = activeTurnRef.current;
 				if (!nextTurn) {
 					restoreQueuedMessages(remaining);
@@ -415,6 +417,7 @@ export function useChatRuntimeQueue({
 			} catch (error) {
 				if (activeTurnRef.current === turn) {
 					turn.preserveQueuedOnRelease = false;
+					turn.suppressResultNotification = false;
 				} else {
 					const stranded = takeQueuedMessages(turn);
 					removeQueuedMessagesFromConversation(turn, stranded);
@@ -492,6 +495,7 @@ export function useChatRuntimeQueue({
 	const handleStop = useCallback(() => {
 		const turn = activeTurnRef.current;
 		if (!turn || turn.sessionId !== session.id) return;
+		turn.suppressResultNotification = true;
 		const queued = takeQueuedMessages(turn);
 		removeQueuedMessagesFromConversation(turn, queued);
 		restoreQueuedMessages(queued);

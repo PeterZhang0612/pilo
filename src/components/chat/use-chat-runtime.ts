@@ -329,7 +329,10 @@ export function useChatRuntime({
 	);
 
 	const beginTurn = useCallback<BeginTurn>(
-		async (submission, appendUserMessage = true) => {
+		async (
+			submission,
+			{ appendUserMessage = true, preserveDraft = false } = {},
+		) => {
 			const normalized = createChatSubmission(
 				submission.text,
 				submission.images,
@@ -382,7 +385,7 @@ export function useChatRuntime({
 					replyRunwayPx,
 				},
 			]);
-			clearDraft();
+			if (!preserveDraft) clearDraft();
 			requestAnimationFrame(() => scrollToBottom(false));
 
 			try {
@@ -481,7 +484,7 @@ export function useChatRuntime({
 			const key = `${session.id}:${initialMessage ?? ""}:${initialImages.map((image) => image.id).join(",")}`;
 			if (sentInitialPromptsRef.current.has(key)) return;
 			sentInitialPromptsRef.current.add(key);
-			void beginTurn(initialSubmission, false);
+			void beginTurn(initialSubmission, { appendUserMessage: false });
 			for (const message of deferred) {
 				queueMessage(createChatSubmission(message), "follow_up");
 			}
