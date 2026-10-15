@@ -45,7 +45,8 @@ export function runtimeActivityFromStates(
 	for (const state of states) {
 		if (
 			(projectIds && !projectIds.has(state.projectId)) ||
-			!chatRuntimeHasOpenTurn(state) ||
+			(!chatRuntimeHasOpenTurn(state) &&
+				!(state.compacting && state.snapshot.state === "running")) ||
 			!state.sessionPath
 		) {
 			continue;

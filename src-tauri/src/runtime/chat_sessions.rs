@@ -33,6 +33,7 @@ pub struct ChatSessionState {
     pub prepared: bool,
     pub initialized: bool,
     pub active_turn: bool,
+    pub compacting: bool,
     pub snapshot: PiSessionSnapshot,
 }
 
@@ -129,6 +130,7 @@ impl ChatSessions {
             prepared: process.prepared.load(Ordering::Acquire),
             initialized: process.initialized.load(Ordering::Acquire),
             active_turn: process.active_turn.load(Ordering::Acquire),
+            compacting: process.compacting.load(Ordering::Acquire),
             snapshot,
         })
     }
@@ -172,6 +174,7 @@ impl ChatSessions {
                 prepared: process.prepared.load(Ordering::Acquire),
                 initialized: process.initialized.load(Ordering::Acquire),
                 active_turn: process.active_turn.load(Ordering::Acquire),
+                compacting: process.compacting.load(Ordering::Acquire),
                 snapshot,
             });
         }

@@ -50,6 +50,7 @@ export type ChatSessionRuntimeState = {
 	prepared: boolean;
 	initialized: boolean;
 	activeTurn: boolean;
+	compacting?: boolean;
 	snapshot: PiSessionSnapshot;
 };
 

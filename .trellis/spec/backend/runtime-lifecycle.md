@@ -81,6 +81,11 @@ Frontend controller eviction alone is not backend process cleanup.
 - `prompt` and `compact` mark their respective busy flags before `send_rpc`;
   transport failure rolls back only flags that were previously idle. Compaction
   is tracked separately so `CompactionEnd` cannot clear an ongoing agent turn.
+  `ChatSessionState` exposes both `activeTurn` and `compacting` from `state()` /
+  `states()`. The shared `runtimeActivityFromStates` includes running compactions
+  in Desktop/WebUI/mobile sidebar activity. Frontend `compacting?: boolean`
+  tolerates older Host responses. Do not set `activeTurn` for compaction or widen
+  `chatRuntimeHasOpenTurn`: turn adoption and prompt handling need the real turn.
 - A `prompt` that flips an idle active-turn flag records its command id as the
   flag owner; `send` injects `pilo-prompt-<n>` when the caller sends none. Pi
   echoes the id in its prompt response. The owned flag rolls back when that
@@ -205,6 +210,7 @@ Frontend controller eviction alone is not backend process cleanup.
 | Pi stdout exceeds line limit | Stop the stream without reading the full oversized line |
 | Idle session evicted | No stop event; `states()` drops it; next `ensure` respawns and resets the generation |
 | Live/temporary/unsaved/in-flight session | Keep it, even above budget |
+| Running Host compaction without an active turn | Sidebar keeps its running marker on Desktop and WebUI/mobile; completion clears it unless a turn remains active |
 | Extension resumes after compaction | Desktop adopts the live turn; queue and stop remain available |
 | Prompt races autonomous continuation | Missing `streamingBehavior` defaults to `followUp`; explicit behavior is preserved |
 | Prompt response rejects | Reject the matching caller; release its optimistic activity |
@@ -293,6 +299,10 @@ The following targeted regressions remain to be added with explicit authorizatio
   These assertion points are requirements, not a claim of checks already run.
 - Prompt forwarding: absent `streamingBehavior` becomes `followUp`, explicit
   `steer`/`followUp` survives, and non-prompt commands are unchanged.
+- Sidebar compaction regression (pending authorization): running + compacting +
+  no turn is active; compacting false is idle; a remaining active turn stays active;
+  stopped/failed runtimes are idle; older responses without compacting retain
+  turn-only behavior. Check Desktop and WebUI/mobile, including session switching.
 - Desktop manual regression: compact with extension-driven `continue`, then send
   steering/follow-up messages and stop; verify running state until agent settles.
   Late compaction/completion or stale/discarded generation events must not adopt
