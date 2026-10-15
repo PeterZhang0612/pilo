@@ -481,6 +481,33 @@ pub(super) async fn next_prompt_request(
     }
 }
 
+pub(super) async fn cache_keep_alive_settings_list(
+    State(state): State<RemoteHttpState>,
+    Query(query): Query<NextPromptSettingsQuery>,
+) -> Response {
+    match crate::runtime::cache_keep_alive::load(&state.paths, &query.connection_id) {
+        Ok(settings) => Json(settings).into_response(),
+        Err(error) => api_error(StatusCode::BAD_REQUEST, &error),
+    }
+}
+
+pub(super) async fn cache_keep_alive_settings_set(
+    State(state): State<RemoteHttpState>,
+    Json(settings): Json<crate::domain::CacheKeepAliveSettings>,
+) -> Response {
+    match crate::runtime::cache_keep_alive::save(
+        &state.paths,
+        &state.app.state::<PiloRuntime>(),
+        &state.app.state::<RuntimeEventBus>(),
+        settings,
+    )
+    .await
+    {
+        Ok(settings) => Json(settings).into_response(),
+        Err(error) => api_error(StatusCode::BAD_REQUEST, &error),
+    }
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(super) struct ChatStartRequest {

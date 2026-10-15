@@ -1,3 +1,4 @@
+import type { CacheKeepAliveSettings } from "@/lib/cache-keep-alive";
 import type {
 	NextPromptModel,
 	NextPromptSettings,
@@ -98,6 +99,12 @@ export interface PiloClient {
 		projectId: string,
 		models: ProjectScopedModel[] | null,
 	): Promise<ProjectModelScope>;
+	loadCacheKeepAliveSettings(
+		connectionId: string,
+	): Promise<CacheKeepAliveSettings[]>;
+	saveCacheKeepAliveSettings(
+		settings: CacheKeepAliveSettings,
+	): Promise<CacheKeepAliveSettings>;
 	loadNextPromptSettings(connectionId: string): Promise<NextPromptSettings>;
 	saveNextPromptSettings(
 		connectionId: string,

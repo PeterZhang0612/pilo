@@ -18,6 +18,43 @@ use super::{
 static PROMPT_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 impl ChatSessions {
+    pub(crate) async fn configure_cache_keep_alive(
+        &self,
+        session_key: &str,
+        settings: Value,
+    ) -> Result<(), String> {
+        let Some(process) = self
+            .registry
+            .lock()
+            .await
+            .processes
+            .get(session_key)
+            .cloned()
+        else {
+            return Ok(());
+        };
+        let session = process.session.lock().await;
+        if process.closed.load(Ordering::Acquire)
+            || !session.cache_keep_alive_ready()
+            || !session
+                .builtin_extensions()
+                .contains(&pilo_protocol::BuiltinExtension::CacheKeepAlive)
+        {
+            return Ok(());
+        }
+        // A registered extension command, never an Agent prompt or an idle-cache touch.
+        tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            session.send_rpc(json!({
+                "id": "pilo-cache-keep-alive-config",
+                "type": "prompt",
+                "message": format!("/pilo-cache-keep-alive {settings}"),
+            })),
+        )
+        .await
+        .map_err(|_| "cache keep-alive configuration timed out".to_owned())?
+    }
+
     async fn close_process(&self, session_key: &str) -> Option<Arc<ChatProcess>> {
         let (process, events) = {
             let mut registry = self.registry.lock().await;

@@ -9,6 +9,8 @@ import {
 } from "@/components/app/app-chat-state";
 import { runtimeActivityFromStates } from "@/components/app/app-session-index-model";
 import { useSyncedSessionUnread } from "@/components/app/use-synced-session-unread";
+import { CacheKeepAliveNotice } from "@/components/chat/cache-keep-alive-notice";
+import { useCacheKeepAliveStatus } from "@/lib/use-cache-keep-alive-status";
 import { useNextPrompt } from "@/components/chat/use-next-prompt";
 import {
 	SessionMentionProvider,
@@ -221,6 +223,14 @@ function RemoteWorkspace() {
 		},
 	);
 
+	const {
+		status: cacheKeepAliveStatus,
+		handleMessage: handleCacheKeepAliveMessage,
+	} = useCacheKeepAliveStatus({
+		client: connection.client,
+		sessionKey: chat.activeSessionKey,
+		refreshKey: `${connection.resyncKey}:${connection.snapshotRefreshKey}`,
+	});
 	const nextPrompt = useNextPrompt({
 		client: connection.client,
 		connectionId: chat.activeProject?.connection.id ?? "",
@@ -242,10 +252,16 @@ function RemoteWorkspace() {
 			if (message.type === "events") {
 				for (const event of message.events) handleReadEvent(event);
 			}
+			handleCacheKeepAliveMessage(message);
 			handleNextPromptMessage(message);
 			handleSocketMessage(message);
 		};
-	}, [handleSocketMessage, handleReadEvent, handleNextPromptMessage]);
+	}, [
+		handleSocketMessage,
+		handleReadEvent,
+		handleNextPromptMessage,
+		handleCacheKeepAliveMessage,
+	]);
 
 	const sidebarSessions = useMemo(
 		() =>
@@ -489,6 +505,7 @@ function RemoteWorkspace() {
 												}
 											/>
 										) : null}
+										<CacheKeepAliveNotice status={cacheKeepAliveStatus} />
 										<ChatComposer
 											nextPrompt={nextPrompt.text}
 											onNextPromptDismiss={nextPrompt.dismiss}

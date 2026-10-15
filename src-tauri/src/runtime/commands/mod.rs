@@ -1,4 +1,5 @@
 mod appearance;
+mod cache_keep_alive;
 mod connections;
 mod next_prompt;
 mod projects;
@@ -11,6 +12,7 @@ mod sessions;
 pub use session_reads::{session_mark_read, session_read_states};
 
 pub use appearance::system_font_families;
+pub use cache_keep_alive::{cache_keep_alive_settings_list, cache_keep_alive_settings_set};
 
 pub use connections::{
     connection_health_get, connection_naming_model_get, connection_naming_model_list,

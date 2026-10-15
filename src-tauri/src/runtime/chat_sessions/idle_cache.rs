@@ -73,6 +73,18 @@ impl ChatSessions {
                 .filter(|(key, process)| Some(key.as_str()) != retained_key && process.can_evict())
                 .map(|(key, process)| (key.clone(), process.last_used.load(Ordering::Acquire)))
                 .collect::<Vec<_>>();
+            // A live Pilo warming lease is separate from user recency and the idle budget.
+            let now = crate::runtime::storage::now_ms();
+            candidates.retain(|(key, _)| {
+                !registry
+                    .snapshots
+                    .get(key)
+                    .and_then(|reader| reader.cache_keep_alive())
+                    .is_some_and(|status| {
+                        status.expires_at_ms > now
+                            && matches!(status.status.as_str(), "scheduled" | "warming")
+                    })
+            });
             candidates.sort_by_key(|(_, last_used)| *last_used);
             let mut remaining = candidates.len();
             let budget = MAX_CACHED_IDLE_CHAT_PROCESSES - usize::from(retained_key.is_some());

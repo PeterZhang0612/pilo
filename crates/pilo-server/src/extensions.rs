@@ -8,6 +8,10 @@ use pilo_protocol::BuiltinExtension;
 
 const SOURCES: &[(&str, &str)] = &[
     (
+        "cache-keep-alive.js",
+        include_str!("../extensions/cache-keep-alive.js"),
+    ),
+    (
         "next-prompt.js",
         include_str!("../extensions/next-prompt.js"),
     ),
@@ -93,6 +97,7 @@ pub(crate) fn deploy() -> io::Result<PathBuf> {
 pub(crate) fn filename(extension: &BuiltinExtension) -> &'static str {
     match extension {
         BuiltinExtension::NextPrompt => "next-prompt.js",
+        BuiltinExtension::CacheKeepAlive => "cache-keep-alive.js",
         BuiltinExtension::ModelCatalog => "model-catalog.js",
         BuiltinExtension::SshWorkspace { .. } => "ssh-workspace.js",
     }

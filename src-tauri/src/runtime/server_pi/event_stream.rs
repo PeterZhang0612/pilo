@@ -22,6 +22,20 @@ const RUNTIME_EVENT_BATCH_MS: u64 = 16;
 fn observe_input_assistance(state: &StateCell, data: &Value) {
     if data.get("type").and_then(Value::as_str) == Some("extension_ui_request")
         && data.get("method").and_then(Value::as_str) == Some("setWidget")
+        && data.get("widgetKey").and_then(Value::as_str) == Some("pilo.cache-keep-alive.v1")
+        && let Some(lines) = data.get("widgetLines").and_then(Value::as_array)
+        && lines.len() == 1
+        && let Some(line) = lines[0].as_str().filter(|line| line.len() <= 4096)
+        && let Ok(status) = serde_json::from_str::<crate::domain::CacheKeepAliveStatus>(line)
+        && status.expires_at_ms <= crate::runtime::storage::now_ms().saturating_add(86_400_000)
+    {
+        *state
+            .cache_keep_alive
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(status);
+    }
+    if data.get("type").and_then(Value::as_str) == Some("extension_ui_request")
+        && data.get("method").and_then(Value::as_str) == Some("setWidget")
         && data.get("widgetKey").and_then(Value::as_str) == Some("pilo.next-prompt.ready.v1")
     {
         state.next_prompt_ready.store(

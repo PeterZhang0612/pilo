@@ -1,3 +1,4 @@
+import type { CacheKeepAliveSettings } from "@/lib/cache-keep-alive";
 import type {
 	NextPromptModel,
 	NextPromptSettings,
@@ -278,6 +279,31 @@ export function saveRemoteModelScope(
 		method: "POST",
 		body: JSON.stringify({ projectId, models }),
 	});
+}
+
+export function loadRemoteCacheKeepAliveSettings(
+	token: string,
+	connectionId: string,
+) {
+	const query = new URLSearchParams({ connectionId });
+	return remoteFetch<CacheKeepAliveSettings[]>(
+		token,
+		`/api/v1/cache-keep-alive/settings?${query.toString()}`,
+	);
+}
+
+export function saveRemoteCacheKeepAliveSettings(
+	token: string,
+	settings: CacheKeepAliveSettings,
+) {
+	return remoteFetch<CacheKeepAliveSettings>(
+		token,
+		"/api/v1/cache-keep-alive/settings",
+		{
+			method: "POST",
+			body: JSON.stringify(settings),
+		},
+	);
 }
 
 export function loadRemoteNextPromptSettings(

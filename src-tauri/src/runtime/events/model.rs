@@ -66,6 +66,9 @@ pub enum RuntimeEvent {
         #[serde(rename = "completionId", skip_serializing_if = "Option::is_none")]
         completion_id: Option<String>,
     },
+    CacheKeepAliveSettingsChanged {
+        settings: crate::domain::CacheKeepAliveSettings,
+    },
     NextPromptSettingsChanged {
         settings: crate::domain::NextPromptSettings,
     },

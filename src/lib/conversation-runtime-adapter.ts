@@ -47,6 +47,7 @@ export function toConversationAction(
 			};
 		case "project_model_scope_changed":
 		case "next_prompt_settings_changed":
+		case "cache_keep_alive_settings_changed":
 		case "session_read_state_changed":
 		case "session_turn_completed":
 		case "process_state":

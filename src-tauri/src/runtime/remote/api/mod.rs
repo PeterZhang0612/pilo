@@ -147,6 +147,11 @@ pub(crate) fn router(
             "/api/v1/next-prompt/request",
             post(handlers::next_prompt_request),
         )
+        .route(
+            "/api/v1/cache-keep-alive/settings",
+            get(handlers::cache_keep_alive_settings_list)
+                .post(handlers::cache_keep_alive_settings_set),
+        )
         .route("/api/v1/chat/start", post(handlers::chat_start))
         .route("/api/v1/chat/stop", post(handlers::chat_stop))
         .route("/api/v1/chat/state", get(handlers::chat_state))

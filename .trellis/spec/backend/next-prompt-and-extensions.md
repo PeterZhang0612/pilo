@@ -32,7 +32,8 @@ share `useNextPrompt`, `useNextPromptSettings`, settings fields and `ChatCompose
   or both present.
 - Pi `pi.start` adds `builtinExtensions: BuiltinExtension[]`, defaulting to `[]`.
   The internally tagged protocol enum uses `{ id: "next-prompt" }`,
-  `{ id: "model-catalog" }`, or `{ id: "ssh-workspace", config }`.
+  `{ id: "cache-keep-alive" }`, `{ id: "model-catalog" }`, or
+  `{ id: "ssh-workspace", config }`.
   Existing `extensions: string[]` still means inline source, not file paths.
 
 ## 3. Contracts

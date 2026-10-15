@@ -8,6 +8,7 @@ import {
 	Plug,
 	SlidersHorizontal,
 	TextCursorInput,
+	Timer,
 	Type,
 } from "lucide-react";
 
@@ -19,6 +20,11 @@ import {
 	DialogDescription,
 	DialogTitle,
 	ScrollArea,
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
 } from "@/ui";
 import { AboutSettings } from "./about-settings";
 import { AppearanceSettings } from "./appearance-settings";
@@ -27,6 +33,7 @@ import { KeyboardShortcutsSettings } from "./keyboard-shortcuts-settings";
 import { NotificationSettings } from "./notification-settings";
 import { PreferencesSettings } from "./preferences-settings";
 import { ConnectionNextPromptSettings } from "./connection-next-prompt-settings";
+import { ConnectionCacheKeepAliveSettings } from "./connection-cache-keep-alive-settings";
 import { SessionNamingSettings } from "./session-naming-settings";
 
 type SettingsTabId =
@@ -36,6 +43,7 @@ type SettingsTabId =
 	| "shortcuts"
 	| "connections"
 	| "next-prompt"
+	| "cache-keep-alive"
 	| "session-naming"
 	| "about";
 
@@ -77,6 +85,12 @@ const SETTINGS_TABS = [
 		icon: TextCursorInput,
 	},
 	{
+		id: "cache-keep-alive" as const,
+		section: "project",
+		labelKey: "settings.cacheKeepAlive",
+		icon: Timer,
+	},
+	{
 		id: "session-naming" as const,
 		section: "project",
 		labelKey: "settings.sessionNaming",
@@ -111,14 +125,14 @@ export function SettingsDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="flex h-[min(90vh,950px)] w-[84vw] max-w-[1100px] flex-col gap-0 overflow-hidden p-0 sm:p-0">
+			<DialogContent className="flex h-[min(90dvh,950px)] w-[calc(100vw-2rem)] max-w-[1100px] flex-col gap-0 overflow-hidden p-0 sm:w-[84vw] sm:p-0">
 				<DialogDescription className="sr-only">
 					{t("settings.title")}
 				</DialogDescription>
 				<div className="flex min-h-0 flex-1 overflow-hidden">
 					<nav
 						aria-label={t("settings.title")}
-						className="flex w-48 shrink-0 flex-col border-e bg-background"
+						className="hidden w-48 shrink-0 flex-col border-e bg-background md:flex"
 					>
 						<div className="min-h-0 flex-1 overflow-y-auto p-3">
 							<div className="space-y-4">
@@ -174,12 +188,41 @@ export function SettingsDialog({
 					</nav>
 
 					<main className="flex min-h-0 min-w-0 flex-1 flex-col">
-						<header className="mt-2 flex h-12 shrink-0 items-center px-8">
-							<DialogTitle>{t(activeTabConfig.labelKey)}</DialogTitle>
+						<header className="mt-2 flex h-12 shrink-0 items-center px-4 pr-12 md:px-8">
+							<DialogTitle className="sr-only md:not-sr-only">
+								{t(activeTabConfig.labelKey)}
+							</DialogTitle>
+							<Select
+								value={activeTab}
+								onValueChange={(value) => {
+									const tab = SETTINGS_TABS.find(
+										(candidate) => candidate.id === value,
+									);
+									if (tab) setActiveTab(tab.id);
+								}}
+							>
+								<SelectTrigger
+									aria-label={t("settings.title")}
+									className="w-full md:hidden pointer-coarse:min-h-11"
+								>
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									{SETTINGS_TABS.map((tab) => (
+										<SelectItem
+											key={tab.id}
+											value={tab.id}
+											className="pointer-coarse:min-h-11"
+										>
+											{t(tab.labelKey)}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
 						</header>
 						<div className="min-h-0 flex-1">
 							<ScrollArea className="h-full">
-								<div className="px-6 pb-6">
+								<div className="px-4 pb-6 md:px-6">
 									<div className="mx-auto max-w-5xl">
 										{activeTab === "preferences" ? (
 											<PreferencesSettings />
@@ -196,6 +239,9 @@ export function SettingsDialog({
 										) : null}
 										{activeTab === "next-prompt" ? (
 											<ConnectionNextPromptSettings />
+										) : null}
+										{activeTab === "cache-keep-alive" ? (
+											<ConnectionCacheKeepAliveSettings />
 										) : null}
 										{activeTab === "session-naming" ? (
 											<SessionNamingSettings />

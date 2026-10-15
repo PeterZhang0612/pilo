@@ -1,3 +1,5 @@
+mod cache_keep_alive;
+pub use cache_keep_alive::{CacheKeepAliveSettings, CacheKeepAliveStatus};
 mod connection;
 mod next_prompt;
 mod project;

@@ -23,6 +23,7 @@ use event_stream::spawn_event_task;
 struct StateCell {
     process: AtomicU8,
     next_prompt_ready: AtomicBool,
+    cache_keep_alive: StdMutex<Option<crate::domain::CacheKeepAliveStatus>>,
 }
 
 impl Default for StateCell {
@@ -30,6 +31,7 @@ impl Default for StateCell {
         Self {
             process: AtomicU8::new(state_to_u8(PiProcessState::Stopped)),
             next_prompt_ready: AtomicBool::new(false),
+            cache_keep_alive: StdMutex::new(None),
         }
     }
 }
@@ -49,6 +51,10 @@ impl StateCell {
         self.process.store(state_to_u8(state), Ordering::Release);
         if state != PiProcessState::Running {
             self.next_prompt_ready.store(false, Ordering::Release);
+            *self
+                .cache_keep_alive
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
         }
     }
 }
@@ -93,6 +99,14 @@ pub(crate) struct SessionSnapshotReader {
 }
 
 impl SessionSnapshotReader {
+    pub(crate) fn cache_keep_alive(&self) -> Option<crate::domain::CacheKeepAliveStatus> {
+        self.state
+            .cache_keep_alive
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+
     pub(crate) fn snapshot(&self) -> PiSessionSnapshot {
         let mut snapshot = self
             .metadata
@@ -162,6 +176,15 @@ impl ServerPiSession {
             stream_id: None,
             event_task: None,
         }
+    }
+
+    pub(crate) fn cache_keep_alive_ready(&self) -> bool {
+        self.state
+            .cache_keep_alive
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+            .is_some_and(|status| status.ready)
     }
 
     pub(crate) fn builtin_extensions(&self) -> &[BuiltinExtension] {

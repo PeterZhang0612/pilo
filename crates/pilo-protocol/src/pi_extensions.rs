@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 #[serde(tag = "id", rename_all = "kebab-case")]
 pub enum BuiltinExtension {
     NextPrompt,
+    CacheKeepAlive,
     ModelCatalog,
     SshWorkspace { config: SshWorkspaceConfig },
 }

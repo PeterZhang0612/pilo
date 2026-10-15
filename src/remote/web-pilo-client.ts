@@ -1,3 +1,4 @@
+import type { CacheKeepAliveSettings } from "@/lib/cache-keep-alive";
 import type {
 	NextPromptModel,
 	NextPromptSettings,
@@ -44,6 +45,8 @@ import {
 	loadRemoteExternalActivity,
 	loadRemoteModels,
 	saveRemoteModels,
+	loadRemoteCacheKeepAliveSettings,
+	saveRemoteCacheKeepAliveSettings,
 	loadRemoteNextPromptSettings,
 	saveRemoteNextPromptSettings,
 	requestRemoteNextPrompt,
@@ -146,6 +149,18 @@ export class WebPiloClient implements PiloClient {
 		sessionPath: string,
 	): Promise<SessionDeleteResult> {
 		return deleteRemoteSession(this.token, projectId, sessionPath);
+	}
+
+	loadCacheKeepAliveSettings(
+		connectionId: string,
+	): Promise<CacheKeepAliveSettings[]> {
+		return loadRemoteCacheKeepAliveSettings(this.token, connectionId);
+	}
+
+	saveCacheKeepAliveSettings(
+		settings: CacheKeepAliveSettings,
+	): Promise<CacheKeepAliveSettings> {
+		return saveRemoteCacheKeepAliveSettings(this.token, settings);
 	}
 
 	loadNextPromptSettings(connectionId: string): Promise<NextPromptSettings> {

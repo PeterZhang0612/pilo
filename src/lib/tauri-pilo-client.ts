@@ -1,3 +1,4 @@
+import type { CacheKeepAliveSettings } from "@/lib/cache-keep-alive";
 import type {
 	NextPromptModel,
 	NextPromptSettings,
@@ -152,6 +153,18 @@ export class TauriPiloClient implements PiloClient {
 			projectId,
 			models,
 		});
+	}
+
+	loadCacheKeepAliveSettings(
+		connectionId: string,
+	): Promise<CacheKeepAliveSettings[]> {
+		return invoke("cache_keep_alive_settings_list", { connectionId });
+	}
+
+	saveCacheKeepAliveSettings(
+		settings: CacheKeepAliveSettings,
+	): Promise<CacheKeepAliveSettings> {
+		return invoke("cache_keep_alive_settings_set", { settings });
 	}
 
 	loadNextPromptSettings(connectionId: string): Promise<NextPromptSettings> {

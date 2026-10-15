@@ -34,6 +34,7 @@ pub struct ChatSessionState {
     pub initialized: bool,
     pub active_turn: bool,
     pub compacting: bool,
+    pub cache_keep_alive: Option<crate::domain::CacheKeepAliveStatus>,
     pub snapshot: PiSessionSnapshot,
 }
 
@@ -119,6 +120,9 @@ impl ChatSessions {
             .lock()
             .unwrap_or_else(|error| error.into_inner())
             .clone();
+        let cache_keep_alive = snapshot_reader
+            .as_ref()
+            .and_then(|reader| reader.cache_keep_alive());
         let snapshot = match snapshot_reader {
             Some(reader) => reader.snapshot(),
             None => process.session.try_lock().ok()?.snapshot(),
@@ -131,6 +135,7 @@ impl ChatSessions {
             initialized: process.initialized.load(Ordering::Acquire),
             active_turn: process.active_turn.load(Ordering::Acquire),
             compacting: process.compacting.load(Ordering::Acquire),
+            cache_keep_alive,
             snapshot,
         })
     }
@@ -160,6 +165,9 @@ impl ChatSessions {
                 .lock()
                 .unwrap_or_else(|error| error.into_inner())
                 .clone();
+            let cache_keep_alive = snapshot_reader
+                .as_ref()
+                .and_then(|reader| reader.cache_keep_alive());
             let snapshot = match snapshot_reader {
                 Some(reader) => reader.snapshot(),
                 None => match process.session.try_lock() {
@@ -175,6 +183,7 @@ impl ChatSessions {
                 initialized: process.initialized.load(Ordering::Acquire),
                 active_turn: process.active_turn.load(Ordering::Acquire),
                 compacting: process.compacting.load(Ordering::Acquire),
+                cache_keep_alive,
                 snapshot,
             });
         }

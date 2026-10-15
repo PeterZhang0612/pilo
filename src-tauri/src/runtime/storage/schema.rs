@@ -77,6 +77,16 @@ pub(super) fn initialize_schema(db: &SqliteConnection) -> Result<(), String> {
            updated_at_ms INTEGER NOT NULL,
            CHECK((provider IS NULL AND model_id IS NULL) OR (provider IS NOT NULL AND model_id IS NOT NULL))
          );
+         CREATE TABLE IF NOT EXISTS model_cache_keep_alive_settings (
+           connection_id TEXT NOT NULL REFERENCES connections(id) ON DELETE CASCADE,
+           provider TEXT NOT NULL,
+           model_id TEXT NOT NULL,
+           enabled INTEGER NOT NULL DEFAULT 0 CHECK(enabled IN (0,1)),
+           cache_ttl_seconds INTEGER NOT NULL CHECK(cache_ttl_seconds BETWEEN 10 AND 86400),
+           idle_keep_alive_seconds INTEGER NOT NULL DEFAULT 1800 CHECK(idle_keep_alive_seconds BETWEEN 60 AND 86400),
+           updated_at_ms INTEGER NOT NULL,
+           PRIMARY KEY(connection_id,provider,model_id)
+         );
          CREATE TABLE IF NOT EXISTS projects (
            id TEXT PRIMARY KEY,
            connection_id TEXT NOT NULL REFERENCES connections(id) ON DELETE CASCADE,

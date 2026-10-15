@@ -29,18 +29,19 @@ async fn resolve_launch(
     paths: &HostPaths,
     runtime: &PiloRuntime,
     request: &ChatSessionRequest,
-) -> Result<(Project, ChatSessionLaunch), String> {
+) -> Result<(Project, ChatSessionLaunch, String), String> {
     let project = get_project(paths, &request.project_id)?;
     let profile =
         pi_workspace::resolve_pi_runtime_with_paths(paths, &project, request.extensions.clone())?;
     let mut builtin_extensions = profile.builtin_extensions;
-    // Probes are throwaway sessions; only the normal chat path loads prediction.
+    // Probes are throwaway sessions; only normal chats load background assistance.
     if !request
         .builtin_extensions
         .iter()
         .any(|extension| matches!(extension, BuiltinExtension::ModelCatalog))
     {
         builtin_extensions.push(BuiltinExtension::NextPrompt);
+        builtin_extensions.push(BuiltinExtension::CacheKeepAlive);
     }
     for extension in &request.builtin_extensions {
         if !matches!(extension, BuiltinExtension::ModelCatalog) {
@@ -61,6 +62,7 @@ async fn resolve_launch(
             disable_extension_discovery: profile.disable_extension_discovery,
             disable_context_files: profile.disable_context_files,
         },
+        project.connection.id,
     ))
 }
 
@@ -70,17 +72,28 @@ pub(crate) async fn prepare(
     events: RuntimeEventBus,
     request: ChatSessionRequest,
 ) -> Result<PiSessionSnapshot, String> {
-    let (project, launch) = resolve_launch(paths, runtime, &request).await?;
-    runtime
+    let (project, launch, connection_id) = resolve_launch(paths, runtime, &request).await?;
+    let snapshot = runtime
         .chat_sessions
         .prepare(
             Arc::clone(&runtime.servers),
             events,
             project,
-            request.session_key,
+            request.session_key.clone(),
             launch,
         )
-        .await
+        .await?;
+    if let Err(error) = super::cache_keep_alive::configure_session(
+        paths,
+        runtime,
+        &request.session_key,
+        &connection_id,
+    )
+    .await
+    {
+        log::warn!(target: "cache-keep-alive", "failed to configure session: {error}");
+    }
+    Ok(snapshot)
 }
 
 pub(crate) async fn start(
@@ -89,15 +102,26 @@ pub(crate) async fn start(
     events: RuntimeEventBus,
     request: ChatSessionRequest,
 ) -> Result<PiSessionSnapshot, String> {
-    let (project, launch) = resolve_launch(paths, runtime, &request).await?;
-    runtime
+    let (project, launch, connection_id) = resolve_launch(paths, runtime, &request).await?;
+    let snapshot = runtime
         .chat_sessions
         .ensure(
             Arc::clone(&runtime.servers),
             events,
             project,
-            request.session_key,
+            request.session_key.clone(),
             launch,
         )
-        .await
+        .await?;
+    if let Err(error) = super::cache_keep_alive::configure_session(
+        paths,
+        runtime,
+        &request.session_key,
+        &connection_id,
+    )
+    .await
+    {
+        log::warn!(target: "cache-keep-alive", "failed to configure session: {error}");
+    }
+    Ok(snapshot)
 }

@@ -1,3 +1,4 @@
+import type { CacheKeepAliveStatus } from "@/lib/cache-keep-alive";
 import { invoke } from "@tauri-apps/api/core";
 import {
 	toPiImageContents,
@@ -51,6 +52,7 @@ export type ChatSessionRuntimeState = {
 	initialized: boolean;
 	activeTurn: boolean;
 	compacting?: boolean;
+	cacheKeepAlive?: CacheKeepAliveStatus | null;
 	snapshot: PiSessionSnapshot;
 };
 

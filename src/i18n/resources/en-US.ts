@@ -82,6 +82,56 @@ const enUS = {
 		notifications: "Notifications",
 		shortcuts: "Shortcuts",
 		connections: "Connections",
+		cacheKeepAlive: "Cache keep-alive",
+		cacheKeepAliveEnabled: "Enable keep-alive",
+		cacheKeepAliveEnabledHint: "Starts with your next conversation turn.",
+		cacheKeepAliveScope:
+			"Model settings are shared across sessions on this connection.",
+		cacheKeepAliveDescription:
+			"Refreshes before the cache expires, even when you switch sessions.",
+		cacheKeepAliveModel: "Model",
+		cacheKeepAliveModels: "Configured models",
+		cacheKeepAliveAddModel: "Add model",
+		cacheKeepAliveEmpty:
+			"No models configured. Add a model to set up keep-alive.",
+		cacheKeepAliveOn: "Enabled",
+		cacheKeepAliveOff: "Disabled",
+		cacheKeepAliveSummary: "Cache {{ttl}} s · Keep alive {{minutes}} min",
+		cacheKeepAliveEdit: "Edit",
+		cacheKeepAliveEditModel: "Edit {{model}} ({{provider}})",
+		cacheKeepAliveEnabledLabel: "Enabled",
+		cacheKeepAliveTtlLabel: "Cache TTL",
+		cacheKeepAliveDurationLabel: "Keep alive",
+		cacheKeepAliveSeconds: "s",
+		cacheKeepAliveMinutes: "min",
+		cacheKeepAliveTtl: "Cache TTL (seconds)",
+		cacheKeepAliveTtlHint:
+			"Use the provider’s actual TTL. This does not change provider settings.",
+		cacheKeepAliveDuration: "Keep-alive duration (minutes)",
+		cacheKeepAliveDurationHint:
+			"Starts when a turn ends. Refreshes do not extend it.",
+		cacheKeepAliveNoModels: "Refresh the model list in a project first.",
+		cacheKeepAliveCostHint:
+			"Refreshes incur API charges. Failure, timeout or a cache miss stops keep-alive.",
+		cacheKeepAliveScheduled: "Next refresh: {{time}}",
+		cacheKeepAliveWindowEnding:
+			"The current cache covers the remaining idle window. No further refresh is needed.",
+		cacheKeepAliveWarmed: "Cache refreshed. Next refresh: {{time}}",
+		cacheKeepAliveWarming: "Refreshing cache…",
+		cacheKeepAliveExpired: "Stopped: the cache refresh deadline was missed.",
+		cacheKeepAliveWindowEnded: "The idle keep-alive window has ended.",
+		cacheKeepAliveMiss: "Cache miss. Further refreshes have stopped.",
+		cacheKeepAliveUnsupported:
+			"This request is not supported. Check model settings and your Pi version.",
+		cacheKeepAliveFailed:
+			"Refresh failed or timed out. Waiting for the next normal turn.",
+		cacheKeepAliveRunning:
+			"Conversation in progress. Idle warming starts after the turn.",
+		cacheKeepAliveDisabled: "Cache keep-alive is disabled.",
+		cacheKeepAliveWaiting:
+			"Waiting for the next normal turn to establish a cache.",
+		cacheKeepAliveUsage:
+			"This process: {{count}} refresh requests · {{tokens}} cached tokens read · estimated cost {{cost}}",
 		nextPrompt: "Prompt suggestions",
 		nextPromptDescription:
 			"Offers optional follow-up suggestions after replies. Uses an extra model call with part of the conversation. Settings are shared on this connection.",
