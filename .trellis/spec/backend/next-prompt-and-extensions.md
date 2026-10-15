@@ -73,34 +73,71 @@ share `useNextPrompt`, `useNextPromptSettings`, settings fields and `ChatCompose
   calls `sendMessage`, `setModel`, or an independent provider SDK.
 - Target is `registry.find(provider, id)` when explicit, otherwise `ctx.model`.
   Missing model/authentication produces unavailable; no silent fallback.
+  Pi may resolve `.result()` with `stopReason: "error"` instead of rejecting;
+  publish `unavailable` with `model_error`, not a normal `empty` result.
+  Reject suggestions with `stopReason: "length"` even if their partial text passes
+  validation; publish null text with `empty` / `output_limit`.
 - Context uses `buildSessionProjection().entries` to honor compaction/context
-  edits: bounded user/assistant text and summaries; tool name + success/error
-  only. No thinking, images, tool arguments/output, filesystem reads or full JSONL.
-  Per-text clipping is 2,000 characters and serialized JSON is at most 10,000
-  characters, including escape expansion. Preserve first user intent and latest
-  summary when they fit, then add recent entries within the remaining budget.
-- One call: 128 max tokens, `maxRetries: 0`, AbortController timeout 5 seconds.
+  edits: bounded user/assistant text and summaries only. No tool records (including
+  names/status), thinking, images, tool arguments/output, filesystem reads or full JSONL.
+  Per-text clipping is 2,000 UTF-16 code units, retaining head + tail around an
+  ellipsis without splitting surrogate pairs. Serialized JSON is at most 10,000
+  characters, including escape expansion. Prioritize the latest user text and
+  latest assistant text, each within half the serialized budget; further head/tail
+  clipping keeps even escape-heavy messages within that share. Then add complete
+  recent entries, including summaries and original intent when they fit. Skip an
+  oversized older entry rather than stopping the search; emit in history order.
+- One call: up to 4,096 completion tokens (capped to a known positive model
+  limit), `maxRetries: 0`, AbortController timeout 15 seconds. Completion tokens
+  may include reasoning, so the short visible suggestion is not a reason to use
+  a 128/512-token ceiling. Keep API compatibility in Pi's `streamSimple` adapters:
+  they map `maxTokens` to the appropriate wire field or omit it where unsupported;
+  do not add provider-name heuristics or retry with a different payload in Pilo.
   Race the model result against the deadline: abort alone does not settle a
   provider Promise. A timeout publishes `unavailable` to every waiting request
   without waiting for provider shutdown; late resolution/rejection cannot publish
   again. A client cancel aborts without publishing. A request whose settled snapshot no longer
   matches (no settle, busy, session/leaf changed) is answered `cancelled`
   instead of leaving the client to its own timer.
-  Prompt follows Claude Prompt Suggestion Generator v2, with attribution/MIT
-  notice inside the script. No obvious next step means silence, not forced continue.
+  Prompt retains the body of [Claude Prompt Suggestion Generator v2](https://github.com/Piebald-AI/claude-code-system-prompts/blob/main/system-prompts/agent-prompt-prompt-suggestion-generator-v2.md)
+  with `Claude Code` replaced by `Pilo` and `Claude` role references replaced by
+  `Assistant` (excluding the file metadata comment), with attribution/MIT notice
+  inside the script. An appended instruction treats
+  JSON as data, prioritizes the latest reply's ending and latest user request,
+  forbids repeated/invented work, and matches the user's language. Clearly implied
+  short confirmations and slash commands are allowed. No obvious next step means
+  silence, not forced continue; the original sensitive-topic restrictions remain.
 - Jobs deduplicate by Session ID + leaf ID + settings revision + resolved model
   identity. Up to 32 request IDs share one pending/completed job; cancel removes
-  only that ID and aborts when no subscribers remain. New run, model selection,
-  session navigation/compaction/shutdown resets the job and invalidates
-  subscribed results.
+  only that ID. When an unfinished job loses its last subscriber, abort and remove
+  it so a later same-key request starts fresh; completed results remain reusable.
+  New run, model selection, session navigation/compaction/shutdown resets the job
+  and invalidates subscribed results.
 - `setWidget("pilo.next-prompt.v1", [JSON.stringify(result)])` carries
   `{ requestId, sessionId, leafId: string | null, revision, text: string | null,
   status: "ready" | "empty" | "cancelled" | "unavailable" }`. This is a private
-  Widget namespace, not a new generic Pi RPC/conversation event.
+  Widget namespace, not a new generic Pi RPC/conversation event. Optional diagnostic
+  fields are `reason`, `elapsedMs`, `stopReason`, `outputTokens`, and
+  `reasoningTokens`; missing usage is null, never assumed to be zero. Pi's
+  `usage.reasoning` is a subset of `usage.output`, not an additional token count.
+  Reasons distinguish `empty_output`, `invalid_output`, `output_limit`,
+  `model_error`, `model_call_failed`, `missing_model`, `missing_auth`,
+  `unsupported_api`, `stale_snapshot`, and `timeout`. Core result decoding stays
+  compatible with older extensions without these fields.
+- Host logs `next_prompt.ready`, `next_prompt.result`, and `next_prompt.reject`
+  through the bounded runtime diagnostics path. Shared frontend logs
+  `next_prompt.client.*` for request, result, skip, discard, timeout, cancellation,
+  and release after a received result. Desktop persists these via the existing
+  trace command; WebUI client logs stay in its browser console, while its Host
+  result/rejection stages persist in the desktop log too. Project only bounded
+  correlation/state/reason/usage metadata, never text, thinking or raw errors.
 - Shared decoder accepts one JSON line of at most 4,096 characters; safe integer
   revision; string IDs; nullable leaf; null or one-line text of 1–160 characters;
-  no backticks. Extension also rejects quotes, multiple sentences and non-CJK
-  output outside 2–12 words. Prediction text is not persisted or traced.
+  no backticks. Extension rejects empty/overlong text and control/bidi characters
+  after trimming, and rejects error, aborted or truncated completions. Keep code
+  validation structural: language, word count, phrasing, single-sentence style and
+  semantic suitability remain Prompt requirements, not regex blacklists or
+  language-specific allowlists. Prediction text is not persisted or traced.
 
 ### Frontend lifecycle
 
@@ -128,7 +165,7 @@ share `useNextPrompt`, `useNextPromptSettings`, settings fields and `ChatCompose
   submit, run, dialog/readOnly, transport/session/model/config changes
   clear results and best-effort cancel. Saving settings locally already disables
   eligibility and cancels pending work, before the Host reply arrives; failure
-  retains formal settings but never restores the old suggestion. A 7-second
+  retains formal settings but never restores the old suggestion. A 20-second
   client timer discards late work.
 - `randomId()` is a correlation ID helper, not a pairing proof. It works on
   ordinary HTTP LAN origins where `crypto.randomUUID()` may not exist.
@@ -217,6 +254,9 @@ log SSH config, model credentials, prediction context or suggestion body.
 mock verifies timeout completion when abort is ignored, shared subscribers,
 completed timeout reuse, late success/failure suppression, per-request and final
 subscriber cancellation, compaction invalidation and normal timer cleanup.
+Its mock asserts the 15,000 ms deadline. The targeted suite passed all seven
+cases after the timeout assertion was synchronized; this does not verify the
+new token budget or diagnostic fields.
 
 Remaining assertion points for future verification are not claims that these
 behaviors have been run:
@@ -227,6 +267,25 @@ behaviors have been run:
   private content; no JSONL writes; physical and virtual model selection (explicit
   and follow-chat), missing streamSimple readiness, target/auth failure; timeout/no retry; shared
   pending/completed calls and per-request cancellation across Session/leaf changes.
+- Context/output optimization: latest user and assistant survive crowded history
+  and escape-heavy text; long string/array messages and summaries preserve their
+  endings and surrogate pairs; oversized older entries do not hide smaller older
+  context; no tool records are sent. Accept structurally valid Chinese suggestions,
+  dotted file paths, confirmations, slash commands and first-person wording without
+  language/word-count filtering. Reject empty/overlong text, internal line breaks,
+  backticks and control/bidi characters; semantic quality is a Prompt concern.
+  These assertions have not been added or run without explicit authorization.
+- Review fixes (not yet added or run): cancel the last subscriber, then submit a
+  same-key request before/after the old provider settles; assert a fresh model
+  call and no stale publication. Preserve completed-result reuse after release.
+  Assert `length` with otherwise valid text returns `empty` / `output_limit` and
+  null text; a resolved `error` returns `unavailable` / `model_error`.
+- Diagnostics: assert result status, fixed reason code, elapsed time, stop reason
+  and nullable output/reasoning usage survive Host logging, while suggestion,
+  context, raw errors and unknown metadata never do. A provider returning only
+  reasoning or `stopReason: "length"` must be distinguishable from a 15-second
+  timeout. Frontend request/result/discard records correlate by request ID, and
+  received-result release must not be mistaken for cancellation of pending work.
 - Host: readiness absent/loading failure sends no private prompt; new generation
   clears readiness; private prompt response does not change main active-turn flags;
   stale/busy/history requests never start Pi or touch idle retention.
@@ -260,3 +319,16 @@ Wrong: force WebSocket reconnect on every foreground return, or invoke
 
 Correct: probe the existing socket and reconnect only on failure; call
 `modelRegistry.streamSimple(...).result()` so Pi resolves virtual routing.
+
+Wrong: interpret a successful command RPC as a generated suggestion, size total
+completion tokens by the short visible phrase alone, or inject `max_tokens`
+directly for every API.
+
+Correct: correlate command acceptance, extension result/reason/usage and client
+accept/discard stages. Reserve reasoning headroom and delegate API fields to Pi.
+The 4,096-token ceiling is informed by
+[gamaraan/next-prompt-extension](https://github.com/gamaraan/next-prompt-extension/blob/main/next-prompt.ts),
+whose default thinking margin is 3,072 tokens; this is reference evidence, not a
+universal budget guarantee. Installed Pi 1.2.0 maps completion fields through
+`maxTokensField`, gates Responses `max_output_tokens` with
+`supportsMaxOutputTokens`, and omits that field on the Codex Responses path.

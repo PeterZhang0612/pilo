@@ -8,6 +8,7 @@ import {
 
 import {
 	decodeNextPromptResult,
+	traceNextPrompt,
 	type NextPromptRequest,
 } from "@/lib/next-prompt";
 import type { PiloClient, PiloClientEventMessage } from "@/lib/pilo-client";
@@ -50,6 +51,8 @@ export function useNextPrompt(options: Options) {
 		client: PiloClient;
 		request: NextPromptRequest;
 		key: string;
+		startedAtMs: number;
+		received: boolean;
 		timer: ReturnType<typeof setTimeout>;
 	} | null>(null);
 	const liveFloorRef = useRef(Number.POSITIVE_INFINITY);
@@ -61,23 +64,35 @@ export function useNextPrompt(options: Options) {
 		options.model?.id,
 		config.settings?.updatedAtMs,
 	]);
-	const eligible =
-		!config.saving &&
-		options.active &&
-		!options.blocked &&
-		!options.draft &&
-		!options.hasAttachments &&
-		Boolean(config.settings?.enabled);
-	const latestRef = useRef({ options, config, key, eligible });
+	let ineligibleReason: string | null = null;
+	if (config.saving) ineligibleReason = "settings_saving";
+	else if (!options.active) ineligibleReason = "inactive";
+	else if (options.blocked) ineligibleReason = "blocked";
+	else if (options.draft) ineligibleReason = "draft_present";
+	else if (options.hasAttachments) ineligibleReason = "attachments_present";
+	else if (!config.settings?.enabled) ineligibleReason = "disabled";
+	const eligible = ineligibleReason === null;
+	const latestRef = useRef({
+		options,
+		config,
+		key,
+		eligible,
+		ineligibleReason,
+	});
 	useLayoutEffect(() => {
-		latestRef.current = { options, config, key, eligible };
-	}, [options, config, key, eligible]);
+		latestRef.current = { options, config, key, eligible, ineligibleReason };
+	}, [options, config, key, eligible, ineligibleReason]);
 
-	const dismiss = useCallback(() => {
+	const dismiss = useCallback((reason = "dismissed") => {
 		const pending = pendingRef.current;
 		pendingRef.current = null;
 		if (pending) {
 			clearTimeout(pending.timer);
+			traceNextPrompt(pending.received ? "release" : "cancel", {
+				...pending.request,
+				reason,
+				elapsedMs: Date.now() - pending.startedAtMs,
+			});
 			void pending.client
 				.requestNextPrompt({ ...pending.request, cancel: true })
 				.catch(() => undefined);
@@ -96,7 +111,7 @@ export function useNextPrompt(options: Options) {
 				event.settings.updatedAtMs >
 					(current.config.settings?.updatedAtMs ?? -1)
 			)
-				dismiss();
+				dismiss("settings_changed");
 			if (!live || event.sessionKey !== current.options.sessionKey) return;
 			if (
 				event.type === "assistant_message_start" ||
@@ -104,11 +119,11 @@ export function useNextPrompt(options: Options) {
 				event.type === "runtime_error" ||
 				(event.type === "process_state" && event.state !== "running")
 			) {
-				dismiss();
+				dismiss(event.type);
 				return;
 			}
 			if (event.type === "assistant_message_end") {
-				dismiss();
+				dismiss("new_completion");
 				if (
 					current.eligible &&
 					current.options.sessionId &&
@@ -116,25 +131,66 @@ export function useNextPrompt(options: Options) {
 					event.stopReason !== "aborted"
 				) {
 					setCompletion({ generation: event.generation, key: current.key });
+				} else if (current.config.settings?.enabled) {
+					traceNextPrompt("skipped", {
+						sessionKey: current.options.sessionKey ?? undefined,
+						generation: event.generation,
+						reason:
+							current.ineligibleReason ??
+							(!current.options.sessionId
+								? "missing_session"
+								: "completion_failed"),
+					});
 				}
 				return;
 			}
 			const decoded = decodeNextPromptResult(event);
 			const pending = pendingRef.current;
-			if (
-				!decoded ||
-				!pending ||
-				!("generation" in event) ||
-				event.generation !== pending.request.generation ||
-				decoded.requestId !== pending.request.requestId ||
-				decoded.sessionId !== pending.request.sessionId ||
-				decoded.revision !== pending.request.revision ||
-				pending.key !== current.key ||
-				!current.eligible ||
-				current.options.busy
-			)
+			if (!decoded) {
+				if (
+					pending &&
+					event.type === "extension_ui_request" &&
+					event.widgetKey === "pilo.next-prompt.v1"
+				)
+					traceNextPrompt("discard", {
+						...pending.request,
+						reason: "invalid_result",
+					});
 				return;
+			}
+			let discardReason: string | null = null;
+			if (!pending) discardReason = "no_request";
+			else if (
+				!("generation" in event) ||
+				event.generation !== pending.request.generation
+			)
+				discardReason = "generation_changed";
+			else if (decoded.requestId !== pending.request.requestId)
+				discardReason = "request_changed";
+			else if (decoded.sessionId !== pending.request.sessionId)
+				discardReason = "session_changed";
+			else if (decoded.revision !== pending.request.revision)
+				discardReason = "revision_changed";
+			else if (pending.key !== current.key) discardReason = "config_changed";
+			else if (!current.eligible) discardReason = current.ineligibleReason;
+			else if (current.options.busy) discardReason = "busy";
+			if (discardReason || !pending) {
+				traceNextPrompt("discard", {
+					sessionKey: current.options.sessionKey ?? undefined,
+					requestId: decoded.requestId,
+					status: decoded.status,
+					reason: discardReason ?? "no_request",
+					elapsedMs: pending ? Date.now() - pending.startedAtMs : undefined,
+				});
+				return;
+			}
 			clearTimeout(pending.timer);
+			pending.received = true;
+			traceNextPrompt("result", {
+				...pending.request,
+				status: decoded.status,
+				elapsedMs: Date.now() - pending.startedAtMs,
+			});
 			setResult({
 				key: current.key,
 				text: decoded.status === "ready" ? decoded.text : null,
@@ -148,7 +204,7 @@ export function useNextPrompt(options: Options) {
 		(message: PiloClientEventMessage) => {
 			if (message.type !== "events") {
 				liveFloorRef.current = message.latestSequence;
-				dismiss();
+				dismiss("transport_resync");
 				void latestRef.current.config.refresh();
 				return;
 			}
@@ -164,8 +220,9 @@ export function useNextPrompt(options: Options) {
 	/* oxlint-disable react/set-state-in-effect -- Editor/run/config changes invalidate asynchronous input assistance, never restore it. */
 	/* oxlint-disable react/exhaustive-effect-dependencies -- These identity/editor/transport dependencies intentionally invalidate pending work on every change, even when not read by the cleanup. */
 	useEffect(() => {
-		dismiss();
-		return dismiss;
+		dismiss(latestRef.current.ineligibleReason ?? "editor_or_config_changed");
+		return () =>
+			dismiss(latestRef.current.ineligibleReason ?? "view_or_config_changed");
 	}, [
 		dismiss,
 		key,
@@ -179,7 +236,7 @@ export function useNextPrompt(options: Options) {
 	]);
 	/* oxlint-enable react/exhaustive-effect-dependencies */
 	useEffect(() => {
-		if (options.busy) dismiss();
+		if (options.busy) dismiss("busy");
 	}, [dismiss, options.busy]);
 	useEffect(() => {
 		if (
@@ -201,14 +258,31 @@ export function useNextPrompt(options: Options) {
 			generation: completion.generation,
 			revision: config.settings.updatedAtMs,
 		};
+		const startedAtMs = Date.now();
+		traceNextPrompt("request", request);
 		const timer = setTimeout(() => {
-			if (pendingRef.current?.request.requestId === request.requestId)
-				dismiss();
-		}, 7000);
-		pendingRef.current = { client: options.client, request, key, timer };
+			if (pendingRef.current?.request.requestId !== request.requestId) return;
+			traceNextPrompt("timeout", {
+				...request,
+				elapsedMs: Date.now() - startedAtMs,
+			});
+			dismiss("client_timeout");
+		}, 20_000);
+		pendingRef.current = {
+			client: options.client,
+			request,
+			key,
+			startedAtMs,
+			received: false,
+			timer,
+		};
 		void options.client.requestNextPrompt(request).catch(() => {
 			if (pendingRef.current?.request.requestId !== request.requestId) return;
-			dismiss();
+			traceNextPrompt("rejected", {
+				...request,
+				elapsedMs: Date.now() - startedAtMs,
+			});
+			dismiss("request_rejected");
 			setResult({ key, text: null, unavailable: true });
 		});
 	}, [
@@ -235,7 +309,7 @@ export function useNextPrompt(options: Options) {
 						for (const event of message.events) handleEvent(event);
 				},
 				onStatus: (connected) => {
-					if (!connected) dismiss();
+					if (!connected) dismiss("transport_disconnected");
 				},
 			})
 			.then((unlisten) => {

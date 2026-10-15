@@ -12,6 +12,57 @@ pub(super) fn trace_pi_transport_event(stream_id: &str, data: &Value) {
     let Some(event_type) = data.get("type").and_then(Value::as_str) else {
         return;
     };
+    if event_type == "extension_ui_request"
+        && data.get("method").and_then(Value::as_str) == Some("setWidget")
+    {
+        match data.get("widgetKey").and_then(Value::as_str) {
+            Some("pilo.next-prompt.ready.v1") => runtime_trace(
+                "next_prompt.ready",
+                None,
+                Some(stream_id),
+                json!({ "ready": data.get("widgetLines") == Some(&json!(["ready"])) }),
+            ),
+            Some("pilo.next-prompt.v1") => {
+                let Some(lines) = data.get("widgetLines").and_then(Value::as_array) else {
+                    return;
+                };
+                let Some(line) = lines.first().and_then(Value::as_str) else {
+                    return;
+                };
+                if lines.len() != 1 || line.len() > 4096 {
+                    return;
+                }
+                let Ok(result) = serde_json::from_str::<Value>(line) else {
+                    return;
+                };
+                // Project only bounded diagnostic metadata, never the suggestion body.
+                let mut detail = serde_json::Map::new();
+                for key in ["requestId", "status", "reason", "stopReason"] {
+                    if let Some(value) = result.get(key).and_then(Value::as_str)
+                        && value.len() <= 128
+                        && value.bytes().all(|byte| {
+                            byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-'
+                        })
+                    {
+                        detail.insert(key.to_owned(), json!(value));
+                    }
+                }
+                for key in ["revision", "elapsedMs", "outputTokens", "reasoningTokens"] {
+                    if let Some(value) = result.get(key).and_then(Value::as_u64) {
+                        detail.insert(key.to_owned(), json!(value));
+                    }
+                }
+                runtime_trace(
+                    "next_prompt.result",
+                    None,
+                    Some(stream_id),
+                    Value::Object(detail),
+                );
+            }
+            _ => {}
+        }
+        return;
+    }
     if !matches!(
         event_type,
         "response"

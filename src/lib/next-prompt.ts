@@ -1,3 +1,5 @@
+import { invoke, isTauri } from "@tauri-apps/api/core";
+
 import type { PiloRuntimeEvent } from "@/lib/pi-runtime";
 
 export type NextPromptModel = { provider: string; id: string };
@@ -23,6 +25,32 @@ export type NextPromptResult = {
 	text: string | null;
 	status: "ready" | "empty" | "cancelled" | "unavailable";
 };
+
+export function traceNextPrompt(
+	stage: string,
+	detail: Partial<NextPromptRequest> & {
+		reason?: string;
+		status?: NextPromptResult["status"];
+		elapsedMs?: number;
+	},
+) {
+	// Only correlation/state metadata; never pass a result, draft or raw error.
+	const payload = JSON.stringify({
+		stage: `next_prompt.client.${stage}`,
+		sessionKey: detail.sessionKey,
+		requestId: detail.requestId,
+		generation: detail.generation,
+		revision: detail.revision,
+		reason: detail.reason,
+		status: detail.status,
+		elapsedMs: detail.elapsedMs,
+	});
+	if (isTauri()) {
+		void invoke("debug_runtime_trace_log", { payload }).catch(() => undefined);
+	} else {
+		console.info("[next-prompt]", payload);
+	}
+}
 
 export function decodeNextPromptResult(
 	event: PiloRuntimeEvent,

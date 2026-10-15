@@ -9,7 +9,6 @@ import {
 } from "@/components/app/app-chat-state";
 import { runtimeActivityFromStates } from "@/components/app/app-session-index-model";
 import { useSyncedSessionUnread } from "@/components/app/use-synced-session-unread";
-import { NextPromptSettingsButton } from "@/components/settings/next-prompt-settings";
 import { useNextPrompt } from "@/components/chat/use-next-prompt";
 import {
 	SessionMentionProvider,
@@ -379,15 +378,6 @@ function RemoteWorkspace() {
 							<SessionHeader
 								session={chat.headerSession ?? undefined}
 								sessionState={chat.chatState ?? undefined}
-								additionalActions={
-									!isNarrow && chat.activeProject ? (
-										<NextPromptSettingsButton
-											config={nextPrompt.config}
-											models={chat.modelScope.availableModels}
-											unavailable={nextPrompt.unavailable}
-										/>
-									) : undefined
-								}
 								onNewChat={
 									isNarrow
 										? () => chat.startDraft(chat.activeProjectId || undefined)

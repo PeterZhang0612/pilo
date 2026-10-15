@@ -82,6 +82,23 @@ impl ChatSessions {
                 && (process.active_turn.load(Ordering::Acquire)
                     || process.compacting.load(Ordering::Acquire)))
         {
+            runtime_trace(
+                "next_prompt.reject",
+                Some(session_key),
+                session.stream_id(),
+                json!({
+                    "reason": "process_unavailable",
+                    "id": command.get("id"),
+                    "generation": snapshot.generation,
+                    "expectedGeneration": generation,
+                    "state": snapshot.state,
+                    "initialized": process.initialized.load(Ordering::Acquire),
+                    "ready": session.next_prompt_ready(),
+                    "activeTurn": process.active_turn.load(Ordering::Acquire),
+                    "compacting": process.compacting.load(Ordering::Acquire),
+                    "cancel": cancel,
+                }),
+            );
             return Err("prediction session is no longer idle or available".to_owned());
         }
         // This registered extension command is not an Agent turn or an idle-cache touch.

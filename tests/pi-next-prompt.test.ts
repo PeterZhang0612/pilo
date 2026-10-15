@@ -69,7 +69,7 @@ function loadExtension() {
 	runInNewContext(`${source}\ninstall(pi);`, {
 		AbortController,
 		setTimeout: (callback: () => void, delay: number) => {
-			assert.equal(delay, 5000);
+			assert.equal(delay, 15_000);
 			timers.set(++timerId, callback);
 			return timerId;
 		},

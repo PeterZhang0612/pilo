@@ -7,7 +7,6 @@ import type {
 } from "@/components/app/chat-ui-state-cache";
 import { useNextPrompt } from "@/components/chat/use-next-prompt";
 import { tauriPiloClient } from "@/lib/tauri-pilo-client";
-import { NextPromptSettingsButton } from "@/components/settings/next-prompt-settings";
 import { SessionMentionScope } from "@/components/chat/session-mention-context";
 import { ChatComposer } from "@/components/chat/chat-composer";
 import { ConversationColumn } from "@/components/chat/chat-conversation-column";
@@ -489,13 +488,6 @@ function ChatPageImpl(props: ChatPageProps) {
 							<SessionHeader
 								session={session}
 								sessionState={sessionState ?? undefined}
-								additionalActions={
-									<NextPromptSettingsButton
-										config={nextPrompt.config}
-										models={modelOptions}
-										unavailable={nextPrompt.unavailable}
-									/>
-								}
 								onOpenChanges={onOpenChanges}
 								onOpenTerminal={onOpenTerminal}
 								terminalRunning={terminalRunning}

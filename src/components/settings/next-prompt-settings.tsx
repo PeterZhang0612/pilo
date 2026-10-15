@@ -1,15 +1,10 @@
-import { useId, useState } from "react";
-import { TextCursorInput } from "lucide-react";
+import { useId } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { useNextPromptSettings } from "@/lib/use-next-prompt-settings";
 import type { PiModel } from "@/lib/pi-runtime";
 import { cn } from "@/lib/utils";
 import {
-	Button,
-	Popover,
-	PopoverContent,
-	PopoverTrigger,
 	Select,
 	SelectContent,
 	SelectItem,
@@ -147,34 +142,5 @@ export function NextPromptSettingsFields({
 				</output>
 			) : null}
 		</div>
-	);
-}
-
-export function NextPromptSettingsButton(
-	props: Parameters<typeof NextPromptSettingsFields>[0],
-) {
-	const { t } = useTranslation();
-	const [open, setOpen] = useState(false);
-	return (
-		<Popover open={open} onOpenChange={setOpen}>
-			<PopoverTrigger asChild>
-				<Button
-					variant="ghost"
-					size="icon"
-					type="button"
-					className="size-7 shrink-0 text-muted-foreground pointer-coarse:size-11"
-					aria-label={t("settings.nextPrompt")}
-				>
-					<TextCursorInput className="size-4" />
-				</Button>
-			</PopoverTrigger>
-			<PopoverContent
-				side="top"
-				align="start"
-				className="w-80 max-w-[calc(100vw-2rem)] max-h-[calc(var(--remote-viewport-height,100dvh)-2rem)] overflow-y-auto"
-			>
-				<NextPromptSettingsFields {...props} />
-			</PopoverContent>
-		</Popover>
 	);
 }

@@ -4,6 +4,7 @@ use crate::domain::{NextPromptModel, NextPromptRequest, NextPromptSettings};
 
 use super::{
     PiloRuntime, RuntimeEventBus,
+    debug_trace::runtime_trace,
     events::{RuntimeEvent, RuntimeEventEnvelope},
     host_paths::HostPaths,
     storage,
@@ -58,7 +59,15 @@ pub(crate) async fn request(
         .chat_sessions
         .state(&request.session_key)
         .await
-        .ok_or_else(|| "prediction session is not running".to_owned())?;
+        .ok_or_else(|| {
+            runtime_trace(
+                "next_prompt.reject",
+                Some(&request.session_key),
+                None,
+                json!({ "requestId": request.request_id, "reason": "process_missing" }),
+            );
+            "prediction session is not running".to_owned()
+        })?;
     let settings = {
         let db = storage::open_with_paths(paths)?;
         let project = storage::get_project(&db, &state.project_id)?
@@ -66,6 +75,16 @@ pub(crate) async fn request(
         storage::get_next_prompt_settings(&db, &project.connection.id)?
     };
     if !request.cancel && (!settings.enabled || settings.updated_at_ms != request.revision) {
+        runtime_trace(
+            "next_prompt.reject",
+            Some(&request.session_key),
+            None,
+            json!({
+                "requestId": request.request_id,
+                "revision": request.revision,
+                "reason": if settings.enabled { "revision_changed" } else { "disabled" },
+            }),
+        );
         return Err("prediction settings changed".to_owned());
     }
     // Cancellation identifies only this client's request, even after settings change.

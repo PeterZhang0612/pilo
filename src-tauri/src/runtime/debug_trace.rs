@@ -49,6 +49,7 @@ fn log_runtime_diagnostic(
         ),
         _ => {
             stage.starts_with("chat.")
+                || stage.starts_with("next_prompt.")
                 || matches!(
                     stage,
                     "channel.subscribe"
@@ -77,6 +78,15 @@ fn log_runtime_diagnostic(
         "state",
         "command",
         "id",
+        "requestId",
+        "revision",
+        "status",
+        "outputTokens",
+        "reasoningTokens",
+        "ready",
+        "expectedGeneration",
+        "compacting",
+        "cancel",
         "reason",
         "found",
         "prepared",

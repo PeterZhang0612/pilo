@@ -112,6 +112,17 @@ streams. Keep timeout, retry, teardown, and public error behavior unchanged.
   write timeout/I/O kind, request capacity exhaustion/admission delay, task
   panic/cancellation, failed or >=5-second requests, stdout/stdin closure and
   cleanup. Desktop captures this stderr in the existing `pilo-server` target.
+- Prediction uses bounded `next_prompt.*` stages in release too: Host readiness,
+  result and policy rejection, plus shared frontend request/result/skip/discard/
+  cancel/release/timeout/rejected decisions. Correlate by request ID and stream ID.
+  Extension result projection accepts one JSON line up to 4,096 bytes and only
+  bounded ASCII identifier/reason/status/stop-reason strings and unsigned
+  revision/elapsed/output-token/reasoning-token numbers. Never pass the whole
+  Widget result or raw provider error to tracing. Absent usage stays unknown;
+  reasoning tokens are already included in output tokens. A release after a
+  received result is not a cancellation of pending generation. WebUI client
+  decisions stay in its console; Host result/rejection records persist for both
+  clients. See [Next Prompt](./next-prompt-and-extensions.md).
 - WebUI browser timeout warnings include RPC/session IDs, elapsed time, command
   transport completion, pending count and last socket sequence/message age.
   These warnings stay in the browser console; shared Host stages and socket
@@ -124,6 +135,8 @@ streams. Keep timeout, retry, teardown, and public error behavior unchanged.
 - Stream overflow -> stream ID, event size and remaining queue/byte capacity.
 - Web replay gap/lag -> device ID and sequence context; no token or event body.
 - Normal deltas/tool updates -> no release per-event diagnostic log.
+- Prediction command `success: true` -> accepted only; use `next_prompt.result`
+  status/reason/usage and `next_prompt.client.result/discard` to explain no hint.
 
 ### 5. Good / Base / Bad Cases
 
