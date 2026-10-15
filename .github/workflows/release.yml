@@ -79,25 +79,16 @@ jobs:
             args: ""
             arch: x64
             artifact: Pilo-windows-x64-installed
-            install_mode: installed
-          - platform: windows-2022
-            target: ""
-            args: ""
-            arch: x64
-            artifact: Pilo-windows-x64-portable
-            install_mode: portable
           - platform: macos-14
             target: aarch64-apple-darwin
             args: --target aarch64-apple-darwin
             arch: arm64
             artifact: Pilo-macos-arm64
-            install_mode: installed
           - platform: ubuntu-22.04
             target: ""
             args: --bundles deb,rpm,appimage
             arch: x64
             artifact: Pilo-linux-x64
-            install_mode: installed
 
     runs-on: ${{ matrix.platform }}
     timeout-minutes: 60
@@ -172,7 +163,6 @@ jobs:
         run: bash scripts/verify-pilo-server-resources.sh
 
       - name: Validate updater signing configuration
-        if: matrix.install_mode == 'installed'
         shell: bash
         run: |
           set -euo pipefail
@@ -181,15 +171,9 @@ jobs:
             exit 1
           fi
 
-      - name: Build Tauri app (installed)
-        if: matrix.install_mode == 'installed'
+      - name: Build Tauri app
         shell: bash
         run: pnpm tauri build ${{ matrix.args }}
-
-      - name: Build Tauri app (portable)
-        if: matrix.install_mode == 'portable'
-        shell: bash
-        run: pnpm tauri build --no-bundle
 
       - name: Test Linux AppImage finalization
         if: runner.os == 'Linux'
@@ -210,7 +194,7 @@ jobs:
           pnpm tauri signer sign "$APPIMAGE"
 
       - name: Prepare Windows installed assets
-        if: runner.os == 'Windows' && matrix.install_mode == 'installed'
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -226,7 +210,7 @@ jobs:
           Copy-Item $nsisSig.FullName "release-assets/Pilo-v$version-x64-setup.exe.sig"
 
       - name: Prepare Windows portable assets
-        if: runner.os == 'Windows' && matrix.install_mode == 'portable'
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
