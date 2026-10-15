@@ -6,6 +6,7 @@ import type {
 	ChatUiStatePatch,
 } from "@/components/app/chat-ui-state-cache";
 import { ChatComposer } from "@/components/chat/chat-composer";
+import { SessionMentionScope } from "@/components/chat/session-mention-context";
 import { ChatEmptyHero } from "@/components/chat/chat-empty-hero";
 import { ChatHistorySkeleton } from "@/components/chat/chat-history-skeleton";
 import { SessionHeader } from "@/components/chat/chat-session-header";
@@ -135,48 +136,55 @@ export function ChatPageLoadingFallback({
 	);
 
 	return (
-		<div className="@container flex h-full min-w-0 flex-col bg-background">
-			<SessionHeader
-				session={session}
-				onOpenTerminal={onOpenTerminal}
-				terminalRunning={terminalRunning}
-				terminalVisible={terminalVisible}
-				onNewTemporaryChat={onNewTemporaryChat}
-				onExpandSidebar={onExpandSidebar}
-				reserveWindowControls={reserveWindowControls}
-				sidebarCollapsed={sidebarCollapsed}
-				overlay={
-					Boolean(session.temporary) && !session.sessionPath && !pendingMessage
-				}
-			/>
-			<div data-chat-panel="" className="relative flex min-h-0 flex-1 flex-col">
-				<div
-					ref={scrollRef}
-					className="chat-scrollbar flex min-h-0 w-full flex-1 flex-col overflow-x-hidden overflow-y-auto"
-				>
-					{session.sessionPath ? (
-						<ChatHistorySkeleton />
-					) : pendingMessage ? (
-						/* 新会话没有历史可读，直接复用正式消息组件呈现真实首帧。 */
-						<div className="pt-4 sm:pt-6">
-							<UserMessage message={pendingMessage} recordRender={false} />
-						</div>
-					) : (
-						<ConversationColumn className="flex flex-1 items-center justify-center">
-							<ChatEmptyHero />
-						</ConversationColumn>
-					)}
-				</div>
-				<LoadingComposer
-					projectId={session.projectRecord.id}
-					uiStateKey={uiStateKey}
-					readUiState={readUiState}
-					writeUiState={writeUiState}
-					readProjectDraft={readProjectDraft}
-					writeProjectDraft={writeProjectDraft}
-					scrollbarWidth={scrollbarWidth}
+		<SessionMentionScope connectionId={session.projectRecord.connection.id}>
+			<div className="@container flex h-full min-w-0 flex-col bg-background">
+				<SessionHeader
+					session={session}
+					onOpenTerminal={onOpenTerminal}
+					terminalRunning={terminalRunning}
+					terminalVisible={terminalVisible}
+					onNewTemporaryChat={onNewTemporaryChat}
+					onExpandSidebar={onExpandSidebar}
+					reserveWindowControls={reserveWindowControls}
+					sidebarCollapsed={sidebarCollapsed}
+					overlay={
+						Boolean(session.temporary) &&
+						!session.sessionPath &&
+						!pendingMessage
+					}
 				/>
+				<div
+					data-chat-panel=""
+					className="relative flex min-h-0 flex-1 flex-col"
+				>
+					<div
+						ref={scrollRef}
+						className="chat-scrollbar flex min-h-0 w-full flex-1 flex-col overflow-x-hidden overflow-y-auto"
+					>
+						{session.sessionPath ? (
+							<ChatHistorySkeleton />
+						) : pendingMessage ? (
+							/* 新会话没有历史可读，直接复用正式消息组件呈现真实首帧。 */
+							<div className="pt-4 sm:pt-6">
+								<UserMessage message={pendingMessage} recordRender={false} />
+							</div>
+						) : (
+							<ConversationColumn className="flex flex-1 items-center justify-center">
+								<ChatEmptyHero />
+							</ConversationColumn>
+						)}
+					</div>
+					<LoadingComposer
+						projectId={session.projectRecord.id}
+						uiStateKey={uiStateKey}
+						readUiState={readUiState}
+						writeUiState={writeUiState}
+						readProjectDraft={readProjectDraft}
+						writeProjectDraft={writeProjectDraft}
+						scrollbarWidth={scrollbarWidth}
+					/>
+				</div>
 			</div>
-		</div>
+		</SessionMentionScope>
 	);
 }

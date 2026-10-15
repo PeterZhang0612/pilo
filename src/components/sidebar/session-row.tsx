@@ -23,6 +23,7 @@ import {
 	TooltipTrigger,
 } from "@/ui";
 import { menuItemIconClassName } from "@/ui/menu-styles";
+import { useSessionMentionDrag } from "@/components/chat/session-mention-context";
 import type { SidebarSession } from "./types";
 
 /** 两步确认的删除按钮；失焦、移出或 Esc 时复位。 */
@@ -214,6 +215,7 @@ export const SessionRow = memo(function SessionRow({
 	projectName?: string;
 }) {
 	const projectContext = Boolean(projectName);
+	const mentionDrag = useSessionMentionDrag();
 	const { t } = useTranslation();
 	const [menuOpen, setMenuOpen] = useState(false);
 	const [confirmingDeleteMenu, setConfirmingDeleteMenu] = useState(false);
@@ -247,7 +249,10 @@ export const SessionRow = memo(function SessionRow({
 		setRenaming(false);
 	};
 	return (
-		<Tooltip delayDuration={600} open={renaming ? false : undefined}>
+		<Tooltip
+			delayDuration={600}
+			open={renaming || mentionDrag?.isDragging ? false : undefined}
+		>
 			<TooltipTrigger asChild>
 				{/* oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- 内嵌图标按钮，不能用原生 button */}
 				<div
@@ -260,6 +265,18 @@ export const SessionRow = memo(function SessionRow({
 					onClick={() => {
 						if (!renaming && !suppressSelectRef.current)
 							onSelect(session.id, session.projectId);
+					}}
+					onPointerDown={(event) => {
+						suppressSelectRef.current = false;
+						if (!renaming)
+							mentionDrag?.start(
+								event,
+								session.projectId,
+								session.sessionPath,
+								() => {
+									suppressSelectRef.current = true;
+								},
+							);
 					}}
 					onPointerEnter={schedulePrefetch}
 					onPointerLeave={clearPrefetchTimer}

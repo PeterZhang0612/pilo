@@ -5,6 +5,7 @@ import {
 	ChatComposer,
 	type ComposerSuggestion,
 } from "@/components/chat/chat-composer";
+import { SessionMentionScope } from "@/components/chat/session-mention-context";
 import { piSessionSuggestions } from "@/components/chat/chat-composer-suggestions";
 import { createFileSuggestions } from "@/components/chat/chat-file-suggestions";
 import { ChatEmptyHero } from "@/components/chat/chat-empty-hero";
@@ -438,71 +439,73 @@ export function NewChatLanding({
 	);
 
 	return (
-		<div className="@container relative flex h-full min-w-0 flex-col">
-			<SessionHeader
-				overlay
-				temporary={temporary}
-				onOpenTerminal={onOpenTerminal}
-				terminalRunning={terminalRunning}
-				terminalVisible={terminalVisible}
-				onNewTemporaryChat={onNewTemporaryChat}
-				onExpandSidebar={onExpandSidebar}
-				reserveWindowControls={reserveWindowControls}
-				sidebarCollapsed={sidebarCollapsed}
-			/>
-			<div className="relative flex min-h-0 flex-1 flex-col">
-				<div className="flex min-h-0 w-full flex-1 flex-col">
-					<ConversationColumn className="flex flex-1 items-center justify-center">
-						<ChatEmptyHero />
-					</ConversationColumn>
-				</div>
-				<div className="relative -mt-4 w-full shrink-0 pb-4">
-					<ConversationColumn className="relative">
-						<DraftProjectPicker
-							projects={projects}
-							project={project}
-							onSwitchProject={onSwitchProject}
-						/>
-						<ChatComposer
-							value={draft}
-							historyKey={projectId}
-							onChange={updateDraft}
-							onSubmit={handleSubmit}
-							disabled={false}
-							models={models}
-							modelScope={{
-								...scopeConfig,
-								models: scopeModels,
-								availableModels,
-								catalogReady,
-							}}
-							canEditScope={projectAvailable && Boolean(project)}
-							selectedModel={selectedModel}
-							modelLoading={modelLoadState === "loading"}
-							modelError={modelError}
-							modelDisabled={!projectAvailable || !project}
-							onModelMenuOpen={() => void loadModels()}
-							onModelRefresh={() => void loadModels(true)}
-							onModelChange={(model) => {
-								if (model) selectDraftModel(model);
-							}}
-							thinkingLevels={getPiModelThinkingLevels(selectedModel)}
-							selectedThinkingLevel={selectedThinkingLevel}
-							thinkingDisabled={
-								!projectAvailable ||
-								!project ||
-								getPiModelThinkingLevels(selectedModel).length === 0
-							}
-							onThinkingChange={(level) => {
-								thinkingSelectionDirtyRef.current = true;
-								setSelectedThinkingLevel(level);
-							}}
-							suggestions={composerSuggestions}
-							onSuggestionTrigger={handleSuggestionTrigger}
-						/>
-					</ConversationColumn>
+		<SessionMentionScope connectionId={project?.connection.id ?? ""}>
+			<div className="@container relative flex h-full min-w-0 flex-col">
+				<SessionHeader
+					overlay
+					temporary={temporary}
+					onOpenTerminal={onOpenTerminal}
+					terminalRunning={terminalRunning}
+					terminalVisible={terminalVisible}
+					onNewTemporaryChat={onNewTemporaryChat}
+					onExpandSidebar={onExpandSidebar}
+					reserveWindowControls={reserveWindowControls}
+					sidebarCollapsed={sidebarCollapsed}
+				/>
+				<div className="relative flex min-h-0 flex-1 flex-col">
+					<div className="flex min-h-0 w-full flex-1 flex-col">
+						<ConversationColumn className="flex flex-1 items-center justify-center">
+							<ChatEmptyHero />
+						</ConversationColumn>
+					</div>
+					<div className="relative -mt-4 w-full shrink-0 pb-4">
+						<ConversationColumn className="relative">
+							<DraftProjectPicker
+								projects={projects}
+								project={project}
+								onSwitchProject={onSwitchProject}
+							/>
+							<ChatComposer
+								value={draft}
+								historyKey={projectId}
+								onChange={updateDraft}
+								onSubmit={handleSubmit}
+								disabled={false}
+								models={models}
+								modelScope={{
+									...scopeConfig,
+									models: scopeModels,
+									availableModels,
+									catalogReady,
+								}}
+								canEditScope={projectAvailable && Boolean(project)}
+								selectedModel={selectedModel}
+								modelLoading={modelLoadState === "loading"}
+								modelError={modelError}
+								modelDisabled={!projectAvailable || !project}
+								onModelMenuOpen={() => void loadModels()}
+								onModelRefresh={() => void loadModels(true)}
+								onModelChange={(model) => {
+									if (model) selectDraftModel(model);
+								}}
+								thinkingLevels={getPiModelThinkingLevels(selectedModel)}
+								selectedThinkingLevel={selectedThinkingLevel}
+								thinkingDisabled={
+									!projectAvailable ||
+									!project ||
+									getPiModelThinkingLevels(selectedModel).length === 0
+								}
+								onThinkingChange={(level) => {
+									thinkingSelectionDirtyRef.current = true;
+									setSelectedThinkingLevel(level);
+								}}
+								suggestions={composerSuggestions}
+								onSuggestionTrigger={handleSuggestionTrigger}
+							/>
+						</ConversationColumn>
+					</div>
 				</div>
 			</div>
-		</div>
+		</SessionMentionScope>
 	);
 }

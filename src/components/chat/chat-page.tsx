@@ -8,6 +8,7 @@ import type {
 import { useNextPrompt } from "@/components/chat/use-next-prompt";
 import { tauriPiloClient } from "@/lib/tauri-pilo-client";
 import { NextPromptSettingsButton } from "@/components/settings/next-prompt-settings";
+import { SessionMentionScope } from "@/components/chat/session-mention-context";
 import { ChatComposer } from "@/components/chat/chat-composer";
 import { ConversationColumn } from "@/components/chat/chat-conversation-column";
 import {
@@ -453,260 +454,266 @@ function ChatPageImpl(props: ChatPageProps) {
 	if (!renderVisual) return null;
 
 	return (
-		<ChatConversationSubscriber
-			active={active}
-			conversationStore={conversationStore}
-			historyStore={historyStore}
-			baseMessages={baseMessages}
-			sessionPath={session.sessionPath}
-			historyLoadState={historyLoadState}
-			loadState={loadState}
-		>
-			{(
-				{
-					messages,
-					pendingUsers,
-					latestTurnInterrupted,
-					activeAssistantMessageId,
-					effectiveLoadState,
-				},
-				live,
-			) => {
-				const viewportUiState =
-					uiStateKey && readUiState ? readUiState(uiStateKey) : initialUiState;
-				const emptyTemporarySession =
-					Boolean(session.temporary) &&
-					effectiveLoadState === "ready" &&
-					messages.length === 0;
-				return (
-					// @container：面板宽度查询容器。大纲栏与本列 padding 以面板为基准，
-					// ConversationColumn 内部的断点以消息列自身宽度为基准（嵌套容器）。
-					<div className="@container flex h-full min-w-0 flex-col bg-background">
-						<SessionHeader
-							session={session}
-							sessionState={sessionState ?? undefined}
-							additionalActions={
-								<NextPromptSettingsButton
-									config={nextPrompt.config}
-									models={modelOptions}
-									unavailable={nextPrompt.unavailable}
-								/>
-							}
-							onOpenChanges={onOpenChanges}
-							onOpenTerminal={onOpenTerminal}
-							terminalRunning={terminalRunning}
-							terminalVisible={terminalVisible}
-							onNewTemporaryChat={onNewTemporaryChat}
-							onRenameSession={onRenameSession}
-							onFindInSession={() => setFindOpen(true)}
-							onOpenInNewWindow={onOpenInNewWindow}
-							onExpandSidebar={onExpandSidebar}
-							reserveWindowControls={reserveWindowControls}
-							sidebarCollapsed={sidebarCollapsed}
-							overlay={emptyTemporarySession}
-						/>
-						<div
-							data-chat-panel=""
-							className="relative flex min-h-0 flex-1 flex-col"
-						>
-							<ChatMarkdownImageScopeProvider scope={projectImageScope}>
-								<ChatImageScopeProvider scope={historyImageScope}>
-									<ChatConversationViewport
-										ref={conversationViewportRef}
-										active={active}
-										visualLive={live}
-										showSwitchSkeleton={showSwitchSkeleton}
-										sessionId={performanceSessionId ?? session.id}
-										sessionPath={session.sessionPath}
-										messages={messages}
-										onVisibleRangeChange={requestHistoryRange}
-										activeAssistantMessageId={activeAssistantMessageId}
-										compacting={compacting}
-										effectiveLoadState={effectiveLoadState}
-										initialScrollTop={viewportUiState.scrollTop}
-										initialSticky={viewportUiState.sticky}
-										initialVirtualizerCache={
-											viewportUiState.virtualizerMessageCount ===
-											messages.length
-												? viewportUiState.virtualizerCache
-												: undefined
-										}
-										onScrollStateChange={persistScrollState}
-										onVirtualizerCacheChange={persistVirtualizerCache}
-										runtimeScrollRef={scrollRef}
-										onForkAssistant={
-											!session.temporary ? handleForkAssistant : undefined
-										}
-										forkingMessageId={forkingMessageId}
-										forkDisabled={
-											runtimeBusy || historyPending || Boolean(forkingMessageId)
-										}
-										suppressInterruptedError={
-											session.externalTurnOpen || running
-										}
-										onVisualReady={handleVisualReady}
-										onRetry={onRetry}
-										onRetryHistory={retryHistory}
+		<SessionMentionScope connectionId={session.projectRecord.connection.id}>
+			<ChatConversationSubscriber
+				active={active}
+				conversationStore={conversationStore}
+				historyStore={historyStore}
+				baseMessages={baseMessages}
+				sessionPath={session.sessionPath}
+				historyLoadState={historyLoadState}
+				loadState={loadState}
+			>
+				{(
+					{
+						messages,
+						pendingUsers,
+						latestTurnInterrupted,
+						activeAssistantMessageId,
+						effectiveLoadState,
+					},
+					live,
+				) => {
+					const viewportUiState =
+						uiStateKey && readUiState
+							? readUiState(uiStateKey)
+							: initialUiState;
+					const emptyTemporarySession =
+						Boolean(session.temporary) &&
+						effectiveLoadState === "ready" &&
+						messages.length === 0;
+					return (
+						// @container：面板宽度查询容器。大纲栏与本列 padding 以面板为基准，
+						// ConversationColumn 内部的断点以消息列自身宽度为基准（嵌套容器）。
+						<div className="@container flex h-full min-w-0 flex-col bg-background">
+							<SessionHeader
+								session={session}
+								sessionState={sessionState ?? undefined}
+								additionalActions={
+									<NextPromptSettingsButton
+										config={nextPrompt.config}
+										models={modelOptions}
+										unavailable={nextPrompt.unavailable}
 									/>
-								</ChatImageScopeProvider>
-							</ChatMarkdownImageScopeProvider>
-							<ChatFindLayer
-								open={findOpen}
-								onClose={() => setFindOpen(false)}
-								messages={messages}
-								onNavigate={handleFindNavigate}
+								}
+								onOpenChanges={onOpenChanges}
+								onOpenTerminal={onOpenTerminal}
+								terminalRunning={terminalRunning}
+								terminalVisible={terminalVisible}
+								onNewTemporaryChat={onNewTemporaryChat}
+								onRenameSession={onRenameSession}
+								onFindInSession={() => setFindOpen(true)}
+								onOpenInNewWindow={onOpenInNewWindow}
+								onExpandSidebar={onExpandSidebar}
+								reserveWindowControls={reserveWindowControls}
+								sidebarCollapsed={sidebarCollapsed}
+								overlay={emptyTemporarySession}
 							/>
-
-							{/* -mt-4 让滚动区底部上探 16px，消息在输入卡背后被自然裁切；
-							    裁切线藏在卡片圆角(12px)以内，输入框下方缝隙不会露出消息 */}
-							{/* 滚动区 scrollbar-gutter 恒为 stable（.chat-scrollbar），paddingRight
-							    恒补偿 gutter 宽度，空会话 → 首条消息不再横跳 */}
 							<div
-								data-chat-composer-region=""
-								className="relative z-20 -mt-4 w-full shrink-0 pb-4"
-								style={{ paddingRight: scrollbarWidth }}
+								data-chat-panel=""
+								className="relative flex min-h-0 flex-1 flex-col"
 							>
-								<ConversationColumn className="relative">
-									<ChatPendingQueue
-										items={pendingUsers}
-										onEdit={(item) =>
-											void handleEditQueued(item.clientMessageId)
-										}
-										onSendNow={(item) =>
-											void handleSendQueuedNow(item.clientMessageId)
-										}
-									/>
-									{recoveryState.status === "idle" &&
-									!session.externalTurnOpen &&
-									!running &&
-									latestTurnInterrupted ? (
-										<ChatInterruptedTurnNotice />
-									) : null}
-									<ChatRuntimeRecoveryNotice
-										state={recoveryState}
-										onNewTemporaryChat={
-											session.temporary ? onNewTemporaryChat : undefined
-										}
-									/>
-									<PiExtensionNotifications
-										notifications={extensionNotifications}
-										onDismiss={dismissExtensionNotification}
-									/>
-									{extensionDialog ? (
-										<PiExtensionUiDialog
-											request={extensionDialog}
-											onRespond={(response) =>
-												void respondToExtensionDialog(response)
+								<ChatMarkdownImageScopeProvider scope={projectImageScope}>
+									<ChatImageScopeProvider scope={historyImageScope}>
+										<ChatConversationViewport
+											ref={conversationViewportRef}
+											active={active}
+											visualLive={live}
+											showSwitchSkeleton={showSwitchSkeleton}
+											sessionId={performanceSessionId ?? session.id}
+											sessionPath={session.sessionPath}
+											messages={messages}
+											onVisibleRangeChange={requestHistoryRange}
+											activeAssistantMessageId={activeAssistantMessageId}
+											compacting={compacting}
+											effectiveLoadState={effectiveLoadState}
+											initialScrollTop={viewportUiState.scrollTop}
+											initialSticky={viewportUiState.sticky}
+											initialVirtualizerCache={
+												viewportUiState.virtualizerMessageCount ===
+												messages.length
+													? viewportUiState.virtualizerCache
+													: undefined
+											}
+											onScrollStateChange={persistScrollState}
+											onVirtualizerCacheChange={persistVirtualizerCache}
+											runtimeScrollRef={scrollRef}
+											onForkAssistant={
+												!session.temporary ? handleForkAssistant : undefined
+											}
+											forkingMessageId={forkingMessageId}
+											forkDisabled={
+												runtimeBusy ||
+												historyPending ||
+												Boolean(forkingMessageId)
+											}
+											suppressInterruptedError={
+												session.externalTurnOpen || running
+											}
+											onVisualReady={handleVisualReady}
+											onRetry={onRetry}
+											onRetryHistory={retryHistory}
+										/>
+									</ChatImageScopeProvider>
+								</ChatMarkdownImageScopeProvider>
+								<ChatFindLayer
+									open={findOpen}
+									onClose={() => setFindOpen(false)}
+									messages={messages}
+									onNavigate={handleFindNavigate}
+								/>
+
+								{/* -mt-4 让滚动区底部上探 16px，消息在输入卡背后被自然裁切；
+							    裁切线藏在卡片圆角(12px)以内，输入框下方缝隙不会露出消息 */}
+								{/* 滚动区 scrollbar-gutter 恒为 stable（.chat-scrollbar），paddingRight
+							    恒补偿 gutter 宽度，空会话 → 首条消息不再横跳 */}
+								<div
+									data-chat-composer-region=""
+									className="relative z-20 -mt-4 w-full shrink-0 pb-4"
+									style={{ paddingRight: scrollbarWidth }}
+								>
+									<ConversationColumn className="relative">
+										<ChatPendingQueue
+											items={pendingUsers}
+											onEdit={(item) =>
+												void handleEditQueued(item.clientMessageId)
+											}
+											onSendNow={(item) =>
+												void handleSendQueuedNow(item.clientMessageId)
 											}
 										/>
-									) : null}
-									<ChatComposer
-										nextPrompt={nextPrompt.text}
-										onNextPromptDismiss={nextPrompt.dismiss}
-										value={session.externalRunning ? "" : draft}
-										historyKey={session.projectRecord.id}
-										placeholder={
-											session.externalRunning
-												? t("chat.externalReadOnly")
-												: undefined
-										}
-										onChange={setDraft}
-										images={composerImages}
-										onImagesChange={setComposerImages}
-										onSubmit={handleComposerSubmit}
-										onSteer={
-											running
-												? (submission) => {
-														void (async () => {
+										{recoveryState.status === "idle" &&
+										!session.externalTurnOpen &&
+										!running &&
+										latestTurnInterrupted ? (
+											<ChatInterruptedTurnNotice />
+										) : null}
+										<ChatRuntimeRecoveryNotice
+											state={recoveryState}
+											onNewTemporaryChat={
+												session.temporary ? onNewTemporaryChat : undefined
+											}
+										/>
+										<PiExtensionNotifications
+											notifications={extensionNotifications}
+											onDismiss={dismissExtensionNotification}
+										/>
+										{extensionDialog ? (
+											<PiExtensionUiDialog
+												request={extensionDialog}
+												onRespond={(response) =>
+													void respondToExtensionDialog(response)
+												}
+											/>
+										) : null}
+										<ChatComposer
+											nextPrompt={nextPrompt.text}
+											onNextPromptDismiss={nextPrompt.dismiss}
+											value={session.externalRunning ? "" : draft}
+											historyKey={session.projectRecord.id}
+											placeholder={
+												session.externalRunning
+													? t("chat.externalReadOnly")
+													: undefined
+											}
+											onChange={setDraft}
+											images={composerImages}
+											onImagesChange={setComposerImages}
+											onSubmit={handleComposerSubmit}
+											onSteer={
+												running
+													? (submission) => {
+															void (async () => {
+																if (await tryHandleComposerCommand(submission))
+																	return;
+																setComposerImages([]);
+																handleSteer(submission);
+															})();
+														}
+													: undefined
+											}
+											onSendNow={
+												running
+													? async (submission) => {
 															if (await tryHandleComposerCommand(submission))
 																return;
 															setComposerImages([]);
-															handleSteer(submission);
-														})();
-													}
-												: undefined
-										}
-										onSendNow={
-											running
-												? async (submission) => {
-														if (await tryHandleComposerCommand(submission))
-															return;
-														setComposerImages([]);
-														await handleSendNow(submission);
-													}
-												: undefined
-										}
-										onFollowUp={
-											running
-												? (submission) => {
-														setComposerImages([]);
-														handleFollowUp(submission);
-													}
-												: undefined
-										}
-										disabled={
-											// 后台保留页不可见；其 focus-composer hook 先注册、先执行，
-											// 会 preventDefault 后 focus 隐藏 textarea（no-op），吞掉新会话页的 Ctrl+L。
-											!active ||
-											recoveryState.status === "reconnecting" ||
-											Boolean(session.externalRunning)
-										}
-										muted={Boolean(session.externalRunning)}
-										running={running}
-										onStop={handleStop}
-										pendingFollowUps={pendingFollowUps}
-										statusText={session.externalRunning ? "" : piStatusText}
-										statusError={
-											(session.externalRunning
-												? null
-												: retryState?.errorMessage) ??
-											historyError ??
-											(historyIndexStale &&
-											!running &&
-											!session.externalTurnOpen
-												? t("chat.historyIndexStale")
-												: null)
-										}
-										compacting={compacting}
-										retrying={retryState?.kind === "agent"}
-										onAbortRetry={() => void abortRetry()}
-										contextUsage={sessionState}
-										suggestions={composerSuggestions}
-										onSuggestionTrigger={handleSuggestionTrigger}
-										models={modelOptions}
-										modelScope={modelScope}
-										selectedModel={selectedModel}
-										modelLoading={modelLoadState === "loading"}
-										modelError={modelError}
-										modelDisabled={
-											modelChanging ||
-											runtimeBusy ||
-											historyPending ||
-											session.externalRunning
-										}
-										onModelMenuOpen={() => void loadModelOptions()}
-										onModelRefresh={() => void loadModelOptions(true)}
-										onModelChange={handleModelChange}
-										thinkingLevels={thinkingLevels}
-										selectedThinkingLevel={selectedThinkingLevel}
-										thinkingLoading={thinkingLoading}
-										thinkingDisabled={
-											thinkingChanging ||
-											runtimeBusy ||
-											historyPending ||
-											session.externalRunning ||
-											thinkingLevels.length === 0
-										}
-										onThinkingMenuOpen={() => void loadThinkingLevels()}
-										onThinkingChange={handleThinkingChange}
-									/>
-								</ConversationColumn>
+															await handleSendNow(submission);
+														}
+													: undefined
+											}
+											onFollowUp={
+												running
+													? (submission) => {
+															setComposerImages([]);
+															handleFollowUp(submission);
+														}
+													: undefined
+											}
+											disabled={
+												// 后台保留页不可见；其 focus-composer hook 先注册、先执行，
+												// 会 preventDefault 后 focus 隐藏 textarea（no-op），吞掉新会话页的 Ctrl+L。
+												!active ||
+												recoveryState.status === "reconnecting" ||
+												Boolean(session.externalRunning)
+											}
+											muted={Boolean(session.externalRunning)}
+											running={running}
+											onStop={handleStop}
+											pendingFollowUps={pendingFollowUps}
+											statusText={session.externalRunning ? "" : piStatusText}
+											statusError={
+												(session.externalRunning
+													? null
+													: retryState?.errorMessage) ??
+												historyError ??
+												(historyIndexStale &&
+												!running &&
+												!session.externalTurnOpen
+													? t("chat.historyIndexStale")
+													: null)
+											}
+											compacting={compacting}
+											retrying={retryState?.kind === "agent"}
+											onAbortRetry={() => void abortRetry()}
+											contextUsage={sessionState}
+											suggestions={composerSuggestions}
+											onSuggestionTrigger={handleSuggestionTrigger}
+											models={modelOptions}
+											modelScope={modelScope}
+											selectedModel={selectedModel}
+											modelLoading={modelLoadState === "loading"}
+											modelError={modelError}
+											modelDisabled={
+												modelChanging ||
+												runtimeBusy ||
+												historyPending ||
+												session.externalRunning
+											}
+											onModelMenuOpen={() => void loadModelOptions()}
+											onModelRefresh={() => void loadModelOptions(true)}
+											onModelChange={handleModelChange}
+											thinkingLevels={thinkingLevels}
+											selectedThinkingLevel={selectedThinkingLevel}
+											thinkingLoading={thinkingLoading}
+											thinkingDisabled={
+												thinkingChanging ||
+												runtimeBusy ||
+												historyPending ||
+												session.externalRunning ||
+												thinkingLevels.length === 0
+											}
+											onThinkingMenuOpen={() => void loadThinkingLevels()}
+											onThinkingChange={handleThinkingChange}
+										/>
+									</ConversationColumn>
+								</div>
 							</div>
 						</div>
-					</div>
-				);
-			}}
-		</ChatConversationSubscriber>
+					);
+				}}
+			</ChatConversationSubscriber>
+		</SessionMentionScope>
 	);
 }
 

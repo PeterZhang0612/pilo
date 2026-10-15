@@ -56,7 +56,14 @@ export function createChatSubmission(
 	text: string,
 	images: readonly ChatImageAttachment[] = [],
 ): ChatSubmission {
-	return { text: text.trim(), images: [...images] };
+	const trimmed = text.trim();
+	// Pi splits Skill and extension command names on a literal space, not a newline.
+	const message = trimmed.replace(/^\/\S+/, (command) =>
+		trimmed.length > command.length && trimmed[command.length] !== " "
+			? `${command} `
+			: command,
+	);
+	return { text: message, images: [...images] };
 }
 
 export function chatSubmissionHasContent(submission: ChatSubmission) {

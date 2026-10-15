@@ -16,6 +16,7 @@ import {
 } from "react-resizable-panels";
 import { toast } from "sonner";
 
+import { SessionMentionProvider } from "@/components/chat/session-mention-context";
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
 import { AddProjectDialog } from "@/components/sidebar/add-project-dialog";
 import {
@@ -277,278 +278,294 @@ function App() {
 
 	return (
 		<TooltipProvider>
-			<div
-				data-session-window={sessionWindow ? "" : undefined}
-				className="flex h-full bg-background text-foreground"
+			<SessionMentionProvider
+				projects={projects}
+				sessions={sidebarSessions}
+				desktopDrag
 			>
-				{sessionWindow ? null : (
-					<AppSidebar
-						collapsed={leftSidebarCollapsed}
-						onCollapse={() => setLeftSidebarCollapsed(true)}
-						envs={envs}
-						projects={sidebarProjects}
-						sessions={sidebarSessions}
-						selectedProjectId={activeProjectId}
-						selectedSessionId={selectedSessionId}
-						onSelectSession={monitoredSelectSession}
-						onOpenSearchSession={monitoredOpenSearchSession}
-						onUpdateSession={(sessionId, update, projectId) => {
-							void updateSession(sessionId, update, projectId);
-						}}
-						onDeleteSession={(sessionId, projectId) => {
-							void deleteSession(sessionId, projectId);
-						}}
-						onDeleteProject={(projectId) => void handleDeleteProject(projectId)}
-						onDeleteConnection={(connectionId) =>
-							void handleDeleteConnection(connectionId)
-						}
-						onNewChat={() => startNewChat()}
-						onNewChatInProject={(projectId) => startNewChat(projectId)}
-						onFocusProject={setFocusedProjectId}
-						onReorderProjects={(connectionId, projectIds) =>
-							void handleReorderProjects(connectionId, projectIds)
-						}
-						onAddProject={(connectionId) => void handleAddProject(connectionId)}
-						onRefreshProjectSessions={(projectId) => {
-							void refreshProjectSessions(projectId, true).catch((error) =>
-								console.error("Failed to refresh sessions", error),
-							);
-						}}
-						refreshingProjectIds={refreshingProjectIds}
-						footer={<SidebarFooter />}
-					/>
-				)}
-				<main className="relative flex min-w-0 flex-1 flex-col">
-					{CUSTOM_TITLEBAR && <TitleBar showAlwaysOnTop={sessionWindow} />}
-					<Group orientation="horizontal" className="min-h-0 flex-1">
-						<Panel
-							defaultSize={RIGHT_SIDEBAR_ENABLED ? 560 : "100"}
-							minSize={400}
-							className="relative min-w-0"
-						>
-							{mountedOpenedChats.map((entry) => {
-								const active =
-									chatSession !== null &&
-									entry.session.projectRecord.id ===
-										chatSession.projectRecord.id &&
-									(entry.session.id === chatSession.id ||
-										entry.piSessionId === chatSession.id);
-								const visualVisible =
-									entry.controllerId === activeChatControllerId;
-								return (
-									<div
-										key={entry.controllerId}
-										aria-hidden={!visualVisible}
-										className={
-											visualVisible
-												? active
-													? "h-full min-h-0"
-													: "pointer-events-none h-full min-h-0"
-												: "pointer-events-none invisible absolute inset-0 h-full min-h-0"
-										}
-									>
-										<Suspense
-											fallback={
-												<ChatPageLoadingFallback
+				<div
+					data-session-window={sessionWindow ? "" : undefined}
+					className="flex h-full bg-background text-foreground"
+				>
+					{sessionWindow ? null : (
+						<AppSidebar
+							collapsed={leftSidebarCollapsed}
+							onCollapse={() => setLeftSidebarCollapsed(true)}
+							envs={envs}
+							projects={sidebarProjects}
+							sessions={sidebarSessions}
+							selectedProjectId={activeProjectId}
+							selectedSessionId={selectedSessionId}
+							onSelectSession={monitoredSelectSession}
+							onOpenSearchSession={monitoredOpenSearchSession}
+							onUpdateSession={(sessionId, update, projectId) => {
+								void updateSession(sessionId, update, projectId);
+							}}
+							onDeleteSession={(sessionId, projectId) => {
+								void deleteSession(sessionId, projectId);
+							}}
+							onDeleteProject={(projectId) =>
+								void handleDeleteProject(projectId)
+							}
+							onDeleteConnection={(connectionId) =>
+								void handleDeleteConnection(connectionId)
+							}
+							onNewChat={() => startNewChat()}
+							onNewChatInProject={(projectId) => startNewChat(projectId)}
+							onFocusProject={setFocusedProjectId}
+							onReorderProjects={(connectionId, projectIds) =>
+								void handleReorderProjects(connectionId, projectIds)
+							}
+							onAddProject={(connectionId) =>
+								void handleAddProject(connectionId)
+							}
+							onRefreshProjectSessions={(projectId) => {
+								void refreshProjectSessions(projectId, true).catch((error) =>
+									console.error("Failed to refresh sessions", error),
+								);
+							}}
+							refreshingProjectIds={refreshingProjectIds}
+							footer={<SidebarFooter />}
+						/>
+					)}
+					<main className="relative flex min-w-0 flex-1 flex-col">
+						{CUSTOM_TITLEBAR && <TitleBar showAlwaysOnTop={sessionWindow} />}
+						<Group orientation="horizontal" className="min-h-0 flex-1">
+							<Panel
+								defaultSize={RIGHT_SIDEBAR_ENABLED ? 560 : "100"}
+								minSize={400}
+								className="relative min-w-0"
+							>
+								{mountedOpenedChats.map((entry) => {
+									const active =
+										chatSession !== null &&
+										entry.session.projectRecord.id ===
+											chatSession.projectRecord.id &&
+										(entry.session.id === chatSession.id ||
+											entry.piSessionId === chatSession.id);
+									const visualVisible =
+										entry.controllerId === activeChatControllerId;
+									return (
+										<div
+											key={entry.controllerId}
+											aria-hidden={!visualVisible}
+											className={
+												visualVisible
+													? active
+														? "h-full min-h-0"
+														: "pointer-events-none h-full min-h-0"
+													: "pointer-events-none invisible absolute inset-0 h-full min-h-0"
+											}
+										>
+											<Suspense
+												fallback={
+													<ChatPageLoadingFallback
+														session={entry.session}
+														initialMessage={entry.initialMessage}
+														initialImages={entry.initialImages}
+														uiStateKey={entry.uiStateKey}
+														readUiState={readChatUiState}
+														writeUiState={writeChatUiState}
+														readProjectDraft={readProjectDraft}
+														writeProjectDraft={writeProjectDraft}
+														reserveWindowControls={CUSTOM_TITLEBAR}
+														sidebarCollapsed={leftSidebarCollapsed}
+														onOpenTerminal={toggleTerminal}
+														terminalRunning={terminalRunning}
+														terminalVisible={terminalVisible}
+														onNewTemporaryChat={() =>
+															startTemporaryChat(entry.session.projectRecord.id)
+														}
+														onExpandSidebar={() =>
+															setLeftSidebarCollapsed(false)
+														}
+													/>
+												}
+											>
+												<ChatPage
 													session={entry.session}
-													initialMessage={entry.initialMessage}
-													initialImages={entry.initialImages}
+													controllerId={entry.controllerId}
+													performanceSessionId={
+														entry.piSessionId ?? entry.session.id
+													}
 													uiStateKey={entry.uiStateKey}
 													readUiState={readChatUiState}
 													writeUiState={writeChatUiState}
 													readProjectDraft={readProjectDraft}
 													writeProjectDraft={writeProjectDraft}
-													reserveWindowControls={CUSTOM_TITLEBAR}
-													sidebarCollapsed={leftSidebarCollapsed}
+													onRuntimeBusyChange={handleChatRuntimeBusyChange}
+													active={active}
+													retainBackgroundVisual={retainedBackgroundVisualControllerIds.has(
+														entry.controllerId,
+													)}
+													onVisualReadyChange={(ready) =>
+														handleChatVisualReadyChange(
+															entry.controllerId,
+															ready,
+														)
+													}
+													showSwitchSkeleton={
+														active &&
+														Boolean(entry.session.sessionPath) &&
+														!visualReadyControllerIds.has(entry.controllerId)
+													}
+													initialMessage={entry.initialMessage}
+													initialImages={entry.initialImages}
+													onSessionIdentified={(piSessionId) =>
+														handleSessionIdentified(entry, piSessionId)
+													}
+													onForkSessionCreated={(target) =>
+														handleForkSessionCreated(entry, target)
+													}
+													onOpenChanges={
+														RIGHT_SIDEBAR_ENABLED
+															? () => rightPanelRef.current?.expand()
+															: undefined
+													}
 													onOpenTerminal={toggleTerminal}
 													terminalRunning={terminalRunning}
 													terminalVisible={terminalVisible}
+													onNewChat={() =>
+														startNewChat(entry.session.projectRecord.id)
+													}
 													onNewTemporaryChat={() =>
 														startTemporaryChat(entry.session.projectRecord.id)
 													}
+													onRenameSession={(title) => {
+														void updateSession(
+															entry.piSessionId ?? entry.session.id,
+															{ title },
+															entry.session.projectRecord.id,
+														);
+													}}
+													onOpenInNewWindow={
+														sessionWindow
+															? undefined
+															: () => {
+																	openSessionInNewWindow({
+																		sessionId:
+																			entry.piSessionId ?? entry.session.id,
+																		projectId: entry.session.projectRecord.id,
+																		sessionPath:
+																			entry.session.sessionPath ?? "",
+																		title: entry.session.title,
+																	});
+																}
+													}
 													onExpandSidebar={() => setLeftSidebarCollapsed(false)}
+													reserveWindowControls={CUSTOM_TITLEBAR}
+													sidebarCollapsed={leftSidebarCollapsed}
 												/>
-											}
-										>
-											<ChatPage
-												session={entry.session}
-												controllerId={entry.controllerId}
-												performanceSessionId={
-													entry.piSessionId ?? entry.session.id
-												}
-												uiStateKey={entry.uiStateKey}
-												readUiState={readChatUiState}
-												writeUiState={writeChatUiState}
-												readProjectDraft={readProjectDraft}
-												writeProjectDraft={writeProjectDraft}
-												onRuntimeBusyChange={handleChatRuntimeBusyChange}
-												active={active}
-												retainBackgroundVisual={retainedBackgroundVisualControllerIds.has(
-													entry.controllerId,
-												)}
-												onVisualReadyChange={(ready) =>
-													handleChatVisualReadyChange(entry.controllerId, ready)
-												}
-												showSwitchSkeleton={
-													active &&
-													Boolean(entry.session.sessionPath) &&
-													!visualReadyControllerIds.has(entry.controllerId)
-												}
-												initialMessage={entry.initialMessage}
-												initialImages={entry.initialImages}
-												onSessionIdentified={(piSessionId) =>
-													handleSessionIdentified(entry, piSessionId)
-												}
-												onForkSessionCreated={(target) =>
-													handleForkSessionCreated(entry, target)
-												}
-												onOpenChanges={
-													RIGHT_SIDEBAR_ENABLED
-														? () => rightPanelRef.current?.expand()
-														: undefined
-												}
-												onOpenTerminal={toggleTerminal}
-												terminalRunning={terminalRunning}
-												terminalVisible={terminalVisible}
-												onNewChat={() =>
-													startNewChat(entry.session.projectRecord.id)
-												}
-												onNewTemporaryChat={() =>
-													startTemporaryChat(entry.session.projectRecord.id)
-												}
-												onRenameSession={(title) => {
-													void updateSession(
-														entry.piSessionId ?? entry.session.id,
-														{ title },
-														entry.session.projectRecord.id,
-													);
-												}}
-												onOpenInNewWindow={
-													sessionWindow
-														? undefined
-														: () => {
-																openSessionInNewWindow({
-																	sessionId:
-																		entry.piSessionId ?? entry.session.id,
-																	projectId: entry.session.projectRecord.id,
-																	sessionPath: entry.session.sessionPath ?? "",
-																	title: entry.session.title,
-																});
-															}
-												}
-												onExpandSidebar={() => setLeftSidebarCollapsed(false)}
-												reserveWindowControls={CUSTOM_TITLEBAR}
-												sidebarCollapsed={leftSidebarCollapsed}
-											/>
-										</Suspense>
-									</div>
-								);
-							})}
-							{!chatSession ? (
-								<NewChatLanding
-									key={`landing:${draftSessionId}`}
-									sessionId={draftSessionId}
-									temporary={draftTemporary}
-									onNewChat={() => startNewChat(activeProject?.id)}
-									projectAvailable={
-										projectsReady && connectionsReady
-											? Boolean(activeProject)
-											: true
-									}
-									project={activeProject}
-									projects={homeProjects}
-									onSwitchProject={switchDraftProject}
-									readProjectDraft={readProjectDraft}
-									writeProjectDraft={writeProjectDraft}
-									onOpenTerminal={toggleTerminal}
-									terminalRunning={terminalRunning}
-									terminalVisible={terminalVisible}
-									onNewTemporaryChat={() =>
-										startTemporaryChat(activeProject?.id)
-									}
-									onStartSession={startLandingSession}
-									onExpandSidebar={() => setLeftSidebarCollapsed(false)}
-									reserveWindowControls={CUSTOM_TITLEBAR}
-									sidebarCollapsed={leftSidebarCollapsed}
-								/>
-							) : null}
-							{activeProject && viewerRequest ? (
-								<Suspense fallback={null}>
-									<ProjectViewer
-										key={`viewer:${activeProject.id}`}
+											</Suspense>
+										</div>
+									);
+								})}
+								{!chatSession ? (
+									<NewChatLanding
+										key={`landing:${draftSessionId}`}
+										sessionId={draftSessionId}
+										temporary={draftTemporary}
+										onNewChat={() => startNewChat(activeProject?.id)}
+										projectAvailable={
+											projectsReady && connectionsReady
+												? Boolean(activeProject)
+												: true
+										}
 										project={activeProject}
-										request={
-											viewerRequest?.projectId === activeProject.id
-												? viewerRequest
-												: undefined
+										projects={homeProjects}
+										onSwitchProject={switchDraftProject}
+										readProjectDraft={readProjectDraft}
+										writeProjectDraft={writeProjectDraft}
+										onOpenTerminal={toggleTerminal}
+										terminalRunning={terminalRunning}
+										terminalVisible={terminalVisible}
+										onNewTemporaryChat={() =>
+											startTemporaryChat(activeProject?.id)
 										}
-										visible={
-											viewerVisible &&
-											viewerRequest?.projectId === activeProject.id
-										}
-										reserveTrafficLights={IS_MACOS && leftSidebarCollapsed}
-										onClose={() => setViewerVisible(false)}
+										onStartSession={startLandingSession}
+										onExpandSidebar={() => setLeftSidebarCollapsed(false)}
+										reserveWindowControls={CUSTOM_TITLEBAR}
+										sidebarCollapsed={leftSidebarCollapsed}
 									/>
-								</Suspense>
-							) : null}
-						</Panel>
-						{RIGHT_SIDEBAR_ENABLED ? (
-							<>
-								<ResizeSeparator
-									className="w-1 bg-transparent transition-colors hover:bg-sidebar-border"
-									onPointerDown={() => setIsResizing(true)}
-									onPointerUp={() => setIsResizing(false)}
-									onPointerCancel={() => setIsResizing(false)}
-								/>
-								<Suspense
-									fallback={
-										<Panel
-											defaultSize={0}
-											minSize={280}
-											collapsible
-											collapsedSize={0}
+								) : null}
+								{activeProject && viewerRequest ? (
+									<Suspense fallback={null}>
+										<ProjectViewer
+											key={`viewer:${activeProject.id}`}
+											project={activeProject}
+											request={
+												viewerRequest?.projectId === activeProject.id
+													? viewerRequest
+													: undefined
+											}
+											visible={
+												viewerVisible &&
+												viewerRequest?.projectId === activeProject.id
+											}
+											reserveTrafficLights={IS_MACOS && leftSidebarCollapsed}
+											onClose={() => setViewerVisible(false)}
 										/>
-									}
-								>
-									<RightSidebar
-										panelRef={rightPanelRef}
-										resizing={isResizing}
-										project={activeProject ?? undefined}
-										onOpenFile={openViewerFile}
+									</Suspense>
+								) : null}
+							</Panel>
+							{RIGHT_SIDEBAR_ENABLED ? (
+								<>
+									<ResizeSeparator
+										className="w-1 bg-transparent transition-colors hover:bg-sidebar-border"
+										onPointerDown={() => setIsResizing(true)}
+										onPointerUp={() => setIsResizing(false)}
+										onPointerCancel={() => setIsResizing(false)}
 									/>
-								</Suspense>
-							</>
+									<Suspense
+										fallback={
+											<Panel
+												defaultSize={0}
+												minSize={280}
+												collapsible
+												collapsedSize={0}
+											/>
+										}
+									>
+										<RightSidebar
+											panelRef={rightPanelRef}
+											resizing={isResizing}
+											project={activeProject ?? undefined}
+											onOpenFile={openViewerFile}
+										/>
+									</Suspense>
+								</>
+							) : null}
+						</Group>
+						{terminalMounted ? (
+							<Suspense fallback={null}>
+								<TerminalDock
+									project={activeProject ?? undefined}
+									visible={terminalVisible}
+									openRequest={terminalOpenRequest}
+									onRunningChange={setTerminalRunning}
+									onDestroy={destroyTerminalDock}
+								/>
+							</Suspense>
 						) : null}
-					</Group>
-					{terminalMounted ? (
-						<Suspense fallback={null}>
-							<TerminalDock
-								project={activeProject ?? undefined}
-								visible={terminalVisible}
-								openRequest={terminalOpenRequest}
-								onRunningChange={setTerminalRunning}
-								onDestroy={destroyTerminalDock}
-							/>
-						</Suspense>
-					) : null}
-				</main>
-			</div>
-			{addProjectOpen ? (
-				<AddProjectDialog
-					open
-					onOpenChange={setAddProjectOpen}
-					connection={
-						connectionCatalog.find(
-							(connection) => connection.id === addProjectConnectionId,
-						) ??
-						projects.find(
-							(project) => project.connection.id === addProjectConnectionId,
-						)?.connection ??
-						null
-					}
-				/>
-			) : null}
-			<ChatImageLightbox />
+					</main>
+				</div>
+				{addProjectOpen ? (
+					<AddProjectDialog
+						open
+						onOpenChange={setAddProjectOpen}
+						connection={
+							connectionCatalog.find(
+								(connection) => connection.id === addProjectConnectionId,
+							) ??
+							projects.find(
+								(project) => project.connection.id === addProjectConnectionId,
+							)?.connection ??
+							null
+						}
+					/>
+				) : null}
+				<ChatImageLightbox />
+			</SessionMentionProvider>
 		</TooltipProvider>
 	);
 }

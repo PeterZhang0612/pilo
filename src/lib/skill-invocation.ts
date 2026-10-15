@@ -14,7 +14,7 @@ export type SkillInvocation = {
 	form: "expanded" | "compact";
 };
 
-const COMPACT_COMMAND_PATTERN = /^\/skill:([^\s/]+)(?:[ \t]+([\s\S]*))?$/;
+const COMPACT_COMMAND_PATTERN = /^\/skill:([^\s/]+)(?:\s+([\s\S]*))?$/;
 const OPENING_TAG_PATTERN = /^<skill name="([^"]+)"(?: location="([^"]*)")?>\n/;
 const CLOSING_TAG = "\n</skill>";
 

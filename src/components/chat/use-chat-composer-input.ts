@@ -3,6 +3,7 @@ import {
 	useEffect,
 	useLayoutEffect,
 	useMemo,
+	useId,
 	useRef,
 	useState,
 	type KeyboardEvent,
@@ -31,18 +32,27 @@ import { isImeComposingKeyboardEvent } from "@/lib/ime";
 import { type PiModel, runtimeErrorMessage } from "@/lib/pi-runtime";
 import { usePreferences } from "@/lib/preferences-provider";
 import { useKeyboardShortcut } from "@/lib/use-keyboard-shortcut";
+import { useIsTouchDevice } from "@/components/chat/chat-composer-run-config";
 import {
 	DEFAULT_SUGGESTIONS,
 	FILE_SUGGESTION_LIMIT,
 	TRIGGER_META,
 	activeSuggestionQuery,
 	type ComposerSuggestion,
+	type MentionTab,
 } from "@/components/chat/chat-composer-suggestions";
 
 const MAX_ROWS = 12;
+const SESSION_QUERY_META = {
+	kind: "session",
+	titleKey: "chat.sessionSuggestion",
+} as const;
 
 export type ChatComposerInputOptions = {
 	value: string;
+	submissionText?: string;
+	onHistoryValue?: (value: string) => void;
+	onSessionSelect?: (suggestion: ComposerSuggestion, text: string) => void;
 	onChange: (value: string) => void;
 	attachments: readonly ChatImageAttachment[];
 	selectedModel?: PiModel | null;
@@ -62,6 +72,9 @@ export type ChatComposerInputOptions = {
 
 export function useChatComposerInput({
 	value,
+	submissionText = value,
+	onHistoryValue,
+	onSessionSelect,
 	onChange,
 	attachments,
 	selectedModel = null,
@@ -79,7 +92,16 @@ export function useChatComposerInput({
 }: ChatComposerInputOptions) {
 	const { t } = useTranslation();
 	const { sendMessageShortcut, keyboardShortcuts } = usePreferences();
+	const isTouch = useIsTouchDevice();
+	const newlineOnEnter = !desktopShortcuts && isTouch;
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
+	const suggestionMenuId = useId();
+	const [mentionNavigation, setMentionNavigation] = useState<{
+		historyKey: ChatComposerInputOptions["historyKey"];
+		start: number;
+		tab: MentionTab;
+		categoryFocused: boolean;
+	} | null>(null);
 	const surroundingHeightRef = useRef<number | null>(null);
 	const [sendMode, setSendModeState] =
 		useState<ComposerSendMode>(readComposerSendMode);
@@ -155,7 +177,11 @@ export function useChatComposerInput({
 		const border =
 			Number.parseFloat(styles.borderTopWidth) +
 			Number.parseFloat(styles.borderBottomWidth);
-		const minHeight = Number.parseFloat(styles.minHeight);
+		// Keep the empty row height after typing; scrollHeight rounds fractional line heights.
+		const minHeight = Math.max(
+			Number.parseFloat(styles.minHeight),
+			Math.ceil(textarea.rows * lineHeight + padding + border),
+		);
 		let maxHeight = MAX_ROWS * lineHeight + padding + border;
 		if (panel && composerRegion) {
 			// Reserve the toolbar, attachments, notices and bottom safe-area padding.
@@ -217,13 +243,30 @@ export function useChatComposerInput({
 	);
 	const activeTrigger = activeQuery?.trigger ?? null;
 	const activeSuggestionText = activeQuery?.query ?? "";
+	const activeKey = activeQuery
+		? `${historyKey ?? ""}:${activeQuery.start}:${activeQuery.trigger}:${activeQuery.query}`
+		: null;
+	const mentionTab: MentionTab =
+		activeQuery?.trigger === "@" &&
+		mentionNavigation?.historyKey === historyKey &&
+		mentionNavigation?.start === activeQuery.start
+			? mentionNavigation.tab
+			: "file";
+	const categoryFocused =
+		activeQuery?.trigger === "@" &&
+		(mentionNavigation?.historyKey === historyKey &&
+		mentionNavigation?.start === activeQuery.start
+			? mentionNavigation.categoryFocused
+			: !activeQuery.query);
 	useEffect(() => {
+		// Switching @ categories must not clear or restart the file query.
 		onSuggestionTrigger?.(activeTrigger, activeSuggestionText);
 	}, [activeSuggestionText, activeTrigger, onSuggestionTrigger]);
-	const activeKey = activeQuery
-		? `${activeQuery.start}:${activeQuery.trigger}:${activeQuery.query}`
+	const queryMeta = activeQuery
+		? activeQuery.trigger === "@" && mentionTab === "session"
+			? SESSION_QUERY_META
+			: TRIGGER_META[activeQuery.trigger]
 		: null;
-	const queryMeta = activeQuery ? TRIGGER_META[activeQuery.trigger] : null;
 	const filteredSuggestions = useMemo(() => {
 		if (!activeQuery || !queryMeta) return [];
 		const query = activeQuery.query.toLowerCase();
@@ -232,29 +275,54 @@ export function useChatComposerInput({
 			.filter((suggestion) => suggestion.kind === queryMeta.kind)
 			.filter((suggestion) => {
 				if (!query) return true;
-				return [suggestion.label, suggestion.value, suggestion.detail]
-					.filter(Boolean)
-					.some((part) => part!.toLowerCase().includes(query));
+				return [suggestion.label, suggestion.value, suggestion.detail].some(
+					(part) => part?.toLowerCase().includes(query),
+				);
 			})
 			.slice(0, limit);
 	}, [activeQuery, queryMeta, suggestions]);
 	const suggestionMenuOpen = Boolean(
-		activeQuery &&
-		activeKey !== dismissedQuery &&
-		(activeQuery.trigger !== "@" || filteredSuggestions.length > 0),
+		activeQuery && activeKey !== dismissedQuery && !disabled,
 	);
-	const effectiveHighlightedIndex =
-		filteredSuggestions.length > 0
-			? Math.min(highlightedIndex, filteredSuggestions.length - 1)
+	const effectiveHighlightedIndex = categoryFocused
+		? -1
+		: filteredSuggestions.length > 0
+			? Math.min(
+					mentionNavigation && mentionNavigation.historyKey !== historyKey
+						? 0
+						: highlightedIndex,
+					filteredSuggestions.length - 1,
+				)
 			: 0;
+	const changeMentionTab = (tab: MentionTab) => {
+		if (activeQuery?.trigger !== "@") return;
+		setMentionNavigation({
+			historyKey,
+			start: activeQuery.start,
+			tab,
+			categoryFocused: true,
+		});
+		setHighlightedIndex(0);
+		textareaRef.current?.focus({ preventScroll: true });
+	};
+	const enterCandidates = () => {
+		if (activeQuery?.trigger === "@")
+			setMentionNavigation({
+				historyKey,
+				start: activeQuery.start,
+				tab: mentionTab,
+				categoryFocused: false,
+			});
+	};
 
 	const showFocusHint =
 		desktopShortcuts &&
 		!disabled &&
-		value.length === 0 &&
+		submissionText.length === 0 &&
 		attachments.length === 0;
 
-	const createSubmission = () => createChatSubmission(value, attachments);
+	const createSubmission = () =>
+		createChatSubmission(submissionText, attachments);
 
 	const rememberSubmission = (submission: ChatSubmission) => {
 		if (submission.text) appendChatInputHistory(historyKey, submission.text);
@@ -329,7 +397,8 @@ export function useChatComposerInput({
 	};
 
 	const applyHistoryValue = (nextValue: string) => {
-		onChange(nextValue);
+		(onHistoryValue ?? onChange)(nextValue);
+		setMentionNavigation(null);
 		setCaret(nextValue.length);
 		setHighlightedIndex(0);
 		setDismissedQuery(null);
@@ -362,13 +431,13 @@ export function useChatComposerInput({
 			!isChatInputHistoryCursorValid(
 				historyEntriesRef.current,
 				historyCursorRef.current,
-				value,
+				submissionText,
 			)
 		) {
 			resetHistoryNavigation();
 			return false;
 		}
-		if (!browsingHistory && value.length > 0) return false;
+		if (!browsingHistory && submissionText.length > 0) return false;
 
 		if (!browsingHistory) {
 			if (event.key === "ArrowDown") return false;
@@ -390,11 +459,14 @@ export function useChatComposerInput({
 
 	const selectSuggestion = (suggestion: ComposerSuggestion) => {
 		if (!activeQuery) return;
-		const inserted = `${suggestion.value} `;
+		const inserted =
+			suggestion.kind === "session" ? "" : `${suggestion.value} `;
 		const nextValue = `${value.slice(0, activeQuery.start)}${inserted}${value.slice(activeQuery.end)}`;
 		const nextCaret = activeQuery.start + inserted.length;
 		resetHistoryNavigation();
-		onChange(nextValue);
+		setMentionNavigation(null);
+		if (suggestion.kind === "session") onSessionSelect?.(suggestion, nextValue);
+		else onChange(nextValue);
 		setCaret(nextCaret);
 		setDismissedQuery(
 			`${activeQuery.start}:${activeQuery.trigger}:__selected__`,
@@ -408,6 +480,8 @@ export function useChatComposerInput({
 	};
 
 	const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+		if (newlineOnEnter && event.key === "Enter") return;
+
 		const primaryShortcutModifierMatches =
 			sendMessageShortcut === "enter"
 				? !event.ctrlKey && !event.metaKey
@@ -440,26 +514,48 @@ export function useChatComposerInput({
 				!event.shiftKey &&
 				!event.ctrlKey &&
 				!event.metaKey &&
-				!event.altKey &&
-				filteredSuggestions[effectiveHighlightedIndex]
+				!event.altKey
 			) {
-				event.preventDefault();
-				selectSuggestion(filteredSuggestions[effectiveHighlightedIndex]);
-				return;
+				if (categoryFocused) {
+					event.preventDefault();
+					changeMentionTab(mentionTab === "file" ? "session" : "file");
+					return;
+				}
+				const suggestion = filteredSuggestions[effectiveHighlightedIndex];
+				if (suggestion) {
+					event.preventDefault();
+					selectSuggestion(suggestion);
+					return;
+				}
 			}
 			if (event.key === "ArrowDown" && filteredSuggestions.length > 0) {
 				event.preventDefault();
+				enterCandidates();
 				setHighlightedIndex(
-					(index) => (index + 1) % filteredSuggestions.length,
+					categoryFocused
+						? 0
+						: (effectiveHighlightedIndex + 1) % filteredSuggestions.length,
 				);
+				return;
+			}
+			if (
+				event.key === "ArrowUp" &&
+				activeQuery?.trigger === "@" &&
+				!categoryFocused &&
+				effectiveHighlightedIndex === 0
+			) {
+				event.preventDefault();
+				changeMentionTab(mentionTab);
 				return;
 			}
 			if (event.key === "ArrowUp" && filteredSuggestions.length > 0) {
 				event.preventDefault();
+				enterCandidates();
 				setHighlightedIndex(
-					(index) =>
-						(index - 1 + filteredSuggestions.length) %
-						filteredSuggestions.length,
+					categoryFocused
+						? filteredSuggestions.length - 1
+						: (effectiveHighlightedIndex - 1 + filteredSuggestions.length) %
+								filteredSuggestions.length,
 				);
 				return;
 			}
@@ -468,13 +564,14 @@ export function useChatComposerInput({
 				setDismissedQuery(activeKey);
 				return;
 			}
-			if (
-				event.key === "Enter" &&
-				filteredSuggestions[effectiveHighlightedIndex]
-			) {
-				event.preventDefault();
-				selectSuggestion(filteredSuggestions[effectiveHighlightedIndex]);
-				return;
+			if (event.key === "Enter") {
+				const suggestion =
+					filteredSuggestions[categoryFocused ? 0 : effectiveHighlightedIndex];
+				if (suggestion) {
+					event.preventDefault();
+					selectSuggestion(suggestion);
+					return;
+				}
 			}
 		}
 
@@ -505,19 +602,42 @@ export function useChatComposerInput({
 		sendingNow,
 		canSubmit: Boolean(running ? runningSubmit : onSubmit),
 		textareaRef,
+		newlineOnEnter,
 		showFocusHint,
 		suggestionMenuOpen,
 		activeQuery,
 		queryMeta,
 		filteredSuggestions,
 		effectiveHighlightedIndex,
-		setHighlightedIndex,
+		suggestionMenuId,
+		mentionTab,
+		categoryFocused,
+		changeMentionTab,
+		highlightSuggestion: (index: number) => {
+			enterCandidates();
+			setHighlightedIndex(index);
+		},
 		selectSuggestion,
 		handleKeyDown,
 		syncCaret,
 		submit,
 		onFieldChange: (nextValue: string, nextCaret: number) => {
 			resetHistoryNavigation();
+			const query = activeSuggestionQuery(nextValue, nextCaret);
+			setMentionNavigation(
+				query?.trigger === "@"
+					? {
+							historyKey,
+							start: query.start,
+							tab:
+								activeQuery?.trigger === "@" &&
+								activeQuery.start === query.start
+									? mentionTab
+									: "file",
+							categoryFocused: !query.query,
+						}
+					: null,
+			);
 			onChange(nextValue);
 			setCaret(nextCaret);
 			setHighlightedIndex(0);

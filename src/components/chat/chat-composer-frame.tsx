@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -30,11 +30,24 @@ export const CHAT_COMPOSER_SEND_BUTTON_CLASS_NAME = cn(
 export function ChatComposerRoot({
 	children,
 	className,
+	elementRef,
 }: {
 	children: ReactNode;
 	className?: string;
+	elementRef?: Ref<HTMLDivElement>;
 }) {
-	return <div className={cn("relative w-full", className)}>{children}</div>;
+	return (
+		<div
+			ref={elementRef}
+			data-session-mention-target=""
+			className={cn(
+				"relative w-full rounded-xl data-[session-drop-state=allowed]:ring-2 data-[session-drop-state=allowed]:ring-ring data-[session-drop-state=denied]:ring-2 data-[session-drop-state=denied]:ring-destructive",
+				className,
+			)}
+		>
+			{children}
+		</div>
+	);
 }
 
 export function ChatComposerSurface({

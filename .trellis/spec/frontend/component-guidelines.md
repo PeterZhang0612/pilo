@@ -150,3 +150,51 @@ actions go there and appear only for persisted sessions (`session && !session.te
 
 - User-facing strings are Simplified Chinese (`"复制"`, `"重试"`, …), matching the
   existing UI. Keep code identifiers and comments in English.
+
+## Session Path References
+
+- `SessionMentionProvider` derives the catalog from the existing project/session
+  index. `SessionMentionScope` filters by exact `connection.id`, not transport
+  type; same-connection cross-project references are allowed. The lazy-loading
+  `ChatPageLoadingFallback` also needs the session connection scope so its enabled
+  composer and first-message preview resolve the same references as `ChatPage`.
+- `readSessionMentionDraft` / `writeSessionMentionDraft` in
+  `src/lib/session-mentions.ts` keep references as trailing `@path` lines in the
+  ordinary draft/submission string. Do not read or inject conversation content,
+  add a second conversation store, or serialize titles instead of paths.
+- Keep the native textarea for body editing. Composer references use compact
+  `SessionMentionBadge` chips (icon + title) in the same wrapping row before the
+  textarea, not a separate attachment row. The default badge remains unchanged
+  for live/history user messages and Skill instructions. Unknown/deleted paths
+  remain visible as ordinary text.
+- Textarea autosizing keeps a whole-pixel minimum from `rows × lineHeight` plus
+  padding/borders for both empty and non-empty text. Integer `scrollHeight` must
+  not shrink that minimum on the first character and shift the inline chips.
+- With a collapsed caret at body offset 0, Backspace removes the last reference
+  atomically; elsewhere, text deletion and selection stay native. Handle mobile
+  `beforeinput` / `deleteContentBackward` as well as keyboard Backspace, without
+  intercepting IME composition or allowing changes while the composer is disabled.
+- Composer suggestion/caret operations use visible body text; submission creation,
+  input-history cursor validation, queues and recovery must use the full string.
+  Append reference lines after the body so slash commands retain their prefix.
+  `createChatSubmission` in `src/lib/chat-submission.ts` ensures an ASCII space
+  separates a slash-command name from following text: Pi splits Skill/extension
+  names on a literal space, not arbitrary whitespace. Submit `/skill:foo` plus a
+  reference as `/skill:foo \n@path`, not `/skill:foo\n@path`. Do this only at
+  submission creation, never during draft editing (which would move the caret).
+  Preserve existing spaces, bare commands and ordinary messages; keep multiline
+  instructions intact and add the command separator before their first newline.
+- A new `@` starts on the file category. Tab cycles categories without entering
+  results; typing or Down enters results, where Tab/Enter completes. Up from the
+  first result returns to categories. Empty results must not swallow submission
+  of uncatalogued slash commands or ordinary text.
+- Switching `@` categories changes filtering only: keep the file trigger/query
+  active so existing and in-flight results survive without clearing or refetching.
+  Reuse the panel DOM; list height follows its contents with a viewport-bounded
+  maximum, not a fixed height. Show the Tab-switch hint beside the categories
+  only while category navigation is active; in results, Tab completes instead.
+- Only the desktop provider enables pointer dragging. Recheck connection and
+  catalog membership on insertion; never enable native HTML5 dragging or touch
+  drag on the WebUI. Keep existing project sorting and row action buttons intact.
+- Mobile uses clickable categories/results, 44px coarse-pointer targets, a
+  viewport-bounded results list, and a tappable path popover rather than hover.

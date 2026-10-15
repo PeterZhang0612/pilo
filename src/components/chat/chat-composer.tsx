@@ -1,8 +1,25 @@
-import type { CSSProperties } from "react";
+import {
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	type CSSProperties,
+} from "react";
 import { isImeComposingKeyboardEvent } from "@/lib/ime";
 import { useTranslation } from "react-i18next";
 import { Plus, X } from "lucide-react";
 
+import { SessionMentionBadge } from "@/components/chat/session-mention-badge";
+import {
+	useSessionMentions,
+	useSessionMentionDrag,
+} from "@/components/chat/session-mention-context";
+import {
+	readSessionMentionDraft,
+	writeSessionMentionDraft,
+	sessionMentionValue,
+	type SessionMention,
+} from "@/lib/session-mentions";
 import { ChatImageThumbnail } from "@/components/chat/chat-image-viewer";
 
 import { formatKeyboardShortcut } from "@/lib/keyboard-shortcuts";
@@ -145,6 +162,44 @@ export function ChatComposer({
 }: ChatComposerProps) {
 	const { t } = useTranslation();
 	const composerPlaceholder = placeholder ?? t("chat.composerPlaceholder");
+	const rootRef = useRef<HTMLDivElement>(null);
+	const { mentions, byValue, connectionId } = useSessionMentions();
+	const mentionDrag = useSessionMentionDrag();
+	const mentionDraft = useMemo(
+		() => readSessionMentionDraft(value, byValue),
+		[value, byValue],
+	);
+	const allSuggestions = useMemo(
+		() => [
+			...suggestions,
+			...[...mentions]
+				// oxlint-disable-next-line unicorn/no-array-sort -- Sort a local clone; the app targets ES2020.
+				.sort((a, b) => b.updatedAt - a.updatedAt)
+				.map((mention): ComposerSuggestion => ({
+					kind: "session",
+					value: sessionMentionValue(mention.path),
+					label: mention.title,
+					detail: mention.projectName,
+				})),
+		],
+		[suggestions, mentions],
+	);
+	const addSessionMention = useCallback(
+		(mention: SessionMention, text = mentionDraft.text) => {
+			// Recheck the current scope at insertion, including drops after a project switch.
+			if (
+				mention.connectionId !== connectionId ||
+				!byValue.has(sessionMentionValue(mention.path))
+			)
+				return;
+			onNextPromptDismiss?.();
+			onChange(
+				writeSessionMentionDraft([...mentionDraft.references, mention], text),
+			);
+		},
+		[mentionDraft, connectionId, byValue, onChange, onNextPromptDismiss],
+	);
+
 	const {
 		keyboardShortcuts,
 		sendMessageShortcut,
@@ -159,21 +214,33 @@ export function ChatComposer({
 		sendingNow,
 		canSubmit,
 		textareaRef,
+		newlineOnEnter,
 		showFocusHint,
 		suggestionMenuOpen,
 		activeQuery,
 		queryMeta,
 		filteredSuggestions,
 		effectiveHighlightedIndex,
-		setHighlightedIndex,
+		suggestionMenuId,
+		mentionTab,
+		categoryFocused,
+		changeMentionTab,
+		highlightSuggestion,
 		selectSuggestion,
 		handleKeyDown,
 		syncCaret,
 		submit,
 		onFieldChange,
 	} = useChatComposerInput({
-		value,
-		onChange,
+		value: mentionDraft.text,
+		submissionText: value,
+		onHistoryValue: onChange,
+		onChange: (text) =>
+			onChange(writeSessionMentionDraft(mentionDraft.references, text)),
+		onSessionSelect: (suggestion, text) => {
+			const mention = byValue.get(suggestion.value);
+			if (mention) addSessionMention(mention, text);
+		},
 		attachments,
 		selectedModel,
 		disabled,
@@ -183,11 +250,66 @@ export function ChatComposer({
 		onSteer,
 		onFollowUp,
 		onSendNow,
-		suggestions,
+		suggestions: allSuggestions,
 		onSuggestionTrigger,
 		historyKey,
 		desktopShortcuts,
 	});
+
+	const removeLastSessionMention = useCallback(
+		(textarea: HTMLTextAreaElement) => {
+			if (
+				disabled ||
+				sendingNow ||
+				textarea.selectionStart !== 0 ||
+				textarea.selectionEnd !== 0 ||
+				mentionDraft.references.length === 0
+			)
+				return false;
+			onNextPromptDismiss?.();
+			onChange(
+				writeSessionMentionDraft(
+					mentionDraft.references.slice(0, -1),
+					mentionDraft.text,
+				),
+			);
+			return true;
+		},
+		[disabled, sendingNow, mentionDraft, onChange, onNextPromptDismiss],
+	);
+
+	useEffect(() => {
+		const textarea = textareaRef.current;
+		if (!textarea) return;
+		// Mobile keyboards can emit beforeinput without a Backspace keydown.
+		const handleBeforeInput = (event: InputEvent) => {
+			if (event.inputType !== "deleteContentBackward" || event.isComposing)
+				return;
+			if (removeLastSessionMention(textarea)) event.preventDefault();
+		};
+		textarea.addEventListener("beforeinput", handleBeforeInput);
+		return () => textarea.removeEventListener("beforeinput", handleBeforeInput);
+	}, [textareaRef, removeLastSessionMention]);
+
+	useEffect(() => {
+		const element = rootRef.current;
+		if (!element || !mentionDrag || !connectionId || disabled || sendingNow)
+			return;
+		return mentionDrag.register(element, {
+			connectionId,
+			insert: (mention) => {
+				addSessionMention(mention);
+				textareaRef.current?.focus({ preventScroll: true });
+			},
+		});
+	}, [
+		mentionDrag,
+		connectionId,
+		disabled,
+		sendingNow,
+		addSessionMention,
+		textareaRef,
+	]);
 
 	const ghostText =
 		!value &&
@@ -206,14 +328,18 @@ export function ChatComposer({
 	};
 
 	return (
-		<ChatComposerRoot className={className}>
+		<ChatComposerRoot className={className} elementRef={rootRef}>
 			{suggestionMenuOpen && activeQuery && queryMeta ? (
 				<ComposerSuggestionMenu
+					menuId={suggestionMenuId}
+					mentionTab={mentionTab}
+					categoryFocused={categoryFocused}
+					onMentionTabChange={changeMentionTab}
 					activeQuery={activeQuery}
 					title={t(queryMeta.titleKey)}
 					suggestions={filteredSuggestions}
 					highlightedIndex={effectiveHighlightedIndex}
-					onHighlight={setHighlightedIndex}
+					onHighlight={highlightSuggestion}
 					onSelect={selectSuggestion}
 				/>
 			) : null}
@@ -289,69 +415,107 @@ export function ChatComposer({
 					</div>
 				) : null}
 
-				<Textarea
-					data-chat-composer-input=""
-					ref={textareaRef}
-					// 移动端软键盘的回车键文案与实际行为一致（Enter 发送时显示“发送”）
-					enterKeyHint={sendMessageShortcut === "enter" ? "send" : "enter"}
-					value={value}
-					onChange={(event) => {
-						onNextPromptDismiss?.();
-						onFieldChange(
-							event.target.value,
-							event.target.selectionStart ?? event.target.value.length,
-						);
-					}}
-					onSelect={syncCaret}
-					onClick={syncCaret}
-					onKeyUp={syncCaret}
-					onKeyDown={(event) => {
-						if (!suggestionMenuOpen && !isImeComposingKeyboardEvent(event)) {
-							// Esc also invalidates a prediction that has not returned yet.
-							if (event.key === "Escape") onNextPromptDismiss?.();
+				<div className="flex max-h-[min(24rem,40dvh)] min-w-0 flex-wrap items-start gap-x-1.5 gap-y-1 overflow-y-auto overscroll-contain px-1">
+					{mentionDraft.references.map((mention) => (
+						<SessionMentionBadge key={mention.path} mention={mention} compact />
+					))}
+					<Textarea
+						data-chat-composer-input=""
+						ref={textareaRef}
+						enterKeyHint={
+							!newlineOnEnter && sendMessageShortcut === "enter"
+								? "send"
+								: "enter"
 						}
-						if (
-							ghostText &&
-							!suggestionMenuOpen &&
-							!isImeComposingKeyboardEvent(event)
-						) {
+						value={mentionDraft.text}
+						// oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- A multiline native textarea needs combobox semantics for the shared suggestion list.
+						role="combobox"
+						aria-autocomplete="list"
+						aria-expanded={suggestionMenuOpen}
+						aria-controls={suggestionMenuOpen ? suggestionMenuId : undefined}
+						aria-activedescendant={
+							suggestionMenuOpen &&
+							effectiveHighlightedIndex >= 0 &&
+							filteredSuggestions.length > 0
+								? `${suggestionMenuId}-${effectiveHighlightedIndex}`
+								: undefined
+						}
+						onChange={(event) => {
+							onNextPromptDismiss?.();
+							onFieldChange(
+								event.target.value,
+								event.target.selectionStart ?? event.target.value.length,
+							);
+						}}
+						onSelect={syncCaret}
+						onClick={syncCaret}
+						onKeyUp={syncCaret}
+						onKeyDown={(event) => {
 							if (
-								event.key === "Tab" &&
-								!event.shiftKey &&
+								event.key === "Backspace" &&
 								!event.ctrlKey &&
 								!event.metaKey &&
-								!event.altKey
+								!event.altKey &&
+								!isImeComposingKeyboardEvent(event) &&
+								removeLastSessionMention(event.currentTarget)
 							) {
 								event.preventDefault();
-								adoptNextPrompt();
 								return;
 							}
-							if (event.key === "Escape") {
-								event.preventDefault();
-								return;
+							if (!suggestionMenuOpen && !isImeComposingKeyboardEvent(event)) {
+								// Esc also invalidates a prediction that has not returned yet.
+								if (event.key === "Escape") onNextPromptDismiss?.();
 							}
+							if (
+								ghostText &&
+								!suggestionMenuOpen &&
+								!isImeComposingKeyboardEvent(event)
+							) {
+								if (
+									event.key === "Tab" &&
+									!event.shiftKey &&
+									!event.ctrlKey &&
+									!event.metaKey &&
+									!event.altKey
+								) {
+									event.preventDefault();
+									adoptNextPrompt();
+									return;
+								}
+								if (event.key === "Escape") {
+									event.preventDefault();
+									return;
+								}
+							}
+							handleKeyDown(event);
+						}}
+						onPaste={(event) => {
+							onNextPromptDismiss?.();
+							handlePaste(event);
+						}}
+						disabled={disabled || sendingNow}
+						rows={2}
+						style={
+							{
+								"--pilo-reading-font-size": `${readingFontSize}px`,
+								fontFamily: `var(--pilo-mobile-font-family, ${getPageFontFamilyStack(readingFontFamily)})`,
+							} as CSSProperties
 						}
-						handleKeyDown(event);
-					}}
-					onPaste={(event) => {
-						onNextPromptDismiss?.();
-						handlePaste(event);
-					}}
-					disabled={disabled || sendingNow}
-					rows={2}
-					style={
-						{
-							"--pilo-reading-font-size": `${readingFontSize}px`,
-							fontFamily: `var(--pilo-mobile-font-family, ${getPageFontFamilyStack(readingFontFamily)})`,
-						} as CSSProperties
-					}
-					aria-label={composerPlaceholder}
-					placeholder={ghostText || composerPlaceholder}
-					className={cn(
-						CHAT_COMPOSER_TEXTAREA_CLASS_NAME,
-						ghostText ? "pr-20" : showFocusHint && "pr-16",
-					)}
-				/>
+						aria-label={composerPlaceholder}
+						placeholder={
+							ghostText ||
+							(mentionDraft.references.length === 0
+								? composerPlaceholder
+								: undefined)
+						}
+						className={cn(
+							CHAT_COMPOSER_TEXTAREA_CLASS_NAME,
+							"w-auto min-w-0 flex-1 basis-32 px-0",
+							mentionDraft.references.length > 0 && "pointer-coarse:pt-2",
+							ghostText ? "pr-20" : showFocusHint && "pr-16",
+						)}
+					/>
+				</div>
 
 				{ghostText ? (
 					<Button
@@ -414,6 +578,7 @@ export function ChatComposer({
 								variant="ghost"
 								size="icon"
 								className={CHAT_COMPOSER_ATTACHMENT_BUTTON_CLASS_NAME}
+								data-chat-composer-attachment=""
 								aria-label={t("chat.addAttachment")}
 								onClick={() => {
 									onNextPromptDismiss?.();

@@ -522,6 +522,13 @@ const enUS = {
 		no: "No",
 		ok: "OK",
 		fileSuggestion: "File",
+		sessionSuggestion: "Session",
+		mentionCategories: "Reference type",
+		mentionTabSwitchHint: "Switch tabs",
+		sessionMentionPath: "View path for session “{{title}}”",
+		removeSessionMention: "Remove session reference “{{title}}”",
+		sessionMentionConnectionMismatch:
+			"Only sessions in the same connection can be referenced",
 		piCommandSuggestion: "Pi command",
 		newSessionDetail: "New session",
 		compactContextDetail: "Compact current context",

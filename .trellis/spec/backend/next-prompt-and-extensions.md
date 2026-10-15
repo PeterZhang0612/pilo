@@ -140,10 +140,11 @@ share `useNextPrompt`, `useNextPromptSettings`, settings fields and `ChatCompose
   Other keyboard behavior is preserved; point/touch adoption only fills the draft.
 - Shared settings fields use cached Host catalogs, preserve unknown configured
   identities, and do not spawn a model probe. Desktop has a Connection settings
-  tab; both ends expose the shared session-header settings popover (the
-  unavailable hint lives inside it). Neither composer
-  displays a prediction settings icon. Use coarse-pointer 44px targets and the
-  existing viewport/safe-area layout.
+  tab; desktop and wide WebUI expose the shared session-header settings popover
+  (the unavailable hint lives inside it). Narrow WebUI (`isNarrow`, below 1024px)
+  does not mount this button or popover; prediction and adoption remain unchanged.
+  Neither composer displays a prediction settings icon. Use coarse-pointer 44px
+  targets and the existing viewport/safe-area layout.
 
 ### Fixed deployment
 
