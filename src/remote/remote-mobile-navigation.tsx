@@ -1,15 +1,7 @@
 import { useMemo, useState } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useTranslation } from "react-i18next";
-import {
-	Clock,
-	Folder,
-	Search,
-	SquarePen,
-	Wifi,
-	WifiOff,
-	X,
-} from "lucide-react";
+import { Search, SquarePen, Wifi, WifiOff, X } from "lucide-react";
 
 import {
 	CommandPalette,
@@ -163,16 +155,16 @@ export function RemoteMobileNavigation({
 	return (
 		<DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
 			<DialogPrimitive.Portal>
-				<DialogPrimitive.Overlay className="fixed inset-0 z-[var(--z-dialog-overlay)] bg-black/40 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 motion-reduce:animate-none" />
+				<DialogPrimitive.Overlay className="fixed inset-0 z-[var(--z-dialog-overlay)] bg-black/40 duration-[var(--dur-2)] ease-out data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 motion-reduce:animate-none" />
 				<DialogPrimitive.Content
 					className={cn(
-						// 固定宽度：移动端不提供拖拽调宽，也不必复用桌面侧栏的宽度状态。
-						"fixed inset-y-0 left-0 z-[var(--z-dialog)] flex w-[min(90vw,22rem)] flex-col overflow-hidden rounded-r-xl",
+						// Reserve at least 64px of backdrop for an easy outside-tap dismissal.
+						"fixed inset-y-0 left-0 z-[var(--z-dialog)] flex w-[min(20rem,calc(100vw-4rem))] flex-col overflow-hidden rounded-r-xl",
 						"border-r border-sidebar-border/60 bg-sidebar text-sidebar-foreground shadow-popover outline-none",
 						"pb-[max(0.5rem,env(safe-area-inset-bottom))] pl-[env(safe-area-inset-left)] pt-[env(safe-area-inset-top)]",
 						"[&_button]:touch-manipulation [&_button]:outline-none [&_button:focus-visible]:ring-2 [&_button:focus-visible]:ring-inset [&_button:focus-visible]:ring-sidebar-ring",
-						"data-[state=open]:animate-in data-[state=open]:slide-in-from-left-full data-[state=open]:duration-300",
-						"data-[state=closed]:animate-out data-[state=closed]:slide-out-to-left-full data-[state=closed]:duration-200 motion-reduce:animate-none",
+						"duration-[var(--dur-2)] ease-out data-[state=open]:animate-in data-[state=open]:slide-in-from-left-full",
+						"data-[state=closed]:animate-out data-[state=closed]:slide-out-to-left-full motion-reduce:animate-none",
 					)}
 				>
 					<DialogPrimitive.Title className="sr-only">
@@ -182,7 +174,7 @@ export function RemoteMobileNavigation({
 						{t("common.sessions")}
 					</DialogPrimitive.Description>
 
-					<header className="flex h-14 shrink-0 items-center px-3">
+					<header className="flex h-14 shrink-0 items-center pl-5 pr-3">
 						<span className="min-w-0 flex-1 truncate text-lg font-semibold tracking-tight">
 							Pilo
 						</span>
@@ -206,22 +198,26 @@ export function RemoteMobileNavigation({
 						</DialogPrimitive.Close>
 					</header>
 
-					<div className="flex shrink-0 items-center gap-2 px-4 pb-2">
+					<div className="flex shrink-0 items-center px-3 pb-2">
 						<button
 							type="button"
-							className="flex min-h-11 min-w-0 flex-1 items-center gap-2.5 rounded-lg px-3 text-left text-sm text-sidebar-foreground transition-colors active:bg-sidebar-hover motion-reduce:transition-none dark:text-sidebar-foreground/75"
+							className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left text-sm text-sidebar-foreground transition-colors duration-[var(--dur-1)] ease-[var(--ease)] hover:bg-sidebar-hover active:bg-sidebar-hover motion-reduce:transition-none"
 							onClick={() => handleNewChat(activeProjectId ?? undefined)}
 						>
-							<SquarePen className="size-4 shrink-0" aria-hidden="true" />
+							<SquarePen
+								className="size-4 shrink-0"
+								strokeWidth={1.5}
+								aria-hidden="true"
+							/>
 							<span className="truncate">{t("sidebar.newSession")}</span>
 						</button>
 					</div>
 
-					<div className="relative mx-4 mb-3 grid shrink-0 grid-cols-2 rounded-lg bg-sidebar-hover/60 p-1">
+					<div className="relative mx-3 mb-3 grid shrink-0 grid-cols-2 rounded-lg bg-sidebar-hover/60 p-1">
 						<span
 							aria-hidden="true"
 							className={cn(
-								"pointer-events-none absolute inset-y-1 left-1 w-[calc(50%-0.25rem)] rounded-md bg-sidebar transition-transform duration-200 ease-out motion-reduce:transition-none",
+								"pointer-events-none absolute inset-y-1 left-1 w-[calc(50%-0.25rem)] rounded-md bg-sidebar transition-transform duration-[var(--dur-1)] ease-[var(--ease)] motion-reduce:transition-none",
 								mode === "recent" && "translate-x-full",
 							)}
 						/>
@@ -236,24 +232,13 @@ export function RemoteMobileNavigation({
 								type="button"
 								aria-pressed={mode === option.value}
 								className={cn(
-									"relative flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-md px-2 text-sm font-medium transition-colors motion-reduce:transition-none",
+									"relative flex min-h-11 min-w-0 items-center justify-center rounded-md px-2 text-sm font-medium transition-colors duration-[var(--dur-1)] ease-[var(--ease)] motion-reduce:transition-none",
 									mode === option.value
 										? "text-sidebar-foreground"
 										: "text-sidebar-foreground-muted active:text-sidebar-foreground",
 								)}
 								onClick={() => setMode(option.value)}
 							>
-								{option.value === "projects" ? (
-									<Folder
-										className="hidden size-3.5 shrink-0 min-[360px]:block"
-										aria-hidden="true"
-									/>
-								) : (
-									<Clock
-										className="hidden size-3.5 shrink-0 min-[360px]:block"
-										aria-hidden="true"
-									/>
-								)}
 								<span className="min-w-0 text-balance leading-4">
 									{option.label}
 								</span>
@@ -356,7 +341,7 @@ export function RemoteMobileNavigation({
 															/>
 															{projectExpanded ? (
 																projectSessions.length === 0 ? (
-																	<p className="px-3 py-4 text-sm text-sidebar-foreground-muted">
+																	<p className="pl-8 pr-2 py-4 text-sm text-sidebar-foreground-muted">
 																		{t("sidebar.noSessions")}
 																	</p>
 																) : (
@@ -445,15 +430,17 @@ export function RemoteMobileNavigation({
 						)}
 					</div>
 
-					<footer className="mx-4 flex min-h-14 shrink-0 items-center gap-2.5 border-t border-sidebar-border/60 pt-1">
+					<footer className="mx-3 flex min-h-14 shrink-0 items-center gap-2 border-t border-sidebar-border/60 px-2 pt-1">
 						{connectionState === "connected" ? (
 							<Wifi
 								className="size-4 shrink-0 text-sidebar-foreground-muted"
+								strokeWidth={1.5}
 								aria-hidden="true"
 							/>
 						) : (
 							<WifiOff
 								className="size-4 shrink-0 text-sidebar-foreground-muted"
+								strokeWidth={1.5}
 								aria-hidden="true"
 							/>
 						)}

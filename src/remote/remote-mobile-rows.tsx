@@ -12,7 +12,7 @@ import { ActivityDot, Button, Spinner } from "@/ui";
 
 /** 触摸端行内按钮：始终可见，且命中区不小于 44×44。 */
 export const ROW_ACTION_CLASS =
-	"flex size-11 shrink-0 items-center justify-center rounded-lg text-sidebar-foreground-muted transition-colors active:bg-sidebar-hover active:text-sidebar-foreground motion-reduce:transition-none";
+	"flex size-11 shrink-0 items-center justify-center rounded-md text-sidebar-foreground-muted transition-colors duration-[var(--dur-1)] ease-[var(--ease)] hover:bg-sidebar-hover hover:text-sidebar-foreground active:bg-sidebar-hover active:text-sidebar-foreground motion-reduce:transition-none";
 
 export function MobileSessionRow({
 	session,
@@ -63,12 +63,12 @@ export function MobileSessionRow({
 		return (
 			<div
 				className={cn(
-					"flex min-h-11 w-full min-w-0 items-center gap-2 rounded-md bg-sidebar pl-3 pr-1",
+					"flex min-h-11 w-full min-w-0 items-center gap-2 rounded-md bg-sidebar pl-2 pr-1",
 					projectName && "min-h-14",
 					selected && "ring-1 ring-inset ring-sidebar-foreground/10",
 				)}
 			>
-				<span className="flex h-5 w-2 shrink-0 items-center justify-center">
+				<span className="flex h-5 w-4 shrink-0 items-center justify-center">
 					{!session.active && session.unread ? (
 						<span
 							aria-hidden="true"
@@ -81,7 +81,7 @@ export function MobileSessionRow({
 						"min-w-0 flex-1 truncate text-sm",
 						selected
 							? "text-sidebar-selection-foreground"
-							: "text-sidebar-foreground dark:text-sidebar-foreground/75",
+							: "text-sidebar-foreground",
 					)}
 					title={session.title}
 				>
@@ -114,7 +114,7 @@ export function MobileSessionRow({
 	return (
 		<div
 			className={cn(
-				"flex min-w-0 items-center rounded-md transition-colors motion-reduce:transition-none",
+				"flex min-w-0 items-center rounded-md transition-colors duration-[var(--dur-1)] ease-[var(--ease)] motion-reduce:transition-none",
 				selected &&
 					"bg-sidebar-foreground/10 ring-1 ring-inset ring-sidebar-foreground/10",
 			)}
@@ -126,11 +126,11 @@ export function MobileSessionRow({
 				aria-current={selected ? "page" : undefined}
 				className={cn(
 					// 长按删除与 iOS 的文字选择/长按弹窗冲突，一并关掉。
-					"flex min-h-11 min-w-0 flex-1 touch-manipulation select-none gap-2 rounded-md px-3 py-2 text-left transition-colors active:bg-sidebar-hover motion-reduce:transition-none [-webkit-touch-callout:none]",
+					"flex min-h-11 min-w-0 flex-1 touch-manipulation select-none gap-2 rounded-md px-2 py-2 text-left transition-colors duration-[var(--dur-1)] ease-[var(--ease)] hover:bg-sidebar-hover active:bg-sidebar-hover motion-reduce:transition-none [-webkit-touch-callout:none]",
 					projectName ? "items-start" : "items-center",
 					selected
 						? "text-sidebar-selection-foreground"
-						: "text-sidebar-foreground dark:text-sidebar-foreground/75",
+						: "text-sidebar-foreground",
 				)}
 				onClick={() => {
 					if (firedRef.current) {
@@ -179,7 +179,7 @@ export function MobileSessionRow({
 					firedRef.current = false;
 				}}
 			>
-				<span className="flex h-5 w-2 shrink-0 items-center justify-center">
+				<span className="flex h-5 w-4 shrink-0 items-center justify-center">
 					{!session.active && session.unread ? (
 						<span
 							aria-hidden="true"
@@ -208,7 +208,7 @@ export function MobileSessionRow({
 					) : null}
 				</span>
 				{/* 保留右侧运行状态槽，避免状态变化时标题宽度跳动。 */}
-				<span className="-mr-3 flex h-5 w-11 shrink-0 items-center justify-center">
+				<span className="flex h-5 w-4 shrink-0 items-center justify-center">
 					{session.active ? (
 						<ActivityDot className="text-sidebar-primary -translate-y-px" />
 					) : null}
@@ -247,7 +247,7 @@ export function MobileProjectRow({
 			<button
 				type="button"
 				aria-expanded={expanded}
-				className="flex min-h-11 min-w-0 flex-1 items-center gap-2.5 rounded-md px-3 text-left transition-colors active:bg-sidebar-hover motion-reduce:transition-none"
+				className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left transition-colors duration-[var(--dur-1)] ease-[var(--ease)] hover:bg-sidebar-hover active:bg-sidebar-hover motion-reduce:transition-none"
 				onClick={onToggle}
 			>
 				<Folder
@@ -270,11 +270,11 @@ export function MobileProjectRow({
 						{sessionCount}
 					</span>
 				) : null}
-				<span className="-mr-3 flex h-5 w-11 shrink-0 items-center justify-center">
+				<span className="flex h-5 w-4 shrink-0 items-center justify-center">
 					<ChevronDown
 						aria-hidden="true"
 						className={cn(
-							"size-3.5 text-sidebar-foreground-muted transition-transform duration-150 ease-out motion-reduce:transition-none",
+							"size-3.5 text-sidebar-foreground-muted transition-transform duration-[var(--dur-1)] ease-[var(--ease)] motion-reduce:transition-none",
 							!expanded && "-rotate-90",
 						)}
 					/>
@@ -305,21 +305,21 @@ export function MobileEnvRow({
 		<button
 			type="button"
 			aria-expanded={expanded}
-			className="flex min-h-11 w-full min-w-0 items-center gap-2 rounded-md px-3 text-left text-sidebar-foreground-muted transition-colors active:bg-sidebar-hover motion-reduce:transition-none"
+			className="flex min-h-11 w-full min-w-0 items-center gap-2 rounded-md px-2 text-left text-sidebar-foreground-muted transition-colors duration-[var(--dur-1)] ease-[var(--ease)] hover:bg-sidebar-hover active:bg-sidebar-hover motion-reduce:transition-none"
 			onClick={onToggle}
 		>
-			<Monitor className="size-3.5 shrink-0 opacity-80" aria-hidden="true" />
+			<Monitor className="size-4 shrink-0" aria-hidden="true" />
 			<span
 				className="min-w-0 flex-1 truncate text-xs font-medium"
 				title={env.name}
 			>
 				{env.name}
 			</span>
-			<span className="-mr-3 flex h-5 w-11 shrink-0 items-center justify-center">
+			<span className="flex h-5 w-4 shrink-0 items-center justify-center">
 				<ChevronDown
 					aria-hidden="true"
 					className={cn(
-						"size-3.5 transition-transform duration-150 ease-out motion-reduce:transition-none",
+						"size-3.5 transition-transform duration-[var(--dur-1)] ease-[var(--ease)] motion-reduce:transition-none",
 						!expanded && "-rotate-90",
 					)}
 				/>
