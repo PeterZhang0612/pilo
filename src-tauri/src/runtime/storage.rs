@@ -206,6 +206,7 @@ mod tests {
         };
         assert!(has_column("default_model_json"));
         assert!(has_column("default_thinking_level"));
+        assert!(has_column("commands_json"));
     }
 
     #[test]
@@ -222,6 +223,7 @@ mod tests {
 
         let cache = ProjectModelCache {
             project_id: "project:local:/code/demo".to_owned(),
+            commands: None,
             models: vec![serde_json::json!({
                 "provider": "pivia",
                 "id": "gpt-5.6-sol",
@@ -240,7 +242,37 @@ mod tests {
         upsert_project_model_cache(&db, &cache).expect("persist model cache");
 
         let snapshots = list_project_model_cache(&db).expect("read model cache");
-        assert_eq!(snapshots, vec![cache]);
+        assert_eq!(snapshots, vec![cache.clone()]);
+
+        let mut with_commands = cache.clone();
+        with_commands.commands = Some(vec![serde_json::json!({
+            "name": "example",
+            "source": "extension"
+        })]);
+        with_commands.refreshed_at_ms += 1;
+        upsert_project_model_cache(&db, &with_commands).expect("persist command catalog");
+        assert_eq!(
+            list_project_model_cache(&db).unwrap(),
+            vec![with_commands.clone()]
+        );
+
+        let mut legacy_client = with_commands.clone();
+        legacy_client.commands = None;
+        legacy_client.refreshed_at_ms += 1;
+        upsert_project_model_cache(&db, &legacy_client)
+            .expect("preserve commands for older client");
+        with_commands.refreshed_at_ms = legacy_client.refreshed_at_ms;
+        assert_eq!(
+            list_project_model_cache(&db).unwrap(),
+            vec![with_commands.clone()]
+        );
+
+        let mut empty_commands = with_commands.clone();
+        empty_commands.commands = Some(Vec::new());
+        empty_commands.refreshed_at_ms += 1;
+        upsert_project_model_cache(&db, &empty_commands).expect("persist empty command catalog");
+        upsert_project_model_cache(&db, &with_commands).expect("ignore older command catalog");
+        assert_eq!(list_project_model_cache(&db).unwrap(), vec![empty_commands]);
 
         remove_project(&db, "project:local:/code/demo").expect("remove project");
         assert!(list_project_model_cache(&db).unwrap().is_empty());

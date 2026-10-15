@@ -562,12 +562,11 @@ function RemoteWorkspace() {
 													void chat.loadDraftCatalog(chat.activeProjectId);
 											}}
 											onModelRefresh={() => {
-												if (chat.hasIdentifiedSession)
-													void chat.refreshAgentConfig(
-														chat.runtimeReady && !chat.readOnly,
+												if (chat.activeProjectId)
+													void chat.loadDraftCatalog(
+														chat.activeProjectId,
+														true,
 													);
-												else if (chat.activeProjectId)
-													void chat.loadDraftCatalog(chat.activeProjectId);
 											}}
 											onModelChange={(model) => {
 												if (model) void chat.changeModel(model);

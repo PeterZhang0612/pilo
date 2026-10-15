@@ -30,8 +30,10 @@ or session JSONL. Both transports use the Host's database.
   Consumers reject lower revisions and stale project/transport requests.
 - Model identity is provider plus model ID. Preserve stored order and explicit
   thinking overrides. Catalog absence never deletes or rejects a stored member.
-- `project_model_cache` remains the unmodified Pi catalog, including scopeOrder,
-  scopeThinkingLevel and its existing refresh timestamp/TTL.
+- `project_model_cache` stores the Pi model and command catalog, including
+  scopeOrder, scopeThinkingLevel and a refresh timestamp for ordering, not TTL.
+  Complete caches are reused until explicit refresh; missing/incomplete caches
+  are probed once on demand (see Project Catalog and Slash Commands below).
 - `getProjectScopeModels` in `src/lib/pi-model-selection.ts` owns the effective
   list. Inheritance orders the Host catalog first, then intersects live available
   identities. Intersecting first could accidentally turn an unavailable Pi Scope
@@ -50,8 +52,9 @@ or session JSONL. Both transports use the Host's database.
 - Desktop keeps the original catalog in React state, updated alongside the all
   models list on hydration, subscription and refresh. Derive Scope from that
   same snapshot, not a separate global-cache read during render. Guard hydration
-  and refresh results against project/session changes. Web keeps Host metadata
-  separate from live availability and tracks whether availability has loaded.
+  and refresh results against project/session changes. Web uses this same cached
+  catalog for availability; live RPC refreshes only session state, thinking levels
+  and statistics, not the model or command directory.
 - Desktop scoped cycling selects in Pilo and uses existing set_model /
   set_thinking_level; Pi owns thinking-level clamping. The all-model shortcut
   keeps its original list/control flow. A singleton already selected is inert.
@@ -67,7 +70,7 @@ or session JSONL. Both transports use the Host's database.
   never by `scope?.projectId`: the first preference response must not remount
   the picker and reset its view, query or focus.
 - All and Scope share loading/error presentation. Every actual catalog refresh,
-  including stale-cache refreshes, reports loading; keep valid existing rows
+  including incomplete-cache refreshes, reports loading; keep valid existing rows
   visible. A missing-metadata message is only appropriate after loading ends.
   Before a refresh disables its button, focus the search input so Radix does
   not dismiss the submenu through focus-outside handling. Refresh updates data
@@ -127,7 +130,7 @@ Add/update/run tests only with explicit user authorization. Assertion points:
   either view keeps the overlay open and retains an existing draft. Check the
   landing page before the first message separately from opened/historical
   sessions: each enabled picker must receive a populated Scope controller.
-- Catalog: stale-cache refresh shows loading in both views; inherited bare
+- Catalog: incomplete-cache refresh shows loading in both views; inherited bare
   metadata stays unresolved; custom Scope works with bare availability; empty
   loaded catalogs remain distinct from missing catalogs; old-project hydration
   cannot replace the current project's snapshot.
@@ -159,3 +162,81 @@ if (event.type === "project_model_scope_changed") {
 }
 if (event.sessionKey !== activeKey) return;
 ```
+
+## Project Catalog and Slash Commands
+
+### 1. Scope / Trigger
+
+Use when changing model/command discovery, cache freshness, composer suggestions
+or catalog refresh in Desktop and WebUI. A session having run previously does
+not mean its Pi process is still running when reopened.
+
+### 2. Signatures
+
+- `ProjectPiModels` / `ProjectModelCache` adds `commands: PiCommand[] | null`.
+- `project_model_cache.commands_json TEXT NULL`; additive migration preserves
+  old caches. `null` means unknown; `[]` means successfully discovered empty.
+- `project_model_cache_set` accepts optional commands alongside model fields.
+- Authenticated `GET /api/v1/models?projectId=...` reads the shared snapshot;
+  `POST /api/v1/models` saves it and assigns the Host timestamp.
+- `WebPiloClient.loadModels(projectId, force = false)` reads cache first and
+  invokes `refreshProjectPiModels(projectId, transport)` only when forced or
+  incomplete. Desktop uses the same refresh function with the Tauri transport.
+
+### 3. Contracts
+
+- One throwaway `noSession` probe reads models and `get_commands` from the same
+  project/Pi environment, preserving the existing extension/RPC model fallback.
+  Remove the probe-only `pilo_model_catalog` command before caching.
+- No catalog TTL, hourly polling, per-draft forced refresh, separate command
+  probe, or per-session command reload. Configuration changes need manual refresh.
+- Desktop landing/opened-session composers and WebUI derive suggestions and
+  extension-name routing from the same project catalog. Passive completion must
+  not start a history session. Executing a known extension still ensures Pi.
+- Web probes reuse the existing event socket, register RPC waiters before send,
+  scope events to their probe session key, wait for the socket before startup,
+  and release timers/listeners/processes on completion or failure.
+- Command query failure retains previous commands (or null if unknown), never
+  turns failure into an authoritative empty list, and does not fail model loading.
+  Cache writes preserve known commands when an older client omits them.
+
+### 4. Validation & Error Matrix
+
+- Complete old timestamp: reuse without probing; timestamp orders updates only.
+- Missing cache/command field/model profile metadata: probe on demand.
+- Command failure: warning and retained commands; retry on a later request when
+  the resulting cache is still incomplete. Persistence failure retains the
+  in-memory snapshot and logs the error.
+- Unknown project on HTTP save: 404. Non-catalog extension, sessionPath or missing
+  noSession on a remote probe: 400. Authentication remains mandatory.
+
+### 5. Good / Base / Bad Cases
+
+- Good: reopen a stopped session on mobile; `/` shows extension and Skill entries
+  from the cache, without sending a command to that stopped runtime.
+- Base: restart/switch drafts with a complete cache; no new Pi probe.
+- Bad: creating a separate landing command process or gating candidates on
+  `runtimeReady` repeats the lifecycle mismatch behind issue #4.
+
+### 6. Verification Required (When Authorized)
+
+Cover NULL/empty command migration and round-trip, retained commands on query
+failure, internal-command exclusion, old complete cache reuse, missing-cache
+deduplication, manual refresh from both clients, RPC correlation and cleanup,
+project switching during refresh, and no new indexed session after a Web probe.
+Implemented assertions live in `tests/pi-models.test.ts` (no age expiry, shared
+probe deduplication, internal-command filtering, retained commands on failure and
+probe cleanup/retry) and `runtime/storage.rs` (migration, NULL/empty commands,
+older-client writes, stale-write rejection and cascade deletion).
+
+WSL verification passed: `pnpm check`, `pnpm test:unit` (186 tests), `pnpm build`,
+`cargo fmt --all --check`, `cargo check --offline`,
+`cargo test --offline --workspace --lib` (134 tests), and
+`cargo clippy --offline --all-targets --all-features -- -D warnings`.
+Windows Desktop and actual mobile-browser end-to-end checks remain unverified.
+
+### 7. Wrong vs Correct
+
+Wrong: `if (!runtimeReady) return` before discovering composer commands, or
+`loadModels(true)` on every draft mount. Correct: derive commands from the project
+catalog and refresh only when missing/incomplete or explicitly requested.

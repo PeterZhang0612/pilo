@@ -254,6 +254,13 @@ export function loadRemoteModels(token: string, projectId: string) {
 	);
 }
 
+export function saveRemoteModels(token: string, snapshot: ProjectPiModels) {
+	return remoteFetch<ProjectPiModels>(token, "/api/v1/models", {
+		method: "POST",
+		body: JSON.stringify(snapshot),
+	});
+}
+
 export function loadRemoteModelScope(token: string, projectId: string) {
 	const query = new URLSearchParams({ projectId });
 	return remoteFetch<ProjectModelScope>(

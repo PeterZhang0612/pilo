@@ -120,7 +120,7 @@ pub fn get_project(db: &SqliteConnection, id: &str) -> Result<Option<Project>, S
 pub fn list_project_model_cache(db: &SqliteConnection) -> Result<Vec<ProjectModelCache>, String> {
     let mut statement = db
         .prepare(
-            "SELECT project_id,models_json,default_model_json,default_thinking_level,refreshed_at_ms FROM project_model_cache ORDER BY refreshed_at_ms DESC",
+            "SELECT project_id,models_json,default_model_json,default_thinking_level,refreshed_at_ms,commands_json FROM project_model_cache ORDER BY refreshed_at_ms DESC",
         )
         .map_err(|error| error.to_string())?;
     let rows = statement
@@ -145,9 +145,22 @@ pub fn list_project_model_cache(db: &SqliteConnection) -> Result<Vec<ProjectMode
                     })
                 })
                 .transpose()?;
+            let commands_json: Option<String> = row.get(5)?;
+            let commands = commands_json
+                .map(|json| {
+                    serde_json::from_str(&json).map_err(|error| {
+                        rusqlite::Error::FromSqlConversionFailure(
+                            5,
+                            rusqlite::types::Type::Text,
+                            Box::new(error),
+                        )
+                    })
+                })
+                .transpose()?;
             Ok(ProjectModelCache {
                 project_id: row.get(0)?,
                 models,
+                commands,
                 default_model,
                 default_thinking_level: row.get(3)?,
                 refreshed_at_ms: row.get::<_, i64>(4)? as u64,
@@ -163,6 +176,12 @@ pub fn upsert_project_model_cache(
     cache: &ProjectModelCache,
 ) -> Result<(), String> {
     let models_json = serde_json::to_string(&cache.models).map_err(|error| error.to_string())?;
+    let commands_json = cache
+        .commands
+        .as_ref()
+        .map(serde_json::to_string)
+        .transpose()
+        .map_err(|error| error.to_string())?;
     let default_model_json = cache
         .default_model
         .as_ref()
@@ -170,15 +189,16 @@ pub fn upsert_project_model_cache(
         .transpose()
         .map_err(|error| error.to_string())?;
     db.execute(
-        "INSERT INTO project_model_cache(project_id,models_json,default_model_json,default_thinking_level,refreshed_at_ms) VALUES(?1,?2,?3,?4,?5)
-         ON CONFLICT(project_id) DO UPDATE SET models_json=excluded.models_json, default_model_json=excluded.default_model_json, default_thinking_level=excluded.default_thinking_level, refreshed_at_ms=excluded.refreshed_at_ms
+        "INSERT INTO project_model_cache(project_id,models_json,default_model_json,default_thinking_level,refreshed_at_ms,commands_json) VALUES(?1,?2,?3,?4,?5,?6)
+         ON CONFLICT(project_id) DO UPDATE SET models_json=excluded.models_json, default_model_json=excluded.default_model_json, default_thinking_level=excluded.default_thinking_level, refreshed_at_ms=excluded.refreshed_at_ms, commands_json=COALESCE(excluded.commands_json,project_model_cache.commands_json)
          WHERE excluded.refreshed_at_ms >= project_model_cache.refreshed_at_ms",
         params![
             cache.project_id,
             models_json,
             default_model_json,
             cache.default_thinking_level,
-            cache.refreshed_at_ms as i64
+            cache.refreshed_at_ms as i64,
+            commands_json
         ],
     )
     .map_err(|error| error.to_string())?;

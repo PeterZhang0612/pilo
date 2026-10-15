@@ -6,7 +6,7 @@ import { createChatSessionClient } from "@/lib/chat-session-client";
 import {
 	getCachedProjectPiModels,
 	hydrateProjectPiModels,
-	isProjectPiModelsStale,
+	isProjectPiModelsIncomplete,
 	refreshProjectPiModels,
 	subscribeProjectPiModels,
 } from "@/lib/pi-models";
@@ -263,7 +263,7 @@ export function useChatSessionConfig({
 				if (profiledSelectedModel) setSelectedModel(profiledSelectedModel);
 				setThinkingLevels([...getPiModelThinkingLevels(profiledSelectedModel)]);
 				setModelLoadState("ready");
-				if (force || !cached || isProjectPiModelsStale(cached)) {
+				if (force || !cached || isProjectPiModelsIncomplete(cached)) {
 					setModelError(null);
 					setModelLoadState("loading");
 					const requestId = ++modelRequestRef.current;
@@ -284,7 +284,7 @@ export function useChatSessionConfig({
 				}
 				return;
 			}
-			if (!force && cached && !isProjectPiModelsStale(cached)) {
+			if (!force && cached && !isProjectPiModelsIncomplete(cached)) {
 				setModelCatalog(cached);
 				setModelOptions(cached.models);
 				if (!session.initialModel && !modelSelectionDirtyRef.current) {
@@ -489,6 +489,7 @@ export function useChatSessionConfig({
 			catalogReady,
 		},
 		sessionState,
+		commands: catalogCurrent ? modelCatalog.commands : null,
 		modelOptions,
 		selectedModel,
 		modelLoadState,

@@ -57,6 +57,7 @@ pub fn project_model_cache_set(
     app: AppHandle,
     project_id: String,
     models: Vec<serde_json::Value>,
+    commands: Option<Vec<serde_json::Value>>,
     default_model: Option<serde_json::Value>,
     default_thinking_level: Option<String>,
     refreshed_at_ms: u64,
@@ -64,6 +65,7 @@ pub fn project_model_cache_set(
     let cache = ProjectModelCache {
         project_id,
         models,
+        commands,
         default_model,
         default_thinking_level,
         refreshed_at_ms,

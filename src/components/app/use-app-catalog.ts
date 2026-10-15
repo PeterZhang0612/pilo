@@ -6,7 +6,7 @@ import { listConnectionCatalog } from "@/lib/connections";
 import {
 	getCachedProjectPiModels,
 	hydrateProjectPiModels,
-	isProjectPiModelsStale,
+	isProjectPiModelsIncomplete,
 	refreshAllProjectPiModels,
 } from "@/lib/pi-models";
 import {
@@ -83,14 +83,14 @@ export function useAppCatalog(
 		const timer = window.setTimeout(() => {
 			void hydrateProjectPiModels()
 				.then(() => {
-					const staleProjectIds = projects
+					const incompleteProjectIds = projects
 						.filter((project) => {
 							const cached = getCachedProjectPiModels(project.id);
-							return !cached || isProjectPiModelsStale(cached);
+							return !cached || isProjectPiModelsIncomplete(cached);
 						})
 						.map((project) => project.id);
-					if (staleProjectIds.length > 0) {
-						void refreshAllProjectPiModels(staleProjectIds);
+					if (incompleteProjectIds.length > 0) {
+						void refreshAllProjectPiModels(incompleteProjectIds);
 					}
 				})
 				.catch((error) =>
@@ -98,17 +98,6 @@ export function useAppCatalog(
 				);
 		}, 15_000);
 		return () => window.clearTimeout(timer);
-	}, [projects]);
-
-	useEffect(() => {
-		if (projects.length === 0) return;
-		const timer = window.setInterval(
-			() => {
-				void refreshAllProjectPiModels(projects.map((project) => project.id));
-			},
-			60 * 60 * 1000,
-		);
-		return () => window.clearInterval(timer);
 	}, [projects]);
 
 	const envs = useMemo(() => {

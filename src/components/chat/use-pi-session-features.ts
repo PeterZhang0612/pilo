@@ -1,17 +1,24 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
 import { i18n } from "../../i18n/index.ts";
 
-import type { ComposerSuggestion } from "@/components/chat/chat-composer";
 import type { PiExtensionNotification } from "@/components/chat/pi-extension-notifications";
 import { createChatSessionClient } from "@/lib/chat-session-client";
+import {
+	getCachedProjectPiModels,
+	refreshProjectPiModels,
+} from "@/lib/pi-models";
 import {
 	createPiCommandSuggestions,
 	createPiExtensionCommandNames,
 } from "@/lib/pi-command-suggestions";
-import { runtimeErrorMessage, type PiloRuntimeEvent } from "@/lib/pi-runtime";
+import {
+	runtimeErrorMessage,
+	type PiCommand,
+	type PiloRuntimeEvent,
+} from "@/lib/pi-runtime";
 
 type ChatSessionClient = ReturnType<typeof createChatSessionClient>;
 
@@ -67,6 +74,7 @@ const EXTENSION_NOTIFICATION_DEDUP_WINDOW_MS = 10_000;
 type UsePiSessionFeaturesOptions = {
 	client: ChatSessionClient;
 	active: boolean;
+	commands: PiCommand[] | null;
 	readOnly?: boolean;
 	projectMcpApprovalPendingRef: { current: boolean };
 	onSetEditorText: (text: string) => void;
@@ -80,6 +88,7 @@ type UsePiSessionFeaturesOptions = {
 export function usePiSessionFeatures({
 	client,
 	active,
+	commands,
 	readOnly = false,
 	projectMcpApprovalPendingRef,
 	onSetEditorText,
@@ -90,14 +99,14 @@ export function usePiSessionFeatures({
 	onProjectMcpDeclined,
 }: UsePiSessionFeaturesOptions) {
 	const { t } = useTranslation();
-	const [commandSuggestions, setCommandSuggestions] = useState<
-		ComposerSuggestion[]
-	>([]);
-	const [extensionCommandNames, setExtensionCommandNames] = useState<
-		Set<string>
-	>(() => new Set());
-	const [commandsLoaded, setCommandsLoaded] = useState(false);
-	const loadingCommandsRef = useRef(false);
+	const commandSuggestions = useMemo(
+		() => createPiCommandSuggestions(commands ?? []),
+		[commands],
+	);
+	const extensionCommandNames = useMemo(
+		() => createPiExtensionCommandNames(commands ?? []),
+		[commands],
+	);
 	const [compacting, setCompacting] = useState(false);
 	const [retryState, setRetryState] = useState<RetryState | null>(null);
 	const [extensionDialogQueue, setExtensionDialogQueue] = useState<
@@ -335,55 +344,32 @@ export function usePiSessionFeatures({
 		};
 	}, [client, handleExtensionRequest, onRefreshSessionState, t]);
 
-	const loadCommands = useCallback(async () => {
-		if (readOnly || commandsLoaded || loadingCommandsRef.current) return;
-		loadingCommandsRef.current = true;
-		try {
-			await client.ensure();
-			const result = await client.getPiCommands();
-			setExtensionCommandNames(createPiExtensionCommandNames(result.commands));
-			setCommandSuggestions(createPiCommandSuggestions(result.commands));
-			setCommandsLoaded(true);
-		} catch (error) {
-			toast.error(t("chat.readCommandsFailed"), {
-				description: runtimeErrorMessage(error),
-			});
-		} finally {
-			loadingCommandsRef.current = false;
-		}
-	}, [client, commandsLoaded, readOnly, t]);
-
 	const tryExecuteExtensionCommand = useCallback(
 		async (message: string) => {
 			if (readOnly) return false;
 			const trimmed = message.trim();
 			if (!trimmed.startsWith("/")) return false;
 			const commandName = trimmed.slice(1).split(/\s+/, 1)[0];
-			let matchedExtension = false;
 			try {
-				await client.ensure();
-				let knownExtensionCommands = extensionCommandNames;
-				if (!commandsLoaded) {
-					const result = await client.getPiCommands();
-					knownExtensionCommands = createPiExtensionCommandNames(
-						result.commands,
-					);
-					setExtensionCommandNames(knownExtensionCommands);
-					setCommandSuggestions(createPiCommandSuggestions(result.commands));
-					setCommandsLoaded(true);
+				let names = extensionCommandNames;
+				if (commands == null) {
+					const available =
+						getCachedProjectPiModels(client.projectId)?.commands ??
+						(await refreshProjectPiModels(client.projectId)).commands;
+					names = createPiExtensionCommandNames(available ?? []);
 				}
-				if (!knownExtensionCommands.has(commandName)) return false;
-				matchedExtension = true;
+				if (!names.has(commandName)) return false;
+				await client.ensure();
 				await client.executePiCommand(trimmed);
 				return true;
 			} catch (error) {
 				toast.error(t("chat.executeExtensionFailed"), {
 					description: runtimeErrorMessage(error),
 				});
-				return matchedExtension;
+				return true;
 			}
 		},
-		[client, commandsLoaded, extensionCommandNames, readOnly, t],
+		[client, commands, extensionCommandNames, readOnly, t],
 	);
 
 	const compact = useCallback(
@@ -491,7 +477,6 @@ export function usePiSessionFeatures({
 
 	return {
 		commandSuggestions,
-		loadCommands,
 		tryExecuteExtensionCommand,
 		compacting,
 		compact,

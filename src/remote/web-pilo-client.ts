@@ -10,9 +10,14 @@ import type {
 	PiloClientHistoryOptions,
 	PiloClientStartChatInput,
 } from "@/lib/pilo-client";
-import type { PiSessionSnapshot } from "@/lib/pi-runtime";
+import type { PiSessionSnapshot, PiloRuntimeEvent } from "@/lib/pi-runtime";
 import type { SessionReadState } from "@/lib/session-read-state";
-import type { ProjectPiModels } from "@/lib/pi-models";
+import {
+	isProjectPiModelsIncomplete,
+	refreshProjectPiModels,
+	type ProjectPiModels,
+} from "@/lib/pi-models";
+import { createRemoteModelProbe } from "./remote-model-probe";
 import type {
 	ProjectModelScope,
 	ProjectScopedModel,
@@ -38,6 +43,7 @@ import {
 	loadRemoteProjectImage,
 	loadRemoteExternalActivity,
 	loadRemoteModels,
+	saveRemoteModels,
 	loadRemoteNextPromptSettings,
 	saveRemoteNextPromptSettings,
 	requestRemoteNextPrompt,
@@ -54,6 +60,16 @@ import {
 } from "./remote-client";
 
 export class WebPiloClient implements PiloClient {
+	private readonly chatEventListeners = new Set<
+		(event: PiloRuntimeEvent) => void
+	>();
+	private readonly eventReadyListeners = new Set<() => void>();
+	private eventsReady = false;
+	private readonly catalogRequests = new Map<
+		string,
+		Promise<ProjectPiModels>
+	>();
+
 	constructor(private readonly token: string) {}
 
 	bootstrap(): Promise<PiloClientBootstrap> {
@@ -169,8 +185,25 @@ export class WebPiloClient implements PiloClient {
 		return searchRemoteFiles(this.token, projectId, query);
 	}
 
-	loadModels(projectId: string): Promise<ProjectPiModels | null> {
-		return loadRemoteModels(this.token, projectId);
+	loadModels(projectId: string, force = false): Promise<ProjectPiModels> {
+		const pending = this.catalogRequests.get(projectId);
+		if (pending) return pending;
+		const request = loadRemoteModels(this.token, projectId).then((cached) => {
+			if (!force && cached && !isProjectPiModelsIncomplete(cached))
+				return cached;
+			return refreshProjectPiModels(projectId, {
+				cached,
+				createClient: (id, sessionId) =>
+					createRemoteModelProbe(this, id, sessionId),
+				persist: (snapshot) => saveRemoteModels(this.token, snapshot),
+			});
+		});
+		this.catalogRequests.set(projectId, request);
+		const clear = () => {
+			this.catalogRequests.delete(projectId);
+		};
+		void request.then(clear, clear);
+		return request;
 	}
 
 	loadModelScope(projectId: string): Promise<ProjectModelScope> {
@@ -198,13 +231,49 @@ export class WebPiloClient implements PiloClient {
 		return approveRemoteProjectMcpServer(this.token, projectId, serverName);
 	}
 
+	listenChatEvents(handler: (event: PiloRuntimeEvent) => void): () => void {
+		this.chatEventListeners.add(handler);
+		return () => {
+			this.chatEventListeners.delete(handler);
+		};
+	}
+
+	waitForEvents(): Promise<void> {
+		if (this.eventsReady) return Promise.resolve();
+		return new Promise((resolve, reject) => {
+			const ready = () => {
+				clearTimeout(timer);
+				this.eventReadyListeners.delete(ready);
+				resolve();
+			};
+			const timer = setTimeout(() => {
+				this.eventReadyListeners.delete(ready);
+				reject(new Error("Pi catalog event connection timed out"));
+			}, 10_000);
+			this.eventReadyListeners.add(ready);
+		});
+	}
+
 	connectEvents(options: PiloClientEventOptions): Promise<() => void> {
 		return Promise.resolve(
 			connectRemoteEvents(
 				this.token,
 				options.after,
-				options.onMessage,
-				options.onStatus,
+				(message) => {
+					if (message.type === "events") {
+						for (const event of message.events) {
+							for (const listener of this.chatEventListeners) listener(event);
+						}
+					}
+					options.onMessage(message);
+				},
+				(connected) => {
+					this.eventsReady = connected;
+					if (connected) {
+						for (const ready of this.eventReadyListeners) ready();
+					}
+					options.onStatus(connected);
+				},
 			),
 		);
 	}

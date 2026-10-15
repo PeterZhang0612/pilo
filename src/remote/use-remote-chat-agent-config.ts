@@ -11,7 +11,6 @@ import type { ProjectPiModels } from "@/lib/pi-models";
 import {
 	findMatchingPiModel,
 	getPiModelThinkingLevels,
-	reconcilePiModelCatalog,
 } from "@/lib/pi-model-selection";
 import { PI_THINKING_LEVELS, runtimeErrorMessage } from "@/lib/pi-runtime";
 import type { SessionHistory, SessionIndexEntry } from "@/lib/sessions";
@@ -98,7 +97,6 @@ export function useRemoteChatAgentConfig({
 					liveRuntime
 						? Promise.all([
 								rpc<PiAgentState>({ type: "get_state" }),
-								rpc<{ models: PiModel[] }>({ type: "get_available_models" }),
 								rpc<{ levels: PiThinkingLevel[] }>({
 									type: "get_available_thinking_levels",
 								}),
@@ -112,25 +110,15 @@ export function useRemoteChatAgentConfig({
 					hostResult.status === "fulfilled" ? hostResult.value : null;
 				if (hostResult.status === "fulfilled") {
 					setCatalog(hostCatalog);
-					// A live refresh must not replace availability with Host cache data.
-					if (!liveRuntime) {
-						setModelsLoaded(hostCatalog !== null);
-						setModels(hostCatalog?.models ?? []);
-					}
+					setModelsLoaded(hostCatalog !== null);
+					setModels(hostCatalog?.models ?? []);
 				}
 				if (liveResult.status === "rejected") throw liveResult.reason;
 				if (hostResult.status === "rejected")
 					setModelError(runtimeErrorMessage(hostResult.reason));
 				if (!liveResult.value) return;
-				const [state, modelResult, thinkingResult, stats] = liveResult.value;
-				setModelsLoaded(true);
+				const [state, thinkingResult, stats] = liveResult.value;
 				setAgentState(state);
-				setModels(
-					reconcilePiModelCatalog(
-						modelResult.models,
-						hostCatalog?.models ?? [],
-					),
-				);
 				setThinkingLevels(thinkingResult.levels);
 				setChatState({
 					name: state.sessionName,
@@ -152,13 +140,13 @@ export function useRemoteChatAgentConfig({
 	);
 
 	const loadDraftCatalog = useCallback(
-		(projectId: string) => {
+		(projectId: string, force = false) => {
 			if (configIdentityRef.current.projectId !== projectId)
 				return Promise.resolve();
 			const requestId = ++draftCatalogRequestRef.current;
 			setModelLoading(true);
 			setModelError(null);
-			return (client?.loadModels(projectId) ?? Promise.resolve(null))
+			return (client?.loadModels(projectId, force) ?? Promise.resolve(null))
 				.then((loaded) => {
 					if (draftCatalogRequestRef.current !== requestId) return;
 					setCatalog(loaded);

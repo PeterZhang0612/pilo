@@ -7,12 +7,12 @@ import {
 } from "@/lib/pi-model-catalog-extension";
 import {
 	type PiAgentState,
+	type PiCommand,
 	type PiModel,
 	type PiThinkingLevel,
 	PI_THINKING_LEVELS,
 } from "@/lib/pi-runtime";
 
-export const PROJECT_PI_MODELS_TTL_MS = 60 * 60 * 1000;
 const STARTUP_REFRESH_CONCURRENCY = 1;
 /** Bounded wait for the catalog extension to answer before falling back to RPC. */
 const MODEL_CATALOG_TIMEOUT_MS = 20_000;
@@ -21,6 +21,7 @@ const CATALOG_ERROR_TITLE = "pilo-model-catalog:error";
 export type ProjectPiModels = {
 	projectId: string;
 	models: PiModel[];
+	commands: PiCommand[] | null;
 	defaultModel: PiModel | null;
 	defaultThinkingLevel: PiThinkingLevel | null;
 	refreshedAtMs: number;
@@ -37,6 +38,28 @@ type PiModelCatalogPayload = {
 	models: PiModelCatalogEntry[];
 	baselineModel: PiModel | null;
 	baselineThinkingLevel: PiThinkingLevel | null;
+};
+
+export type PiModelProbeClient = Pick<
+	ReturnType<typeof createChatSessionClient>,
+	| "prepare"
+	| "dispose"
+	| "listen"
+	| "getPiCommands"
+	| "getAvailablePiModels"
+	| "getPiAgentState"
+	| "getAvailablePiThinkingLevels"
+	| "cyclePiModel"
+	| "setPiModel"
+	| "setPiThinkingLevel"
+	| "executePiCommand"
+	| "respondToExtensionUi"
+>;
+
+type PiModelProbeTransport = {
+	cached: ProjectPiModels | null;
+	createClient: (projectId: string, sessionId: string) => PiModelProbeClient;
+	persist: (snapshot: ProjectPiModels) => Promise<ProjectPiModels>;
 };
 
 type PiModelCatalogResult = Pick<
@@ -69,6 +92,7 @@ async function persistProjectPiModels(
 	return invoke<ProjectPiModels>("project_model_cache_set", {
 		projectId: snapshot.projectId,
 		models: snapshot.models,
+		commands: snapshot.commands,
 		defaultModel: snapshot.defaultModel,
 		defaultThinkingLevel: snapshot.defaultThinkingLevel,
 		refreshedAtMs: snapshot.refreshedAtMs,
@@ -81,11 +105,11 @@ export function getCachedProjectPiModels(
 	return modelCache.get(projectId) ?? null;
 }
 
-export function isProjectPiModelsStale(
+export function isProjectPiModelsIncomplete(
 	snapshot: ProjectPiModels,
-	now = Date.now(),
 ): boolean {
 	return (
+		snapshot.commands == null ||
 		snapshot.defaultThinkingLevel === null ||
 		snapshot.models.some(
 			(model) =>
@@ -94,8 +118,7 @@ export function isProjectPiModelsStale(
 				(model.reasoning && model.thinkingLevels.length === 0) ||
 				model.scopeOrder === undefined ||
 				model.scopeThinkingLevel === undefined,
-		) ||
-		now - snapshot.refreshedAtMs >= PROJECT_PI_MODELS_TTL_MS
+		)
 	);
 }
 
@@ -143,7 +166,7 @@ type ScopedModelProfile = {
 };
 
 async function resolveScopedModelProfiles(
-	client: ReturnType<typeof createChatSessionClient>,
+	client: PiModelProbeClient,
 	models: PiModel[],
 	baseline: PiAgentState,
 ): Promise<Map<string, ScopedModelProfile>> {
@@ -219,7 +242,7 @@ async function resolveScopedModelProfiles(
 }
 
 async function resolveModelThinkingProfiles(
-	client: ReturnType<typeof createChatSessionClient>,
+	client: PiModelProbeClient,
 	models: PiModel[],
 	baseline: PiAgentState,
 	scopeProfiles: ReadonlyMap<string, ScopedModelProfile>,
@@ -333,7 +356,7 @@ function parsePiModelCatalogPayload(raw: string): PiModelCatalogResult {
  * caller can fall back to the per-model RPC chain.
  */
 async function fetchPiModelCatalogViaExtension(
-	client: ReturnType<typeof createChatSessionClient>,
+	client: PiModelProbeClient,
 ): Promise<PiModelCatalogResult | null> {
 	let settle: (value: PiModelCatalogResult) => void;
 	let fail: (error: unknown) => void;
@@ -401,6 +424,7 @@ async function fetchPiModelCatalogViaExtension(
 
 export function refreshProjectPiModels(
 	projectId: string,
+	transport?: PiModelProbeTransport,
 ): Promise<ProjectPiModels> {
 	const pending = pendingRefreshes.get(projectId);
 	if (pending) return pending;
@@ -411,27 +435,46 @@ export function refreshProjectPiModels(
 	// 空会话文件，被 watcher 索引后侧栏凭空多出一条会话。
 	// builtinExtensions 让 pilo-server 从固定目录只为这个探测进程加载目录扩展，
 	// 不影响用户正常的 Pi 会话；扩展不可用时回退到逐模型 RPC 链。
-	const client = createChatSessionClient(projectId, sessionKey, undefined, {
-		noSession: true,
-		owner: "model_probe",
-		builtinExtensions: [{ id: "model-catalog" }],
-	});
+	const client = transport
+		? transport.createClient(projectId, sessionKey)
+		: createChatSessionClient(projectId, sessionKey, undefined, {
+				noSession: true,
+				owner: "model_probe",
+				builtinExtensions: [{ id: "model-catalog" }],
+			});
+	const persist = transport?.persist ?? persistProjectPiModels;
 	const refresh = (async () => {
 		try {
 			await client.prepare();
+			const commands = await client
+				.getPiCommands()
+				.then((result) =>
+					result.commands.filter(
+						(command) => `/${command.name}` !== PI_MODEL_CATALOG_COMMAND,
+					),
+				)
+				.catch((error: unknown) => {
+					console.warn("Failed to refresh Pi commands", error);
+					return (
+						transport?.cached?.commands ??
+						getCachedProjectPiModels(projectId)?.commands ??
+						null
+					);
+				});
 			const extensionCatalog = await fetchPiModelCatalogViaExtension(client);
 			if (extensionCatalog) {
-				const snapshot = publishProjectPiModels({
+				let snapshot: ProjectPiModels = {
 					projectId,
 					...extensionCatalog,
+					commands,
 					refreshedAtMs: Date.now(),
-				});
+				};
 				try {
-					await persistProjectPiModels(snapshot);
+					snapshot = await persist(snapshot);
 				} catch (error) {
 					console.warn("Failed to persist refreshed Pi models", error);
 				}
-				return snapshot;
+				return publishProjectPiModels(snapshot);
 			}
 
 			console.warn(
@@ -455,19 +498,20 @@ export function refreshProjectPiModels(
 			);
 			const defaultModel =
 				models.find((model) => modelsMatch(model, state.model)) ?? state.model;
-			const snapshot = publishProjectPiModels({
+			let snapshot: ProjectPiModels = {
 				projectId,
 				models,
+				commands,
 				defaultModel,
 				defaultThinkingLevel: state.thinkingLevel,
 				refreshedAtMs: Date.now(),
-			});
+			};
 			try {
-				await persistProjectPiModels(snapshot);
+				snapshot = await persist(snapshot);
 			} catch (error) {
 				console.warn("Failed to persist refreshed Pi models", error);
 			}
-			return snapshot;
+			return publishProjectPiModels(snapshot);
 		} finally {
 			await client.dispose("model_probe_cleanup").catch((error) => {
 				console.warn("Failed to stop Pi model probe session", error);

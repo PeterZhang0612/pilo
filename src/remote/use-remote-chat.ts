@@ -740,12 +740,11 @@ export function useRemoteChat({
 	const suggestions = useRemoteChatSuggestions({
 		client,
 		activeProjectId,
-		activeSessionKey,
-		activeSessionKeyRef,
-		runtimeReady: runtimeReady && historyReady,
+		commands:
+			catalog?.projectId === activeProjectId
+				? (catalog.commands ?? null)
+				: null,
 		readOnly,
-		ensureDraftRuntime,
-		rpcForSession,
 	});
 	const {
 		composerSuggestions,

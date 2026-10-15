@@ -70,7 +70,8 @@ Authenticated (`require_auth` middleware):
 GET  /api/v1/bootstrap       -> { projects, chatSessions, latestSequence }
 GET  /api/v1/sessions?projectId=...
 GET  /api/v1/history?projectId=&sessionPath=&startMessage=&messageLimit=&includeMessageIndex=
-GET  /api/v1/models?projectId=... -> ProjectModelCache | null  (Host-cached Pi model catalog)
+GET  /api/v1/models?projectId=... -> ProjectModelCache | null  (Host-cached model and command catalog)
+POST /api/v1/models          -> ProjectModelCache        body: ProjectModelCache (Host assigns timestamp)
 POST /api/v1/chat/start      -> PiSessionSnapshot        body: ChatStartRequest
 GET  /api/v1/chat/state?sessionKey=...
 POST /api/v1/chat/rpc        -> 204                      body: { sessionKey, command }
@@ -202,10 +203,16 @@ remote_devices(id, name, pair_ip, token_hash, created_at_ms, last_seen_at_ms, ex
 - **Files surfaces**: `GET /api/v1/files/search` forwards host `fs.search` and
   returns paths only. `/files/image` is the image-only exception for Markdown
   replies (see below); generic reads, writes, and directory listing stay private.
-- **Model catalog**: `GET /api/v1/models` is read-only and returns the
-  Desktop-maintained `project_model_cache` snapshot (or `null` when absent).
-  Remote must not spawn its own Pi probe session for the draft composer; the
-  Desktop client keeps the cache fresh.
+- **Model and command catalog**: `GET /api/v1/models` returns the shared
+  `project_model_cache` snapshot (or `null`). Complete caches have no TTL or
+  periodic refresh. On missing/incomplete caches or explicit refresh, WebUI
+  reuses the same TypeScript probe logic as Desktop through the existing socket
+  and chat transport, then persists via authenticated `POST /api/v1/models`.
+  `builtinExtensions: [{ id: "model-catalog" }]` on `/chat/start` is allowed only
+  with `noSession: true` and no sessionPath; other client-selected extensions
+  are rejected. This path calls `chat_service::prepare`, not `start`, to avoid
+  creating an empty persisted session. Normal chats retain their existing path.
+  See [Project Model Scope](./project-model-scope.md#project-catalog-and-slash-commands).
 - **Attachments**: images only (`png/jpeg/webp/gif`), ≤ 10 MB each, ≤ 20 MB total,
   ≤ `MAX_CHAT_IMAGES`. Reuses the existing chat image contract.
 - **Replay gap semantics**: `replay_after(seq)` returns `None` (gap → client must

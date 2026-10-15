@@ -29,6 +29,8 @@ pub struct ProjectMetadata {
 pub struct ProjectModelCache {
     pub project_id: String,
     pub models: Vec<Value>,
+    #[serde(default)]
+    pub commands: Option<Vec<Value>>,
     pub default_model: Option<Value>,
     pub default_thinking_level: Option<String>,
     pub refreshed_at_ms: u64,

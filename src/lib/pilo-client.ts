@@ -31,6 +31,7 @@ export type PiloClientStartChatInput = {
 	sessionKey: string;
 	sessionPath?: string;
 	noSession?: boolean;
+	builtinExtensions?: { id: "model-catalog" }[];
 };
 
 export type PiloClientHistoryOptions = {

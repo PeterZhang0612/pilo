@@ -358,9 +358,7 @@ pub(super) struct ModelsQuery {
     project_id: String,
 }
 
-/// Read-only model catalog used by the Remote WebUI composer. The Desktop
-/// client already keeps `project_model_cache` fresh through its Pi probe
-/// sessions; Remote reuses that snapshot instead of spawning its own probe.
+/// Project model and command catalog shared by Desktop and WebUI.
 pub(super) async fn models(
     State(state): State<RemoteHttpState>,
     Query(query): Query<ModelsQuery>,
@@ -374,6 +372,23 @@ pub(super) async fn models(
                 .find(|cache| cache.project_id == query.project_id);
             Json(cache).into_response()
         }
+        Err(error) => api_error(StatusCode::INTERNAL_SERVER_ERROR, &error),
+    }
+}
+
+pub(super) async fn models_set(
+    State(state): State<RemoteHttpState>,
+    Json(mut cache): Json<crate::domain::ProjectModelCache>,
+) -> Response {
+    if let Err(error) = get_project(&state.paths, &cache.project_id) {
+        return api_error(StatusCode::NOT_FOUND, &error);
+    }
+    // Mobile and desktop clocks can differ; the Host owns cache ordering.
+    cache.refreshed_at_ms = storage::now_ms();
+    match storage::open_with_paths(&state.paths)
+        .and_then(|db| storage::upsert_project_model_cache(&db, &cache))
+    {
+        Ok(()) => Json(cache).into_response(),
         Err(error) => api_error(StatusCode::INTERNAL_SERVER_ERROR, &error),
     }
 }
@@ -473,29 +488,44 @@ pub(super) struct ChatStartRequest {
     session_key: String,
     session_path: Option<String>,
     no_session: Option<bool>,
+    #[serde(default)]
+    builtin_extensions: Vec<pilo_protocol::BuiltinExtension>,
 }
 
 pub(super) async fn chat_start(
     State(state): State<RemoteHttpState>,
     Json(request): Json<ChatStartRequest>,
 ) -> Response {
+    if !request.builtin_extensions.is_empty()
+        && (!request.no_session.unwrap_or(false)
+            || request.session_path.is_some()
+            || request.builtin_extensions.iter().any(|extension| {
+                !matches!(extension, pilo_protocol::BuiltinExtension::ModelCatalog)
+            }))
+    {
+        return api_error(
+            StatusCode::BAD_REQUEST,
+            "Remote catalog probes only support the model-catalog extension with noSession",
+        );
+    }
     let runtime = state.app.state::<PiloRuntime>();
     let events = state.app.state::<RuntimeEventBus>().inner().clone();
-    match chat_service::start(
-        &state.paths,
-        &runtime,
-        events,
-        ChatSessionRequest {
-            project_id: request.project_id,
-            session_key: request.session_key,
-            session_path: request.session_path,
-            no_session: request.no_session.unwrap_or(false),
-            extensions: Vec::new(),
-            builtin_extensions: Vec::new(),
-        },
-    )
-    .await
-    {
+    let probe = !request.builtin_extensions.is_empty();
+    let request = ChatSessionRequest {
+        project_id: request.project_id,
+        session_key: request.session_key,
+        session_path: request.session_path,
+        no_session: request.no_session.unwrap_or(false),
+        extensions: Vec::new(),
+        builtin_extensions: request.builtin_extensions,
+    };
+    let result = if probe {
+        // Preparing a no-session probe must not send new_session or index an empty chat.
+        chat_service::prepare(&state.paths, &runtime, events, request).await
+    } else {
+        chat_service::start(&state.paths, &runtime, events, request).await
+    };
+    match result {
         Ok(snapshot) => Json(snapshot).into_response(),
         Err(error) => api_error(StatusCode::BAD_REQUEST, &error),
     }

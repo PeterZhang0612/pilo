@@ -17,7 +17,6 @@ import {
 	type PiModel,
 	type PiThinkingLevel,
 } from "@/lib/pi-runtime";
-import { createChatSessionClient } from "@/lib/chat-session-client";
 import { createPiCommandSuggestions } from "@/lib/pi-command-suggestions";
 import { searchProjectFiles } from "@/lib/files";
 import {
@@ -30,7 +29,7 @@ import {
 import {
 	getCachedProjectPiModels,
 	hydrateProjectPiModels,
-	isProjectPiModelsStale,
+	isProjectPiModelsIncomplete,
 	refreshProjectPiModels,
 	subscribeProjectPiModels,
 } from "@/lib/pi-models";
@@ -51,7 +50,6 @@ const FILE_SUGGESTION_DEBOUNCE_MS = 180;
 const EMPTY_PROJECTS: Project[] = [];
 
 export function NewChatLanding({
-	sessionId,
 	onStartSession,
 	onNewChat,
 	onOpenTerminal,
@@ -131,16 +129,20 @@ export function NewChatLanding({
 		"idle" | "loading" | "ready" | "error"
 	>(cachedModels ? "ready" : "idle");
 	const [modelError, setModelError] = useState<string | null>(null);
-	const [commandSuggestions, setCommandSuggestions] = useState<
-		ComposerSuggestion[]
-	>([]);
+	const commandSuggestions = useMemo(
+		() =>
+			createPiCommandSuggestions(
+				modelCatalog?.projectId === projectId
+					? (modelCatalog.commands ?? [])
+					: [],
+			),
+		[modelCatalog, projectId],
+	);
 	const [fileSuggestions, setFileSuggestions] = useState<ComposerSuggestion[]>(
 		[],
 	);
 	const fileSuggestionTimerRef = useRef<number | null>(null);
 	const fileSuggestionRequestRef = useRef(0);
-	const commandLoadingRef = useRef(false);
-	const commandsLoadedRef = useRef(false);
 	const modelRequestRef = useRef(0);
 	const modelLoadingRef = useRef(false);
 	const modelSelectionDirtyRef = useRef(false);
@@ -164,30 +166,6 @@ export function NewChatLanding({
 		[projectId, setDraft, writeProjectDraft],
 	);
 
-	const loadCommands = useCallback(async () => {
-		if (!projectId || commandLoadingRef.current || commandsLoadedRef.current) {
-			return;
-		}
-		commandLoadingRef.current = true;
-		const client = createChatSessionClient(
-			projectId,
-			`${sessionId}:landing-commands`,
-			undefined,
-			{ noSession: true, owner: "landing_commands" },
-		);
-		try {
-			await client.prepare();
-			const result = await client.getPiCommands();
-			setCommandSuggestions(createPiCommandSuggestions(result.commands));
-			commandsLoadedRef.current = true;
-		} catch (error) {
-			console.warn("Failed to load Pi commands for new chat", error);
-		} finally {
-			commandLoadingRef.current = false;
-			await client.dispose("landing_commands").catch(() => undefined);
-		}
-	}, [projectId, sessionId, setCommandSuggestions]);
-
 	const handleSuggestionTrigger = useCallback(
 		(trigger: "@" | "/" | null, query: string) => {
 			fileSuggestionRequestRef.current += 1;
@@ -198,7 +176,6 @@ export function NewChatLanding({
 			}
 			if (trigger === "/") {
 				setFileSuggestions([]);
-				void loadCommands();
 				return;
 			}
 			if (trigger !== "@" || !projectId) {
@@ -221,7 +198,7 @@ export function NewChatLanding({
 					});
 			}, FILE_SUGGESTION_DEBOUNCE_MS);
 		},
-		[loadCommands, projectId, setFileSuggestions],
+		[projectId, setFileSuggestions],
 	);
 
 	const applyModelSnapshot = useCallback(
@@ -264,7 +241,7 @@ export function NewChatLanding({
 		async (force = false) => {
 			if (!projectId || modelLoadingRef.current) return;
 			const cached = getCachedProjectPiModels(projectId);
-			if (!force && cached && !isProjectPiModelsStale(cached)) {
+			if (!force && cached && !isProjectPiModelsIncomplete(cached)) {
 				applyModelSnapshot(cached);
 				return;
 			}
@@ -293,14 +270,11 @@ export function NewChatLanding({
 	useEffect(() => {
 		modelSelectionDirtyRef.current = false;
 		thinkingSelectionDirtyRef.current = false;
-		commandsLoadedRef.current = false;
-		commandLoadingRef.current = false;
 		fileSuggestionRequestRef.current += 1;
 		if (fileSuggestionTimerRef.current !== null) {
 			window.clearTimeout(fileSuggestionTimerRef.current);
 			fileSuggestionTimerRef.current = null;
 		}
-		setCommandSuggestions([]);
 		setFileSuggestions([]);
 		const cached = projectId ? getCachedProjectPiModels(projectId) : null;
 		setModelCatalog(cached);
@@ -323,13 +297,9 @@ export function NewChatLanding({
 				if (disposed) return;
 				const cached = getCachedProjectPiModels(projectId);
 				if (cached) applyModelSnapshot(cached);
-				if (!cached) {
+				if (!cached || isProjectPiModelsIncomplete(cached)) {
 					void loadModels();
-					return;
 				}
-				// 每次进入新会话都后台重探模型目录，改完 Pi 配置无需等 TTL。
-				// 结果由 subscribeProjectPiModels 回推；沿用同一加载/错误状态。
-				void loadModels(true);
 			})
 			.catch((error) => {
 				if (disposed) return;

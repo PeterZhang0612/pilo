@@ -91,6 +91,7 @@ pub(super) fn initialize_schema(db: &SqliteConnection) -> Result<(), String> {
          CREATE TABLE IF NOT EXISTS project_model_cache (
            project_id TEXT PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
            models_json TEXT NOT NULL,
+           commands_json TEXT,
            default_model_json TEXT,
            default_thinking_level TEXT,
            refreshed_at_ms INTEGER NOT NULL
@@ -360,6 +361,10 @@ fn ensure_project_model_cache_columns(db: &SqliteConnection) -> Result<(), Strin
         .map(|exists| exists != 0)
         .map_err(|error| error.to_string())
     };
+    if !has_column("commands_json")? {
+        db.execute_batch("ALTER TABLE project_model_cache ADD COLUMN commands_json TEXT;")
+            .map_err(|error| error.to_string())?;
+    }
     if !has_column("default_model_json")? {
         db.execute_batch("ALTER TABLE project_model_cache ADD COLUMN default_model_json TEXT;")
             .map_err(|error| error.to_string())?;

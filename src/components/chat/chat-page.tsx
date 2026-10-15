@@ -158,6 +158,7 @@ function ChatPageImpl(props: ChatPageProps) {
 	});
 	const {
 		sessionState,
+		commands,
 		modelScope,
 		modelOptions,
 		selectedModel,
@@ -318,6 +319,7 @@ function ChatPageImpl(props: ChatPageProps) {
 	});
 	const piFeatures = usePiSessionFeatures({
 		client,
+		commands,
 		active,
 		readOnly: session.externalRunning,
 		projectMcpApprovalPendingRef,
@@ -330,7 +332,6 @@ function ChatPageImpl(props: ChatPageProps) {
 	});
 	const {
 		commandSuggestions,
-		loadCommands,
 		tryExecuteExtensionCommand,
 		compact,
 		compacting,
@@ -360,12 +361,8 @@ function ChatPageImpl(props: ChatPageProps) {
 		model: selectedModel,
 		subscribe: true,
 	});
-	const handleCommandsTrigger = useCallback(() => {
-		if (!session.externalRunning) void loadCommands();
-	}, [loadCommands, session.externalRunning]);
 	const { fileSuggestions, handleSuggestionTrigger } = useChatFileSuggestions({
 		projectId: session.projectRecord.id,
-		onCommandsTrigger: handleCommandsTrigger,
 	});
 	const composerSuggestions = useMemo(
 		() => [
