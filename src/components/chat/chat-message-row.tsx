@@ -78,7 +78,11 @@ export const MessageRow = memo(function MessageRow({
 	suppressInterruptedError,
 }: MessageRowProps) {
 	return (
-		<div className="contents" data-message-id={message.id}>
+		<div
+			className="contents"
+			data-message-id={message.id}
+			data-message-role={message.role}
+		>
 			{renderMessageRow({
 				message,
 				isLastMessage,

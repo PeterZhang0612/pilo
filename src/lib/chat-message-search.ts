@@ -1,23 +1,31 @@
 import { skillInvocationSummary } from "./skill-invocation.ts";
 import type { ChatMessage } from "./conversation-types.ts";
+import { markdownSearchText, searchTextMatches } from "./chat-search-text.ts";
 
 export type ChatMessageMatch = {
 	messageId: string;
 	messageIndex: number;
 	/** 该消息内第几个命中（0 起），用于对齐 DOM 字符级高亮。 */
 	occurrenceIndex: number;
-	/** 命中的字符在消息文本中的起点。 */
+	/** Assistant 文本段的身份与段内序号，避免折叠工作过程后命中错位。 */
+	contentId?: string;
+	contentOccurrenceIndex?: number;
+	/** 命中在可搜索的可见文本中的区间。 */
 	start: number;
+	end: number;
 	/** 命中位置附近的片段，用于展示。 */
 	snippet: string;
 };
 
 const SNIPPET_LEAD = 24;
 const SNIPPET_TAIL = 80;
+const markdownTextCache = new WeakMap<
+	object,
+	{ source: string; text: string }
+>();
 
 /**
- * 查找用的消息文本：用户输入与 Agent 回复都取原文（包含 Markdown 与代码块），
- * 仅用户消息的 Skill 展开块改用 `/skill:<name>` 摘要（与界面显示一致）。
+ * 用户输入按纯文本显示，Skill 展开块改用 `/skill:<name>` 摘要。
  */
 function searchableText(message: ChatMessage): string {
 	if (message.role !== "user") return message.text;
@@ -32,26 +40,54 @@ export function findMessageMatches(
 	messages: readonly ChatMessage[],
 	query: string,
 ): ChatMessageMatch[] {
-	const needle = query.trim().toLowerCase();
-	if (!needle) return [];
+	if (!query.trim()) return [];
 	const matches: ChatMessageMatch[] = [];
 	messages.forEach((message, messageIndex) => {
 		if (message.historyPlaceholder) return;
-		const text = searchableText(message);
-		const lower = text.toLowerCase();
+		const textContent =
+			message.role === "assistant"
+				? message.content?.filter((item) => item.type === "text")
+				: undefined;
+		const sections = textContent?.length
+			? textContent
+			: [
+					{
+						id: message.role === "assistant" ? `${message.id}-text` : undefined,
+						text: searchableText(message),
+					},
+				];
 		let occurrenceIndex = 0;
-		let at = lower.indexOf(needle);
-		while (at >= 0) {
-			const from = Math.max(0, at - SNIPPET_LEAD);
-			matches.push({
-				messageId: message.id,
-				messageIndex,
-				occurrenceIndex,
-				start: at,
-				snippet: text.slice(from, at + needle.length + SNIPPET_TAIL),
-			});
-			occurrenceIndex += 1;
-			at = lower.indexOf(needle, at + needle.length);
+		let offset = 0;
+		for (const section of sections) {
+			let text = section.text;
+			if (message.role !== "user") {
+				const key = textContent?.length ? section : message;
+				const cached = markdownTextCache.get(key);
+				if (cached?.source === section.text) {
+					text = cached.text;
+				} else {
+					text = markdownSearchText(section.text);
+					markdownTextCache.set(key, { source: section.text, text });
+				}
+			}
+			let contentOccurrenceIndex = 0;
+			for (const range of searchTextMatches(text, query)) {
+				const from = Math.max(0, range.start - SNIPPET_LEAD);
+				matches.push({
+					messageId: message.id,
+					messageIndex,
+					occurrenceIndex,
+					...(section.id !== undefined
+						? { contentId: section.id, contentOccurrenceIndex }
+						: {}),
+					start: offset + range.start,
+					end: offset + range.end,
+					snippet: text.slice(from, range.end + SNIPPET_TAIL),
+				});
+				occurrenceIndex += 1;
+				contentOccurrenceIndex += 1;
+			}
+			offset += text.length;
 		}
 	});
 	return matches;

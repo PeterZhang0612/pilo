@@ -1,6 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+	useCallback,
+	useContext,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import type { CacheSnapshot, VirtualizerHandle } from "virtua";
 
+import { ChatFindMatchContext } from "@/components/chat/chat-find-context";
 import { useChatStickyScroll } from "@/components/chat/use-chat-sticky-scroll";
 import { useChatVirtualPadding } from "@/components/chat/use-chat-virtual-padding";
 import {
@@ -60,6 +68,7 @@ export function useChatScrollController({
 	);
 	/* oxlint-enable react-hooks/exhaustive-deps */
 
+	const findMessageIndex = useContext(ChatFindMatchContext)?.messageIndex;
 	const virtualizerRef = useRef<VirtualizerHandle>(null);
 	const virtualPadding = useChatVirtualPadding();
 	const pendingOutlineJumpRef = useRef<{
@@ -315,6 +324,11 @@ export function useChatScrollController({
 		persistVirtualizerCache(true);
 		const pending = pendingOutlineJumpRef.current;
 		if (!pending) return;
+		// Search aligns the exact text range after the target row mounts.
+		if (findMessageIndex === pending.messageIndex) {
+			pendingOutlineJumpRef.current = null;
+			return;
+		}
 		if (
 			outlineJumpDrift(pending.messageIndex) <= OUTLINE_JUMP_TOLERANCE_PX ||
 			pending.attempts >= OUTLINE_JUMP_MAX_CORRECTIONS
@@ -327,7 +341,12 @@ export function useChatScrollController({
 			attempts: pending.attempts + 1,
 		};
 		scrollMessageToTop(pending.messageIndex);
-	}, [outlineJumpDrift, persistVirtualizerCache, scrollMessageToTop]);
+	}, [
+		findMessageIndex,
+		outlineJumpDrift,
+		persistVirtualizerCache,
+		scrollMessageToTop,
+	]);
 
 	useEffect(() => {
 		const viewport = scrollElement;

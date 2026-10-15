@@ -16,6 +16,7 @@ import {
 import { toggleChatExpansionWithAnchor } from "@/components/chat/chat-expansion-anchor";
 import { useChatExpansionState } from "@/components/chat/chat-expansion-state";
 import { ChatMarkdown } from "@/components/chat/chat-markdown";
+import { useChatFindMatch } from "@/components/chat/chat-find-context";
 import type { AssistantContentItem } from "@/lib/chat-activity-state";
 import type { ChatMessage } from "@/lib/conversation-types";
 import { formatWorkDuration } from "@/lib/format-duration";
@@ -76,11 +77,15 @@ function markdownPreview(text: string) {
 }
 
 const CollapsibleMessageBody = memo(function CollapsibleMessageBody({
+	messageId,
+	contentId,
 	text,
 	markdown = false,
 	streaming = false,
 	collapseDisabled = false,
 }: {
+	messageId: string;
+	contentId: string;
 	text: string;
 	markdown?: boolean;
 	streaming?: boolean;
@@ -88,16 +93,25 @@ const CollapsibleMessageBody = memo(function CollapsibleMessageBody({
 }) {
 	const { t } = useTranslation();
 	const { collapseLongMessages } = usePreferences();
+	const findMatch = useChatFindMatch(messageId);
+	const searchExpanded =
+		findMatch !== null &&
+		(findMatch.contentId === undefined || findMatch.contentId === contentId);
 	const collapsible =
 		collapseLongMessages &&
 		!collapseDisabled &&
+		!searchExpanded &&
 		!streaming &&
 		text.length > LARGE_MESSAGE_PREVIEW_CHARS;
 	const [expanded, setExpanded] = useState(false);
 	const visibleText = collapsible && !expanded ? markdownPreview(text) : text;
 
 	return (
-		<div className="min-w-0" data-chat-expansion-root>
+		<div
+			className="min-w-0"
+			data-chat-expansion-root
+			data-chat-search-content-id={contentId}
+		>
 			{markdown ? (
 				<ChatMarkdown text={visibleText} isStreaming={streaming} />
 			) : (
@@ -170,6 +184,8 @@ export function renderAssistantContentNodes({
 				nodes.push(
 					<CollapsibleMessageBody
 						key={item.id}
+						messageId={messageId}
+						contentId={item.id}
 						text={item.text}
 						markdown
 						streaming={streaming && index === content.length - 1}
@@ -223,36 +239,57 @@ function ProgressiveAssistantWorkContent({
 	keepTextExpanded: boolean;
 	followedByTextAfterContent: boolean;
 }) {
-	const contentLengthRef = useRef(content.length);
-	useEffect(() => {
-		contentLengthRef.current = content.length;
-	}, [content.length]);
-	const [requestedVisibleCount, setRequestedVisibleCount] = useState(() =>
-		Math.min(content.length, WORK_ACTIVITY_INITIAL_ITEMS),
-	);
-	const visibleCount = Math.min(
-		content.length,
-		Math.max(requestedVisibleCount, WORK_ACTIVITY_INITIAL_ITEMS),
-	);
-	const startIndex = active ? Math.max(0, content.length - visibleCount) : 0;
-	const endIndex = active ? content.length : visibleCount;
+	const contentRef = useRef<HTMLDivElement>(null);
+	const [revealedBefore, setRevealedBefore] = useState(0);
+	const [revealedAfter, setRevealedAfter] = useState(0);
+	const findMatch = useChatFindMatch(messageId);
+	const targetContentId = findMatch?.contentId;
+	const targetIndex = targetContentId
+		? content.findIndex((item) => item.id === targetContentId)
+		: -1;
+	const initialStart =
+		targetIndex >= 0
+			? Math.max(0, targetIndex - Math.floor(WORK_ACTIVITY_INITIAL_ITEMS / 2))
+			: active
+				? Math.max(0, content.length - WORK_ACTIVITY_INITIAL_ITEMS)
+				: 0;
+	const initialEnd =
+		active && targetIndex < 0
+			? content.length
+			: Math.min(content.length, initialStart + WORK_ACTIVITY_INITIAL_ITEMS);
+	const startIndex = Math.max(0, initialStart - revealedBefore);
+	const endIndex = Math.min(content.length, initialEnd + revealedAfter);
 	const hasHiddenBefore = startIndex > 0;
 	const hasHiddenAfter = endIndex < content.length;
 	const visibleContent = content.slice(startIndex, endIndex);
-	const revealMore = useCallback(() => {
-		setRequestedVisibleCount((current) =>
-			Math.min(
-				contentLengthRef.current,
-				Math.max(current, WORK_ACTIVITY_INITIAL_ITEMS) +
-					WORK_ACTIVITY_REVEAL_ITEMS,
-			),
-		);
-	}, []);
+	const revealMore = useCallback(
+		(direction: "before" | "after") => {
+			const root = contentRef.current;
+			const anchor = root?.querySelector<HTMLElement>(
+				targetContentId
+					? `[data-chat-search-content-id="${CSS.escape(targetContentId)}"]`
+					: "[data-chat-search-content-id]",
+			);
+			const reveal = () => {
+				const setCount =
+					direction === "before" ? setRevealedBefore : setRevealedAfter;
+				setCount((current) => current + WORK_ACTIVITY_REVEAL_ITEMS);
+			};
+			if (targetContentId && anchor && root) {
+				toggleChatExpansionWithAnchor(anchor, reveal, root);
+			} else {
+				reveal();
+			}
+		},
+		[targetContentId],
+	);
+	const revealBefore = useCallback(() => revealMore("before"), [revealMore]);
+	const revealAfter = useCallback(() => revealMore("after"), [revealMore]);
 
 	return (
-		<>
+		<div ref={contentRef}>
 			{hasHiddenBefore ? (
-				<WorkActivityRevealSentinel onReveal={revealMore} />
+				<WorkActivityRevealSentinel onReveal={revealBefore} />
 			) : null}
 			{renderAssistantContentNodes({
 				messageId,
@@ -263,9 +300,9 @@ function ProgressiveAssistantWorkContent({
 					hasHiddenAfter || followedByTextAfterContent,
 			})}
 			{hasHiddenAfter ? (
-				<WorkActivityRevealSentinel onReveal={revealMore} />
+				<WorkActivityRevealSentinel onReveal={revealAfter} />
 			) : null}
-		</>
+		</div>
 	);
 }
 
@@ -288,10 +325,26 @@ export function AssistantWorkedRegion({
 }) {
 	const { t } = useTranslation();
 	const { collapseCompletedActivity, showWorkDuration } = usePreferences();
-	const [open, setOpen] = useChatExpansionState(
+	const [expanded, setOpen] = useChatExpansionState(
 		`worked:${messageId}:${active ? "active" : "complete"}`,
 		active || !collapseCompletedActivity,
 	);
+	const findMatch = useChatFindMatch(messageId);
+	const searchKey = findMatch
+		? `${findMatch.contentId}:${findMatch.occurrenceIndex}:${findMatch.start}:${findMatch.end}`
+		: null;
+	const [searchDisclosure, setSearchDisclosure] = useState({
+		key: searchKey,
+		dismissed: false,
+	});
+	if (searchDisclosure.key !== searchKey) {
+		setSearchDisclosure({ key: searchKey, dismissed: false });
+	}
+	const searchExpanded =
+		findMatch?.contentId !== undefined &&
+		content.some((item) => item.id === findMatch.contentId) &&
+		!(searchDisclosure.key === searchKey && searchDisclosure.dismissed);
+	const open = expanded || searchExpanded;
 	const durationLabel =
 		showWorkDuration && durationMs !== undefined
 			? formatWorkDuration(durationMs, {
@@ -310,9 +363,10 @@ export function AssistantWorkedRegion({
 				type="button"
 				className="group/work flex w-full items-center gap-1.5 rounded-md py-0.5 pr-1 text-left font-medium leading-snug text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
 				onClick={(event) =>
-					toggleChatExpansionWithAnchor(event.currentTarget, () =>
-						setOpen((value) => !value),
-					)
+					toggleChatExpansionWithAnchor(event.currentTarget, () => {
+						setSearchDisclosure({ key: searchKey, dismissed: open });
+						setOpen(!open);
+					})
 				}
 				aria-expanded={open}
 			>
@@ -331,6 +385,7 @@ export function AssistantWorkedRegion({
 			{open ? (
 				<div className="pt-0.5">
 					<ProgressiveAssistantWorkContent
+						key={searchExpanded ? findMatch?.contentId : "default"}
 						messageId={messageId}
 						content={content}
 						active={active}

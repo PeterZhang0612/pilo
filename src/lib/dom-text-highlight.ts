@@ -3,22 +3,25 @@
  * 不改 Markdown 渲染管线、不产生额外 DOM 节点，虚拟列表里的已挂载行才生效。
  */
 
+import type { ChatMessageMatch } from "./chat-message-search";
+import {
+	SEARCH_BLOCK_TAGS,
+	SEARCH_IGNORED_TAGS,
+	searchTextMatches,
+} from "./chat-search-text";
+
 const ALL_HIGHLIGHT = "pilo-find";
 const ACTIVE_HIGHLIGHT = "pilo-find-active";
 
-type HighlightApi = {
-	highlights: {
-		set(name: string, highlight: unknown): void;
-		delete(name: string): void;
-	};
-	Highlight: new (...ranges: Range[]) => unknown;
-};
-
-function highlightApi(): HighlightApi | null {
-	if (typeof CSS === "undefined") return null;
-	const css = CSS as unknown as Partial<HighlightApi>;
-	if (!css.highlights || typeof css.Highlight !== "function") return null;
-	return css as HighlightApi;
+function highlightApi() {
+	if (
+		typeof CSS === "undefined" ||
+		!CSS.highlights ||
+		typeof Highlight !== "function"
+	) {
+		return null;
+	}
+	return { highlights: CSS.highlights, Highlight };
 }
 
 export function clearTextHighlight(): void {
@@ -27,61 +30,118 @@ export function clearTextHighlight(): void {
 	api?.highlights.delete(ACTIVE_HIGHLIGHT);
 }
 
-/** 收集某个消息元素内 needle 的全部命中区间（同一文本节点内的连续匹配）。 */
-function matchRangesInElement(element: Element, needle: string): Range[] {
-	const ranges: Range[] = [];
-	const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
-	let node = walker.nextNode();
-	while (node) {
-		const text = node.nodeValue ?? "";
-		const lower = text.toLowerCase();
-		let at = lower.indexOf(needle);
-		while (at >= 0) {
-			const range = document.createRange();
-			range.setStart(node, at);
-			range.setEnd(node, at + needle.length);
-			ranges.push(range);
-			at = lower.indexOf(needle, at + needle.length);
+/** Match visible text across inline/ syntax-highlight token boundaries. */
+function matchRangesInElement(element: Element, query: string): Range[] {
+	const parts: string[] = [];
+	const chunks: Array<{ node: Node; start: number; end: number }> = [];
+	let length = 0;
+	const append = (text: string) => {
+		parts.push(text);
+		length += text.length;
+	};
+	const visit = (node: Node) => {
+		if (node.nodeType === Node.TEXT_NODE) {
+			const text = node.nodeValue ?? "";
+			if (text) chunks.push({ node, start: length, end: length + text.length });
+			append(text);
+			return;
 		}
-		node = walker.nextNode();
+		if (!(node instanceof Element)) return;
+		if (
+			SEARCH_IGNORED_TAGS.has(node.localName) ||
+			node.matches(
+				'[hidden], [aria-hidden="true"], [data-streamdown="code-block-header"], [data-streamdown="code-block-actions"]',
+			)
+		)
+			return;
+		// Streamdown renders code lines as block spans without newline text nodes.
+		const boundary =
+			SEARCH_BLOCK_TAGS.has(node.localName) ||
+			node.matches('[data-streamdown="code-block-body"] > pre > code > span');
+		if (boundary) append("\n");
+		for (const child of node.childNodes) visit(child);
+		if (boundary) append("\n");
+	};
+	visit(element);
+	const ranges: Range[] = [];
+	let chunkIndex = 0;
+	for (const match of searchTextMatches(parts.join(""), query)) {
+		while (chunks[chunkIndex] && chunks[chunkIndex].end <= match.start) {
+			chunkIndex += 1;
+		}
+		const start = chunks[chunkIndex];
+		let endIndex = chunkIndex;
+		while (chunks[endIndex] && chunks[endIndex].end < match.end) endIndex += 1;
+		const end = chunks[endIndex];
+		if (!start || !end) continue;
+		const range = document.createRange();
+		range.setStart(start.node, match.start - start.start);
+		range.setEnd(end.node, match.end - end.start);
+		ranges.push(range);
 	}
 	return ranges;
 }
 
 /**
  * 在 `container` 内按 `query` 重算高亮：全部命中弱高亮，active 命中强高亮。
- * `active` 以「消息 id + 该消息内第几个命中」定位，与模型层匹配序号对齐。
+ * `active` 以消息、文本段与段内可见命中序号定位。
  * 返回 active 命中是否已在 DOM 中找到（供调用方决定是否重试）。
  */
 export function applyTextHighlight(
 	container: ParentNode,
 	query: string,
-	active?: { messageId: string; occurrenceIndex: number },
+	active?: ChatMessageMatch,
+	scrollActive = false,
 ): boolean {
 	const api = highlightApi();
 	if (!api) return false;
 	api.highlights.delete(ALL_HIGHLIGHT);
 	api.highlights.delete(ACTIVE_HIGHLIGHT);
-	const needle = query.trim().toLowerCase();
-	if (!needle) return false;
+	if (!query.trim()) return false;
 
 	const all: Range[] = [];
 	let activeRange: Range | undefined;
 	for (const element of container.querySelectorAll("[data-message-id]")) {
-		const ranges = matchRangesInElement(element, needle);
-		all.push(...ranges);
-		if (
-			active &&
-			element.getAttribute("data-message-id") === active.messageId &&
-			ranges[active.occurrenceIndex]
-		) {
-			activeRange = ranges[active.occurrenceIndex];
+		const sections =
+			element.getAttribute("data-message-role") === "assistant"
+				? element.querySelectorAll("[data-chat-search-content-id]")
+				: [element];
+		let occurrenceIndex = 0;
+		for (const section of sections) {
+			const ranges = matchRangesInElement(section, query);
+			all.push(...ranges);
+			if (
+				active &&
+				element.getAttribute("data-message-id") === active.messageId
+			) {
+				if (active.contentId !== undefined) {
+					if (
+						section.getAttribute("data-chat-search-content-id") ===
+						active.contentId
+					) {
+						activeRange = ranges[active.contentOccurrenceIndex ?? 0];
+					}
+				} else {
+					activeRange ??= ranges[active.occurrenceIndex - occurrenceIndex];
+				}
+			}
+			occurrenceIndex += ranges.length;
 		}
 	}
 	if (all.length > 0)
 		api.highlights.set(ALL_HIGHLIGHT, new api.Highlight(...all));
 	if (activeRange) {
 		api.highlights.set(ACTIVE_HIGHLIGHT, new api.Highlight(activeRange));
+		if (scrollActive) {
+			const viewport =
+				activeRange.startContainer.parentElement?.closest(".chat-scrollbar");
+			if (viewport) {
+				const rect = activeRange.getBoundingClientRect();
+				const viewportRect = viewport.getBoundingClientRect();
+				viewport.scrollTop +=
+					rect.top - viewportRect.top - viewport.clientHeight / 2;
+			}
+		}
 	}
 	return Boolean(activeRange);
 }

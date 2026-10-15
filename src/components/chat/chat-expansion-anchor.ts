@@ -17,6 +17,7 @@ export const CHAT_EXPANSION_TOGGLE_EVENT = "pilo:chat-expansion-toggle";
 export function toggleChatExpansionWithAnchor(
 	trigger: HTMLElement,
 	toggle: () => void,
+	root?: HTMLElement,
 ) {
 	const viewport = trigger.closest<HTMLElement>(".chat-scrollbar");
 	if (!viewport) {
@@ -36,6 +37,7 @@ export function toggleChatExpansionWithAnchor(
 
 	const anchorTop = trigger.getBoundingClientRect().top;
 	const expansionRoot =
+		root ??
 		trigger.closest<HTMLElement>(ANCHOR_ROOT_SELECTOR) ??
 		trigger.parentElement ??
 		trigger;
