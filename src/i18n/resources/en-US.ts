@@ -381,6 +381,11 @@ const enUS = {
 	},
 	chat: {
 		todayPrompt: "What would you like to work on today?",
+		openProjectInEditor: "Open project in editor",
+		openProjectWithEditor: "Open in {{editor}}",
+		chooseProjectEditor: "Choose editor",
+		openProjectInEditorFailed:
+			"Could not open {{editor}}. Make sure it is installed and its URL handler is registered.",
 		acceptNextPrompt: "Use suggestion",
 		adoptNextPrompt: "Use suggestion: {{text}}",
 		composerPlaceholder: "Message Pi, @ to mention files",

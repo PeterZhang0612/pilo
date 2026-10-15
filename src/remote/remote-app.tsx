@@ -376,6 +376,7 @@ function RemoteWorkspace() {
 						)}
 						<main className="@container relative flex min-w-0 flex-1 flex-col bg-background">
 							<SessionHeader
+								project={chat.activeProject}
 								session={chat.headerSession ?? undefined}
 								sessionState={chat.chatState ?? undefined}
 								onNewChat={

@@ -442,6 +442,7 @@ export function NewChatLanding({
 		<SessionMentionScope connectionId={project?.connection.id ?? ""}>
 			<div className="@container relative flex h-full min-w-0 flex-col">
 				<SessionHeader
+					project={project}
 					overlay
 					temporary={temporary}
 					onOpenTerminal={onOpenTerminal}

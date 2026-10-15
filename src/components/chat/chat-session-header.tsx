@@ -7,6 +7,7 @@ import {
 	TerminalSquare,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { isTauri } from "@tauri-apps/api/core";
 
 import {
 	CUSTOM_TITLEBAR,
@@ -14,6 +15,8 @@ import {
 	TRAFFIC_LIGHT_ALIGNED_HEADER,
 	TRAFFIC_LIGHT_GUTTER,
 } from "@/components/title-bar";
+import { ProjectEditorMenu } from "@/components/project-editor-menu";
+import type { Project } from "@/lib/projects";
 import { cn } from "@/lib/utils";
 import { isSessionWindow } from "@/lib/window";
 import { Button, Tooltip, TooltipContent, TooltipTrigger } from "@/ui";
@@ -22,6 +25,7 @@ import { SessionHeaderMenu } from "./chat-session-header-menu";
 
 export function SessionHeader({
 	session,
+	project = session?.projectRecord,
 	sessionState,
 	onOpenChanges,
 	onOpenTerminal,
@@ -40,6 +44,7 @@ export function SessionHeader({
 	temporary = false,
 }: {
 	session?: ChatSession;
+	project?: Project | null;
 	sessionState?: ChatSessionRuntimeState;
 	onOpenChanges?: () => void;
 	onOpenTerminal?: () => void;
@@ -60,6 +65,7 @@ export function SessionHeader({
 	temporary?: boolean;
 }) {
 	const { t } = useTranslation();
+	const editorProject = isTauri() ? project : null;
 	// 会话窗口的 TitleBar 额外渲染置顶按钮（见 App.tsx 的 showAlwaysOnTop），
 	// 需要按多一个控件宽度避让，否则会压住菜单按钮。
 	const reserveWithPin =
@@ -153,7 +159,8 @@ export function SessionHeader({
 				/* 没有会话：占位保证顶栏几何一致（落地页项目选择已移至输入框上方） */
 				<div className="min-w-0 flex-1" />
 			)}
-			{onNewTemporaryChat ||
+			{editorProject ||
+			onNewTemporaryChat ||
 			onNewChat ||
 			onOpenChanges ||
 			onOpenTerminal ||
@@ -230,6 +237,7 @@ export function SessionHeader({
 							<TooltipContent>{t("app.temporaryChat")}</TooltipContent>
 						</Tooltip>
 					) : null}
+					{editorProject ? <ProjectEditorMenu project={editorProject} /> : null}
 					{onOpenChanges ? (
 						<Tooltip>
 							<TooltipTrigger asChild>
