@@ -164,11 +164,13 @@ function ActivityProcessStep({
 	return (
 		<div
 			className={cn(
-				"flex min-h-6 w-full items-start gap-1.5 py-0.5",
+				"flex min-h-6 w-full items-baseline gap-1.5 py-0.5",
 				PROCESS_TEXT_CLASS,
 			)}
 		>
-			<span className="inline-flex shrink-0 pt-0.5">{icon}</span>
+			<span className="relative top-[0.125em] inline-flex shrink-0">
+				{icon}
+			</span>
 			<div className="min-w-0 flex-1">{children}</div>
 		</div>
 	);
@@ -181,11 +183,7 @@ function ThinkingActivityView({ activity }: { activity: ThinkingActivity }) {
 		<ActivityProcessStep
 			icon={
 				<Sparkles
-					className={cn(
-						PROCESS_ICON_CLASS,
-						"mt-0.5",
-						running && "animate-pulse",
-					)}
+					className={cn(PROCESS_ICON_CLASS, running && "animate-pulse")}
 				/>
 			}
 		>

@@ -310,7 +310,7 @@ export function AppSidebar({
 								Pilo
 							</span>
 							{import.meta.env.DEV ? (
-								<span className="inline-flex shrink-0 select-none items-center gap-1 rounded-full bg-primary/10 px-1.5 py-[1px] text-[10px] font-semibold uppercase leading-4 tracking-wide text-primary">
+								<span className="inline-flex shrink-0 select-none items-center gap-1 rounded-full bg-primary/10 px-1.5 py-[1px] text-2xs font-semibold uppercase leading-4 tracking-wide text-primary">
 									<span className="size-1.5 animate-pulse rounded-full bg-primary motion-reduce:animate-none" />
 									DEV
 								</span>

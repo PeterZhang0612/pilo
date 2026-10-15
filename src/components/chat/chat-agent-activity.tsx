@@ -1,17 +1,24 @@
 import type { CSSProperties } from "react";
 
+import { usePreferences } from "@/lib/preferences-provider";
+
 type ActivityLabelStyle = CSSProperties & {
 	"--chat-agent-activity-label-duration": string;
 };
 
 export function ChatAgentActivityIndicator({ label }: { label: string }) {
+	const { readingFontSize } = usePreferences();
 	const highlightSteps = Array.from(label).length + 5;
 	const labelStyle: ActivityLabelStyle = {
 		"--chat-agent-activity-label-duration": `${highlightSteps * 60 + 2_000}ms`,
 	};
 
 	return (
-		<output className="inline-flex items-center gap-1.5" aria-live="polite">
+		<output
+			className="inline-flex items-center gap-1.5"
+			aria-live="polite"
+			style={{ fontSize: `${readingFontSize}px` }}
+		>
 			<span
 				aria-hidden="true"
 				className="chat-agent-activity-dot relative inline-grid size-3.5 shrink-0 place-items-center"

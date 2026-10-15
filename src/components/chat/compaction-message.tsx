@@ -8,6 +8,8 @@ import { ConversationColumn } from "@/components/chat/chat-conversation-column";
 import { toggleChatExpansionWithAnchor } from "@/components/chat/chat-expansion-anchor";
 import { ChatMarkdown } from "@/components/chat/chat-markdown";
 import type { ChatMessage } from "@/lib/conversation-types";
+import { getPageFontFamilyStack } from "@/lib/font-settings";
+import { usePreferences } from "@/lib/preferences-provider";
 import { cn } from "@/lib/utils";
 
 /**
@@ -21,6 +23,7 @@ export const CompactionMessage = memo(function CompactionMessage({
 }) {
 	const [expanded, setExpanded] = useState(false);
 	const { t } = useTranslation();
+	const { readingFontSize, readingFontFamily } = usePreferences();
 	const summary = message.text.trim();
 	const label =
 		message.tokensBefore === undefined
@@ -61,7 +64,13 @@ export const CompactionMessage = memo(function CompactionMessage({
 					<span aria-hidden="true" className="h-px flex-1 bg-border" />
 				</div>
 				{expanded && summary.length > 0 ? (
-					<div className="mt-2 rounded-lg border border-foreground/[0.06] bg-foreground/[0.02] px-3 py-2 text-sm text-muted-foreground">
+					<div
+						className="mt-2 rounded-lg border border-foreground/[0.06] bg-foreground/[0.02] px-3 py-2 text-muted-foreground"
+						style={{
+							fontSize: `${readingFontSize}px`,
+							fontFamily: `var(--pilo-mobile-font-family, ${getPageFontFamilyStack(readingFontFamily)})`,
+						}}
+					>
 						<ChatMarkdown text={summary} isStreaming={false} />
 					</div>
 				) : null}
