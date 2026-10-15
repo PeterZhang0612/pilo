@@ -45,14 +45,10 @@ export function useRemoteChatSuggestions({
 	const loadExtensionCommandNames = useCallback(async () => {
 		if (readOnly) return null;
 		if (commands != null) return extensionCommandNames;
-		try {
-			const loaded = await client?.loadModels(activeProjectId);
-			return loaded?.commands == null
-				? null
-				: createPiExtensionCommandNames(loaded.commands);
-		} catch {
-			return null;
-		}
+		const loaded = await client?.loadModels(activeProjectId);
+		return loaded?.commands == null
+			? null
+			: createPiExtensionCommandNames(loaded.commands);
 	}, [activeProjectId, client, commands, extensionCommandNames, readOnly]);
 
 	const handleSuggestionTrigger = useCallback(

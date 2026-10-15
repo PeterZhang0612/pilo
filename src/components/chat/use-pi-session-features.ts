@@ -345,7 +345,7 @@ export function usePiSessionFeatures({
 	}, [client, handleExtensionRequest, onRefreshSessionState, t]);
 
 	const tryExecuteExtensionCommand = useCallback(
-		async (message: string) => {
+		async (message: string): Promise<boolean | null> => {
 			if (readOnly) return false;
 			const trimmed = message.trim();
 			if (!trimmed.startsWith("/")) return false;
@@ -356,7 +356,8 @@ export function usePiSessionFeatures({
 					const available =
 						getCachedProjectPiModels(client.projectId)?.commands ??
 						(await refreshProjectPiModels(client.projectId)).commands;
-					names = createPiExtensionCommandNames(available ?? []);
+					if (available == null) throw new Error(t("chat.readCommandsFailed"));
+					names = createPiExtensionCommandNames(available);
 				}
 				if (!names.has(commandName)) return false;
 				await client.ensure();
@@ -366,7 +367,7 @@ export function usePiSessionFeatures({
 				toast.error(t("chat.executeExtensionFailed"), {
 					description: runtimeErrorMessage(error),
 				});
-				return true;
+				return null;
 			}
 		},
 		[client, commands, extensionCommandNames, readOnly, t],

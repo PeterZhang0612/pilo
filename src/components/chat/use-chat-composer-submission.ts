@@ -21,7 +21,7 @@ export type UseChatComposerSubmissionOptions = {
 	clearImages: () => void;
 	onNewChat?: () => void;
 	compact: (customInstructions?: string) => unknown;
-	tryExecuteExtensionCommand: (command: string) => Promise<boolean>;
+	tryExecuteExtensionCommand: (command: string) => Promise<boolean | null>;
 	handleSubmit: (submission: ChatSubmission) => void;
 	handleFollowUp: (submission: ChatSubmission) => void;
 };
@@ -83,7 +83,10 @@ export function useChatComposerSubmission({
 				void compact(customInstructions || undefined);
 				return true;
 			}
-			if (await tryExecuteExtensionCommand(command)) {
+			const executed = await tryExecuteExtensionCommand(command);
+			// null 表示失败已提示；保留输入，也不回退成普通消息。
+			if (executed === null) return true;
+			if (executed) {
 				clearDraft();
 				clearImages();
 				return true;

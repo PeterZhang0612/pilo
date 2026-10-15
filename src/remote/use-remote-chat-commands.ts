@@ -75,17 +75,20 @@ export function useRemoteChatCommands({
 				}
 				return true;
 			}
-			const extensionNames = await loadExtensionCommandNames();
-			// A switched-away command must not clear or submit the new session's draft.
-			if (!isActiveSession()) return true;
-			if (!extensionNames || !extensionNames.has(commandName)) return false;
-			clearComposer();
 			try {
+				const extensionNames = await loadExtensionCommandNames();
+				// A switched-away command must not clear or submit the new session's draft.
+				if (!isActiveSession()) return true;
+				if (extensionNames === null)
+					throw new Error(t("chat.readCommandsFailed"));
+				if (!extensionNames.has(commandName)) return false;
 				await ensureDraftRuntime();
+				if (!isActiveSession()) return true;
 				await client.sendChatCommand(targetSessionKey, {
 					type: "prompt",
 					message: command,
 				});
+				if (isActiveSession()) clearComposer();
 			} catch (error) {
 				if (!handleExpiredAuth(error) && isActiveSession()) {
 					setFatalError(error instanceof Error ? error.message : String(error));
