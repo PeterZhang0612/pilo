@@ -65,9 +65,12 @@ them (`#[allow(...)]` only with a comment explaining why).
 - Initialize the server resource directory from `app.path().resource_dir()` in
   Tauri setup, before restoring connections or starting server prewarming.
 - `server_binary` checks explicit `PILO_SERVER_PATH` / `PILO_SERVER_LINUX_PATH`
-  overrides first, then `<resource_dir>/runtime/<resource_name>`, portable/macOS
-  fallback locations, and staged development resources. Missing files keep the
-  existing `bundled pilo-server runtime ... is missing` error.
+  overrides first. Debug builds then require the standard Cargo output
+  `target/<rust-target>/debug/pilo-server` (`pilo-server.exe` on Windows) and never
+  fall back to production resources. Release builds check
+  `<resource_dir>/runtime/<resource_name>`, portable/macOS fallback locations,
+  and staged production resources. Missing release files keep the existing
+  `bundled pilo-server runtime ... is missing` error.
 - Linux resource directories use Tauri's product name, not the executable stem:
   the deb installs `/usr/bin/pilo` with resources under `/usr/lib/Pilo/runtime`.
   AppImage resources live under its mount directory. Do not lowercase the
@@ -92,3 +95,77 @@ them (`#[allow(...)]` only with a comment explaining why).
 - Run `python3 tests/test-linux-appimage.py` for portable orchestration tests.
   These use a fixture packer; Linux CI must also run final-artifact verification,
   and desktop testing must validate UI and Pi connections on the target host.
+
+### Manual development runtime builds
+
+#### 1. Scope / Trigger
+
+Dev startup, manual server/extension builds and deployment isolation.
+
+#### 2. Signatures
+
+- `pnpm server:build [target]` runs `scripts/build-server.mjs` for manual local
+  development builds. There is no separate `:dev` command.
+- Release CI still calls `bash scripts/build-pilo-server.sh [target]` without
+  `--dev` and stages production resources; do not replace it with the dev entry.
+- `bash scripts/build-pilo-server.sh --dev [target]` builds a debug runtime in
+  `target/<rust-target>/debug/`, without a staging copy.
+- `PILO_DEV_WSL_DISTRO` optionally selects the Windows build distro.
+- Dev defaults: `CARGO_BUILD_JOBS=1`, `CARGO_PROFILE_DEV_DEBUG=0`; callers may
+  override them. Production build settings remain unchanged.
+
+#### 3. Contracts
+
+- Dev startup never builds WSL/SSH runtimes or watches plugins specially. Keep
+  Tauri's normal Rust watcher and the shared desktop/WebUI frontend watchers.
+- Local debug uses the desktop's embedded server. WSL/SSH debug loads manually
+  built binaries from `target/<rust-target>/debug/pilo-server` (Windows: `.exe`),
+  never production fallback.
+- Windows manual builds run through WSL against the Windows checkout; POSIX builds
+  run directly. Default to the build environment's native target. Cross-target
+  builds need the target toolchain/linker. Use the workspace’s normal `target/`
+  directory for Cargo output, with no `target/pilo-dev` build or staging tree.
+  Dev builds neither copy binaries to resources nor deploy running environments.
+- Plugins are embedded in server binaries. Startup deploys them into the runtime
+  root's `extensions/`; rebuild and restart Pilo/Pi after changes. No reload
+  markers or custom backend watcher. Reject release/custom dev profiles to
+  prevent accidental production runtime paths.
+- Debug Local cache is `LOCALAPPDATA/pilo-dev/server` or POSIX `pilo-dev/server`;
+  WSL/SSH explicitly use `$HOME/.cache/pilo-dev/server`. Do not remove production
+  legacy directories during debug deployment. Pi config/session files are shared.
+- Debug deployments re-read artifact fingerprints after manual builds. Existing
+  deployment fingerprint checks upload changed binaries on the next connection.
+  Never automatically resend prompts or restart an active Pi process for a build.
+- Source sync to Windows excludes production server resources and all build
+  output. Run the manual dev build in the Windows checkout after source sync.
+
+#### 4. Validation / Error Matrix
+
+- Manual build failure: propagate nonzero exit; do not deploy or restart Pi.
+- Missing debug target: explicit error directing users to `pnpm server:build`.
+- No WSL on Windows: manual remote build fails; Local dev startup still works.
+
+#### 5. Good / Base / Bad Cases
+
+- Good: rebuild after a plugin edit; restart and deploy only dev resources.
+- Base: Local dev compiles its embedded server with the desktop.
+- Bad: dev startup forces a cold WSL build, or shares production runtime paths.
+
+#### 6. Tests Required
+
+Pending explicit authorization: standard Cargo output paths, absence of a staging
+copy, build failure propagation,
+Windows WSL paths, missing target errors, plugin deployment on Local/WSL/SSH,
+production/dev coexistence and source sync isolation.
+`current_platform_resolves_its_server_runtime` checks the Cargo filename in
+Debug, or the exact missing-dev-runtime error when no standalone dev build
+exists; Local debug uses the embedded server and needs no manual build.
+Release still requires an existing binary with the packaged resource filename.
+These updated assertions have not been run. No end-to-end runtime validation
+is implied by syntax/lint checks.
+
+#### 7. Wrong vs Correct
+
+Wrong: dev startup automatically builds remote servers, or dev binaries overwrite
+`src-tauri/resources/`. Correct: explicit dev builds and isolated runtime roots;
+startup only deploys an already built server and its embedded plugins.

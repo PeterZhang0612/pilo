@@ -63,19 +63,34 @@ Pilo 默认从 `PATH` 自动发现 `pi`。也可以在 Settings 中为每个 Con
 
 ```powershell
 pnpm install
-pnpm server:build:win
-pnpm tauri dev
+pnpm dev
 ```
 
 ### macOS / Linux
 
 ```bash
 pnpm install
-pnpm server:build
-pnpm tauri dev
+pnpm dev
 ```
 
-上面的命令只会构建当前主机对应的 `pilo-server`。WSL 和 SSH Connection 还需要在 `src-tauri/resources/` 中准备与目标 OS/架构匹配的运行时；Release 打包流程会自动准备完整运行时集合。
+`pnpm dev`（或 `pnpm tauri dev`）启动时不再构建 WSL/SSH 运行时。桌面前端热更新、WebUI 资源监听和 Tauri 原有的 Rust 自动重编译保持不变，不再增加 server/插件构建监听。
+
+Local 使用桌面构建中内嵌的 server。WSL/SSH 请先手动构建开发 server，再启动或重启 Pilo：
+
+```powershell
+pnpm server:build
+pnpm dev
+```
+
+Windows 请在 Windows 那份仓库中执行以上命令。手动构建通过 WSL 运行，WSL 中需安装 Rust 和 Bash，默认构建该发行版原生架构的 Linux server。可在构建前指定发行版，例如 `$env:PILO_DEV_WSL_DISTRO = "Debian"`。macOS/Linux 默认构建原生 server。其他远程目标可使用 `pnpm server:build linux-aarch64`，构建环境中需安装对应 Rust target 和链接器。
+
+dev 构建默认使用一个 Cargo job，并关闭调试符号，降低 WSL 内存占用；需要时可显式覆盖 `CARGO_BUILD_JOBS` / `CARGO_PROFILE_DEV_DEBUG`。正式构建参数不变。
+
+开发二进制直接使用 Cargo 标准输出目录，例如 `target/x86_64-unknown-linux-gnu/debug/pilo-server`，不再额外复制一份；`src-tauri/resources/` 中的正式资源保持不变。启动或连接时，Pilo 将匹配的 server 部署到 dev 运行目录，server 自动将内嵌插件释放到 `extensions/`。修改插件后重新构建并重启 Pilo/Pi 即可加载。运行时和插件缓存使用 `pilo-dev/server`，而非正式版的 `pilo/server`（WSL/SSH 为 `~/.cache/pilo-dev/server`）；Pi 设置和会话文件仍然共享。
+
+`scripts/sync-to-windows.sh` 只同步源码，不同步 server 构建产物。同步修改后，请在 Windows 那份仓库中执行手动 dev 构建。
+
+Release 打包流程仍自动准备完整运行时集合。手动准备正式资源时，Windows 使用 `pnpm server:build:win`，macOS/Linux 使用 `bash scripts/build-pilo-server.sh`。
 
 支持的服务端运行时目标为 Linux x64/arm64、Windows x64/arm64 和 macOS x64/arm64。也可以显式构建指定目标：
 

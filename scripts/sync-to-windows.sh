@@ -6,8 +6,6 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 SOURCE_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd -P)/"
 TARGET_DIR="${TARGET_DIR:-/mnt/d/Code/pilo/}"
 DEBOUNCE_SECONDS="${DEBOUNCE_SECONDS:-0.15}"
-SERVER_RESOURCE_NAME="$("$SCRIPT_DIR/build-pilo-server.sh" --print-resource-name)"
-SERVER_RESOURCE="$SOURCE_DIR/src-tauri/resources/$SERVER_RESOURCE_NAME"
 
 RSYNC_EXCLUDES=(
   "--exclude=.git/"
@@ -20,9 +18,10 @@ RSYNC_EXCLUDES=(
   "--exclude=dist/"
   "--exclude=.vite/"
   "--exclude=target/"
+  "--exclude=src-tauri/resources/pilo-server-*"
 )
 
-INOTIFY_EXCLUDE='(^|/)(\.git|\.idea|\.vscode|\.pi|\.trellis|\.agents|node_modules|dist|\.vite|target)(/|$)'
+INOTIFY_EXCLUDE='(^|/)(\.git|\.idea|\.vscode|\.pi|\.trellis|\.agents|node_modules|dist|\.vite|target)(/|$)|/src-tauri/resources/pilo-server-[^/]*$'
 
 require_command() {
   command -v "$1" >/dev/null 2>&1 || {
@@ -32,13 +31,7 @@ require_command() {
 }
 
 sync_once() {
-  if [[ ! -f "$SERVER_RESOURCE" ]] ||
-    find "$SOURCE_DIR/crates/pilo-protocol" "$SOURCE_DIR/crates/pilo-server" \
-      -type f \( -name '*.rs' -o -name '*.js' -o -name 'Cargo.toml' \) \
-      -newer "$SERVER_RESOURCE" -print -quit 2>/dev/null | grep -q .; then
-    "$SCRIPT_DIR/build-pilo-server.sh"
-  fi
-
+  # Runtime builds are manual; never overwrite the Windows checkout's staged resources.
   mkdir -p -- "$TARGET_DIR"
 
   rsync \

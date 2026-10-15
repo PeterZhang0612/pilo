@@ -41,7 +41,14 @@ pub fn runtime_directory() -> io::Result<PathBuf> {
         .filter(|path| path.is_absolute())
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cache")));
     cache
-        .map(|cache| cache.join("pilo").join("server"))
+        .map(|cache| {
+            let app = if cfg!(debug_assertions) {
+                "pilo-dev"
+            } else {
+                "pilo"
+            };
+            cache.join(app).join("server")
+        })
         .ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::NotFound,

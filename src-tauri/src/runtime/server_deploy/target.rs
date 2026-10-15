@@ -131,6 +131,33 @@ pub(crate) fn server_binary(target: ServerTarget) -> Result<PathBuf, String> {
         return Ok(path);
     }
 
+    if cfg!(debug_assertions) {
+        let arch = match target.arch {
+            ServerArch::X86_64 => "x86_64",
+            ServerArch::Aarch64 => "aarch64",
+        };
+        let platform = match target.platform {
+            ServerPlatform::Windows => "pc-windows-msvc",
+            ServerPlatform::Linux => "unknown-linux-gnu",
+            ServerPlatform::Darwin => "apple-darwin",
+        };
+        let filename = if target.platform == ServerPlatform::Windows {
+            "pilo-server.exe"
+        } else {
+            "pilo-server"
+        };
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../target")
+            .join(format!("{arch}-{platform}"))
+            .join("debug")
+            .join(filename);
+        return path.is_file().then_some(path).ok_or_else(|| {
+            format!(
+                "development pilo-server runtime '{resource_name}' is missing; run pnpm server:build with the remote platform target, then restart Pilo"
+            )
+        });
+    }
+
     let mut candidates = Vec::new();
     if let Ok(exe) = std::env::current_exe() {
         candidates.extend(installed_server_candidates(

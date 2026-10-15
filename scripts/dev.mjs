@@ -1,23 +1,10 @@
 #!/usr/bin/env node
-// Tauri dev only HMRs the desktop webview (from the Vite dev server).
-// The Remote WebUI is served from `dist/` on disk, so we also run a Vite build
-// in watch mode to keep `dist/` fresh for the embedded HTTP server.
 import { spawn, spawnSync } from "node:child_process";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
 
-const commands = [
-	["exec", "vite", "build", "--watch"],
-	["tauri", "dev", "--features", "webdriver"],
-];
-
-const children = commands.map((args) =>
-	spawn("pnpm", args, {
-		stdio: "inherit",
-		shell: process.platform === "win32",
-		detached: process.platform !== "win32",
-	}),
-);
-
+const root = fileURLToPath(new URL("../", import.meta.url));
+const children = [];
 let closing = false;
 function shutdown(code) {
 	if (closing) return;
@@ -26,7 +13,7 @@ function shutdown(code) {
 		if (!child.pid) continue;
 		if (process.platform === "win32") {
 			if (child.exitCode !== null || child.signalCode !== null) continue;
-			// Killing only cmd.exe leaves its pnpm/Vite descendants running.
+			// Stop descendants as well as the Node launcher.
 			const result = spawnSync(
 				"taskkill.exe",
 				["/PID", String(child.pid), "/T", "/F"],
@@ -52,10 +39,33 @@ function shutdown(code) {
 	process.exit(code);
 }
 
-for (const child of children) {
-	child.on("exit", (code) => shutdown(code ?? 0));
-	child.on("error", () => shutdown(1));
-}
 for (const signal of ["SIGINT", "SIGTERM"]) {
 	process.on(signal, () => shutdown(0));
+}
+
+try {
+	const frontend = process.argv.includes("--frontend");
+	// WebUI serves dist/ from disk; desktop uses the Vite dev server.
+	const commands = frontend
+		? [
+				["node_modules/vite/bin/vite.js"],
+				["node_modules/vite/bin/vite.js", "build", "--watch"],
+			]
+		: [["scripts/tauri.mjs", "dev", "--features", "webdriver"]];
+	for (const args of commands) {
+		const child = spawn(process.execPath, args, {
+			cwd: root,
+			stdio: "inherit",
+			detached: process.platform !== "win32",
+		});
+		children.push(child);
+		child.on("exit", (code) => shutdown(code ?? 1));
+		child.on("error", (error) => {
+			console.error(error);
+			shutdown(1);
+		});
+	}
+} catch (error) {
+	console.error("[pilo-dev] Startup failed:", error);
+	shutdown(1);
 }

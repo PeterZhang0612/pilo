@@ -4,8 +4,19 @@ set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 ROOT_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd -P)"
+DEV_BUILD=0
+if [[ "${1:-}" == '--dev' ]]; then
+  DEV_BUILD=1
+  shift
+fi
 PROFILE="${PILO_SERVER_PROFILE:-release}"
 RESOURCE_DIR="$ROOT_DIR/src-tauri/resources"
+if [[ "$DEV_BUILD" == 1 ]]; then
+  PROFILE='debug'
+  export CARGO_TARGET_DIR="$ROOT_DIR/target"
+  export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-1}"
+  export CARGO_PROFILE_DEV_DEBUG="${CARGO_PROFILE_DEV_DEBUG:-0}"
+fi
 
 normalize_arch() {
   case "$1" in
@@ -83,7 +94,7 @@ if [[ "$PRINT_RESOURCE_ONLY" == 1 ]]; then
   exit 0
 fi
 
-if [[ "$TARGET_EXPLICIT" == 0 && "$ROOT_DIR" == /mnt/[A-Za-z]/* ]]; then
+if [[ "$DEV_BUILD" == 0 && "$TARGET_EXPLICIT" == 0 && "$ROOT_DIR" == /mnt/[A-Za-z]/* ]]; then
   printf 'This checkout lives on a Windows drive (%s) but bash is WSL bash.\n' "$ROOT_DIR" >&2
   printf 'Host detection would build the Linux runtime (%s) for the Windows copy of the repo.\n' "$TARGET" >&2
   printf 'Run "pnpm server:build:win" on Windows (no bash involved), or pass an explicit target.\n' >&2
@@ -114,7 +125,7 @@ case "$PROFILE" in
     ;;
 esac
 
-SOURCE_PATH="$ROOT_DIR/target/$RUST_TARGET/$PROFILE_DIR/$SOURCE_NAME"
+SOURCE_PATH="${CARGO_TARGET_DIR:-$ROOT_DIR/target}/$RUST_TARGET/$PROFILE_DIR/$SOURCE_NAME"
 RESOURCE_PATH="$RESOURCE_DIR/$RESOURCE_NAME"
 
 cd -- "$ROOT_DIR"
@@ -129,6 +140,11 @@ fi
 if [[ ! -f "$SOURCE_PATH" ]]; then
   printf 'pilo-server build completed but output is missing: %s\n' "$SOURCE_PATH" >&2
   exit 1
+fi
+
+if [[ "$DEV_BUILD" == 1 ]]; then
+  printf 'Development runtime ready: %s\n' "$SOURCE_PATH"
+  exit 0
 fi
 
 mkdir -p -- "$RESOURCE_DIR"

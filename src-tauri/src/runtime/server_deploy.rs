@@ -10,9 +10,17 @@ use crate::domain::{Connection, ConnectionKind};
 
 use super::ssh::{ssh_command, wrap_posix_script};
 
-const SERVER_REMOTE_DIR: &str = ".cache/pilo/server";
-/// Pre-fingerprinted-name layout; cleaned up on install.
-const LEGACY_SERVER_REMOTE_DIR: &str = ".cache/pilo/server-v3";
+const SERVER_REMOTE_DIR: &str = if cfg!(debug_assertions) {
+    ".cache/pilo-dev/server"
+} else {
+    ".cache/pilo/server"
+};
+// Development installs must never remove a production runtime.
+const LEGACY_SERVER_CLEANUP: &str = if cfg!(debug_assertions) {
+    ""
+} else {
+    r#"rm -rf "$HOME/.cache/pilo/server-v3"; "#
+};
 
 pub(super) struct SpawnedServer {
     pub(super) child: Child,
@@ -207,7 +215,7 @@ async fn deploy_server_wsl(
     // binary to fingerprint exactly like the current build, so the ready check
     // never trusts a stale or corrupted file.
     let install_script = format!(
-        "set -e; dst=\"$HOME/{SERVER_REMOTE_DIR}/pilo-server\"; expected=\"{fingerprint}\"; force={force_redeploy}; actual=$(\"$dst\" --fingerprint 2>/dev/null || true); if [ \"$force\" = \"false\" ] && [ \"$actual\" = \"$expected\" ]; then printf 'ready\\n'; exit 0; fi; src=$(wslpath -u \"$1\"); [ -f \"$src\" ] || {{ printf 'source_missing\\t%s\\n' \"$src\" >&2; exit 44; }}; mkdir -p \"$(dirname \"$dst\")\"; tmp=\"$dst.tmp.$$\"; trap 'rm -f \"$tmp\"' EXIT; cp -- \"$src\" \"$tmp\"; chmod 700 \"$tmp\"; actual=$(\"$tmp\" --fingerprint 2>/dev/null || true); [ \"$actual\" = \"$expected\" ] || {{ printf 'fingerprint_mismatch\\n' >&2; exit 43; }}; mv -f \"$tmp\" \"$dst\"; trap - EXIT; rm -rf \"$HOME/{LEGACY_SERVER_REMOTE_DIR}\"; printf 'installed\\n'",
+        "set -e; dst=\"$HOME/{SERVER_REMOTE_DIR}/pilo-server\"; expected=\"{fingerprint}\"; force={force_redeploy}; actual=$(\"$dst\" --fingerprint 2>/dev/null || true); if [ \"$force\" = \"false\" ] && [ \"$actual\" = \"$expected\" ]; then printf 'ready\\n'; exit 0; fi; src=$(wslpath -u \"$1\"); [ -f \"$src\" ] || {{ printf 'source_missing\\t%s\\n' \"$src\" >&2; exit 44; }}; mkdir -p \"$(dirname \"$dst\")\"; tmp=\"$dst.tmp.$$\"; trap 'rm -f \"$tmp\"' EXIT; cp -- \"$src\" \"$tmp\"; chmod 700 \"$tmp\"; actual=$(\"$tmp\" --fingerprint 2>/dev/null || true); [ \"$actual\" = \"$expected\" ] || {{ printf 'fingerprint_mismatch\\n' >&2; exit 43; }}; mv -f \"$tmp\" \"$dst\"; trap - EXIT; {LEGACY_SERVER_CLEANUP}printf 'installed\\n'",
         fingerprint = artifact.fingerprint,
     );
     let mut command = Command::new("wsl.exe");
@@ -255,7 +263,10 @@ async fn server_artifact(target: ServerTarget) -> Result<Arc<ServerArtifact>, St
     let artifacts = SERVER_ARTIFACTS
         .get_or_init(|| async { Mutex::new(HashMap::new()) })
         .await;
-    if let Some(artifact) = artifacts.lock().await.get(&target).cloned() {
+    // Manual dev builds can replace artifacts while the Host is still running.
+    if !cfg!(debug_assertions)
+        && let Some(artifact) = artifacts.lock().await.get(&target).cloned()
+    {
         return Ok(artifact);
     }
 
@@ -285,7 +296,9 @@ async fn server_artifact(target: ServerTarget) -> Result<Arc<ServerArtifact>, St
         fingerprint,
         size,
     });
-    artifacts.lock().await.insert(target, Arc::clone(&artifact));
+    if !cfg!(debug_assertions) {
+        artifacts.lock().await.insert(target, Arc::clone(&artifact));
+    }
     Ok(artifact)
 }
 
@@ -300,7 +313,7 @@ async fn deploy_server_ssh(
     // fingerprint exactly like the current build, so the ready check never
     // trusts a stale or corrupted file.
     let install_script = format!(
-        "set -e; dst=\"$HOME/{SERVER_REMOTE_DIR}/pilo-server\"; expected=\"{fingerprint}\"; force={force_redeploy}; actual=$(\"$dst\" --fingerprint 2>/dev/null || true); if [ \"$force\" = \"false\" ] && [ \"$actual\" = \"$expected\" ]; then printf 'ready\\n'; exit 0; fi; mkdir -p \"$(dirname \"$dst\")\"; printf 'upload\\n'; tmp=\"$dst.tmp.$$\"; trap 'rm -f \"$tmp\"' EXIT; cat > \"$tmp\"; chmod 700 \"$tmp\"; actual=$(\"$tmp\" --fingerprint 2>/dev/null || true); [ \"$actual\" = \"$expected\" ] || {{ printf 'fingerprint_mismatch\\n' >&2; exit 43; }}; mv -f \"$tmp\" \"$dst\"; trap - EXIT; rm -rf \"$HOME/{LEGACY_SERVER_REMOTE_DIR}\"; printf 'installed\\n'",
+        "set -e; dst=\"$HOME/{SERVER_REMOTE_DIR}/pilo-server\"; expected=\"{fingerprint}\"; force={force_redeploy}; actual=$(\"$dst\" --fingerprint 2>/dev/null || true); if [ \"$force\" = \"false\" ] && [ \"$actual\" = \"$expected\" ]; then printf 'ready\\n'; exit 0; fi; mkdir -p \"$(dirname \"$dst\")\"; printf 'upload\\n'; tmp=\"$dst.tmp.$$\"; trap 'rm -f \"$tmp\"' EXIT; cat > \"$tmp\"; chmod 700 \"$tmp\"; actual=$(\"$tmp\" --fingerprint 2>/dev/null || true); [ \"$actual\" = \"$expected\" ] || {{ printf 'fingerprint_mismatch\\n' >&2; exit 43; }}; mv -f \"$tmp\" \"$dst\"; trap - EXIT; {LEGACY_SERVER_CLEANUP}printf 'installed\\n'",
         fingerprint = artifact.fingerprint,
     );
     let mut command = ssh_command(connection)?;

@@ -155,9 +155,12 @@ share `useNextPrompt`, `useNextPromptSettings`, settings fields and `ChatCompose
   they are deployment staging only, never Session extension paths.
 - `PILO_SERVER_RUNTIME_DIR` is an absolute writable runtime root. Local debug
   embedded Server and release binary launchers explicitly supply it. Default
-  Local root is Windows `LOCALAPPDATA/pilo/server`, or POSIX absolute
+  release Local root is Windows `LOCALAPPDATA/pilo/server`, or POSIX absolute
   `XDG_CACHE_HOME/pilo/server` / `HOME/.cache/pilo/server`, never an install directory.
-  WSL/SSH launchers explicitly use `$HOME/.cache/pilo/server`.
+  Debug Local uses `pilo-dev/server` instead. WSL/SSH launchers explicitly use
+  `$HOME/.cache/pilo/server` for release and `$HOME/.cache/pilo-dev/server` for debug.
+  See [Manual development runtime builds](./quality-guidelines.md#manual-development-runtime-builds)
+  for manual builds and cache isolation.
 - Server maps only typed built-in IDs to canonical absolute deployed paths.
   Normal chat loads next-prompt; model probe loads model-catalog (plus SSH tools
   only when required by its profile); parallel/direct Pi load only their profile.
@@ -172,9 +175,12 @@ share `useNextPrompt`, `useNextPromptSettings`, settings fields and `ChatCompose
 - The model-catalog probe resolves defaults serially: each setModel changes the
   same throwaway Pi session and must restore its baseline before the next model.
   Never parallelize this loop to satisfy no-await-in-loop.
-- Extension-only changes affect Cargo embedded resources/binary fingerprint;
-  `sync-to-windows.sh` freshness includes `.js`. CI already covers the Server
-  crate tree. No hot reload, package manifest, bundle-hash or independent rollback.
+- Extension-only changes affect Cargo embedded resources/binary fingerprint.
+  For WSL/SSH dev, run `pnpm server:build` and restart Pilo/Pi; startup deploys
+  the server and embedded plugins into the isolated dev runtime root.
+  `sync-to-windows.sh` only syncs sources; build in the Windows checkout after sync.
+  CI already covers the Server crate tree. No plugin hot reload, package manifest,
+  bundle-hash or independent rollback.
 
 ## 4. Validation & Error Matrix
 

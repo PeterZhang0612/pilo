@@ -159,13 +159,36 @@ fn platform_probe_maps_linux_and_macos_architectures() {
 }
 
 #[test]
-fn current_platform_resolves_its_staged_server_runtime() {
+fn current_platform_resolves_its_server_runtime() {
     let target = ServerTarget::current().unwrap();
-    let path = server_binary(target).unwrap();
+    let path = match server_binary(target) {
+        Ok(path) => path,
+        Err(error) if cfg!(debug_assertions) => {
+            // Local debug embeds the server; a standalone dev build is optional.
+            assert_eq!(
+                error,
+                format!(
+                    "development pilo-server runtime '{}' is missing; run pnpm server:build with the remote platform target, then restart Pilo",
+                    target.resource_name().unwrap()
+                )
+            );
+            return;
+        }
+        Err(error) => panic!("{error}"),
+    };
     assert!(path.is_file());
+    let expected_name = if cfg!(debug_assertions) {
+        if target.platform == ServerPlatform::Windows {
+            "pilo-server.exe"
+        } else {
+            "pilo-server"
+        }
+    } else {
+        target.resource_name().unwrap()
+    };
     assert_eq!(
         path.file_name().and_then(|name| name.to_str()),
-        Some(target.resource_name().unwrap())
+        Some(expected_name)
     );
 }
 

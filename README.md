@@ -63,19 +63,34 @@ Pilo discovers `pi` from `PATH` by default. Each connection can also be configur
 
 ```powershell
 pnpm install
-pnpm server:build:win
-pnpm tauri dev
+pnpm dev
 ```
 
 ### macOS / Linux
 
 ```bash
 pnpm install
-pnpm server:build
-pnpm tauri dev
+pnpm dev
 ```
 
-The commands above build the `pilo-server` runtime for the current host only. WSL and SSH connections need a runtime matching the target OS and architecture in `src-tauri/resources/`. Release packaging stages the complete runtime set automatically.
+`pnpm dev` (or `pnpm tauri dev`) starts development without building WSL/SSH runtimes. Desktop frontend HMR, WebUI asset watching and Tauri's normal Rust rebuild behavior remain enabled; there is no additional server/extension build watcher.
+
+Local uses the server embedded in the desktop build. For WSL/SSH, build a development server manually, then start or restart Pilo:
+
+```powershell
+pnpm server:build
+pnpm dev
+```
+
+On Windows, run these commands in the Windows checkout. The manual build uses WSL (Rust and Bash must be installed there), with its native Linux target by default. Set `PILO_DEV_WSL_DISTRO` before building to select a distro, for example `$env:PILO_DEV_WSL_DISTRO = "Debian"`. On macOS/Linux, it builds the native server target. To build another remote target, use `pnpm server:build linux-aarch64`; its Rust target and linker must be installed in the build environment.
+
+The dev build defaults to one Cargo job and no debug symbols to reduce WSL memory use. Override `CARGO_BUILD_JOBS` / `CARGO_PROFILE_DEV_DEBUG` explicitly if needed. Production build settings are unchanged.
+
+Development binaries stay in Cargo’s standard output directory, for example `target/x86_64-unknown-linux-gnu/debug/pilo-server`, without a second staging copy. Release resources in `src-tauri/resources/` remain unchanged. On startup/connection, Pilo deploys the matching server into its dev runtime directory; the server writes its embedded plugins into `extensions/`. Rebuild after plugin changes and restart Pilo/Pi to load them. Runtime/extension caches use `pilo-dev/server` instead of `pilo/server` (WSL/SSH: `~/.cache/pilo-dev/server`). Pi settings and session files remain shared.
+
+`scripts/sync-to-windows.sh` syncs source only, not server build artifacts. Run the manual dev build in the Windows checkout after syncing changes.
+
+Release packaging stages the complete runtime set automatically. To stage a release runtime manually, use `pnpm server:build:win` on Windows or `bash scripts/build-pilo-server.sh` on macOS/Linux.
 
 Supported server runtime targets are Linux x64/arm64, Windows x64/arm64, and macOS x64/arm64. An explicit runtime can be built with:
 
