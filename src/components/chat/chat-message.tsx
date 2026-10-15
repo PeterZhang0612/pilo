@@ -184,11 +184,11 @@ export const AssistantMessage = memo(function AssistantMessage({
 						</div>
 					) : null}
 					{streamingLabel || message.stopReason === "aborted" ? (
-						<div className="mt-1 flex min-h-6 items-center gap-1 text-2xs text-muted-foreground">
+						<div className="mt-1 flex min-h-6 items-center gap-1 text-muted-foreground">
 							{streamingLabel ? (
 								<ChatAgentActivityIndicator label={streamingLabel} />
 							) : (
-								<span>{t("chat.stopped")}</span>
+								<span className="text-2xs">{t("chat.stopped")}</span>
 							)}
 						</div>
 					) : !visibleErrorMessage &&

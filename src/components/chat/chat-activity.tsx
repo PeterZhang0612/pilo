@@ -330,7 +330,7 @@ function ToolCallActivityView({
 			<button
 				type="button"
 				className={cn(
-					"group/tool -mx-1 flex min-h-6 w-[calc(100%+0.5rem)] items-start gap-1.5 rounded-md px-1 py-0.5 text-left transition-colors",
+					"group/tool -mx-1 flex min-h-6 w-[calc(100%+0.5rem)] items-center gap-1.5 rounded-md px-1 py-0.5 text-left transition-colors",
 					PROCESS_TEXT_CLASS,
 					hasDetails
 						? "hover:bg-muted/40 hover:text-foreground"
@@ -350,7 +350,6 @@ function ToolCallActivityView({
 					toolName={activity.toolName}
 					className={cn(
 						PROCESS_ICON_CLASS,
-						"mt-0.5",
 						activity.isError && "text-destructive",
 					)}
 				/>
@@ -365,9 +364,9 @@ function ToolCallActivityView({
 					) : null}
 				</span>
 				{activity.isError ? (
-					<CircleAlert className="mt-0.5 size-3.5 shrink-0" />
+					<CircleAlert className="size-3.5 shrink-0" />
 				) : running ? (
-					<Spinner className="mt-0.5 size-3.5 shrink-0" />
+					<Spinner className="size-3.5 shrink-0" />
 				) : null}
 			</button>
 			{hasDetails && open ? (
