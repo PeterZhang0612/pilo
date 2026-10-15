@@ -21,6 +21,15 @@ pub fn project_list(app: AppHandle) -> Result<Vec<Project>, String> {
 }
 
 #[tauri::command]
+pub async fn project_open_in_zed_wsl(app: AppHandle, id: String) -> Result<(), String> {
+    let project = project::get(&app, &id)?;
+    let crate::domain::ConnectionKind::Wsl { distro } = &project.connection.kind else {
+        return Err("opening Zed in WSL requires a WSL project".to_owned());
+    };
+    super::super::wsl::open_in_zed(distro, &project.path).await
+}
+
+#[tauri::command]
 pub fn project_model_scope_get(
     app: AppHandle,
     project_id: String,

@@ -1,4 +1,4 @@
-import { isTauri } from "@tauri-apps/api/core";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
 import type { Project } from "@/lib/projects";
@@ -75,9 +75,19 @@ export function projectEditorUrl(
 }
 
 export async function openProjectInEditor(
-	project: Pick<Project, "path" | "connection">,
+	project: Pick<Project, "id" | "path" | "connection">,
 	editor: ProjectEditor,
 ): Promise<void> {
+	if (
+		isTauri() &&
+		navigator.userAgent.includes("Windows") &&
+		editor === "zed" &&
+		project.connection.kind.type === "wsl"
+	) {
+		await invoke<void>("project_open_in_zed_wsl", { id: project.id });
+		return;
+	}
+
 	const url = projectEditorUrl(project, editor);
 	if (isTauri()) {
 		await openUrl(url);
