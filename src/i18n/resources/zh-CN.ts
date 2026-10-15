@@ -266,6 +266,15 @@ const zhCN = {
 		upToDate: "已是最新",
 		downloadInstall: "下载并安装",
 		updateAvailable: "可更新",
+		updateDetails: "查看更新",
+		updateDialogTitle: "发现新版本",
+		updateDialogDescription:
+			"Pilo v{{version}} 已发布，安装更新后应用将自动重启。",
+		releaseNotesLoading: "正在加载更新日志…",
+		releaseNotesUnavailable:
+			"暂时无法加载更新日志，可前往 GitHub Releases 查看，也可以继续更新。",
+		releaseNotesEmpty: "此版本未提供更新日志。",
+		updateBackgroundHint: "关闭弹窗不会中断更新，安装完成后应用将自动重启。",
 		updatePreview: "预览更新提示",
 		updatePreviewOnly: "仅供预览，不会下载或安装更新。",
 		checking: "检查中…",

@@ -188,6 +188,35 @@ actions go there and appear only for persisted sessions (`session && !session.te
   `CSS.highlights`, never `CSS.Highlight`. Prefer the DOM library types over
   assertions that conceal an invalid browser API shape.
 
+## Desktop Updates
+
+- `SidebarFooter` owns one `useDesktopUpdate()` instance and passes it to settings
+  and `UpdateDialog`. Startup calls `checkForUpdates({ openDialog: false })`;
+  manual checks open the dialog when an update exists. Footer clicks only open
+  the dialog, including during downloads; closing it must not cancel the update.
+- `UpdateDialog` raises its overlay to `z-[var(--z-dialog)]`: settings content
+  already uses that layer, above the default overlay layer. Its portal renders
+  after settings, with the update content after its own overlay, so settings is
+  dimmed while the update dialog remains on top. Do not raise only the content
+  or globally change the shared dialog layer to fix this nested case.
+- `useReleaseNotes(version, fallbackNotes, enabled)` reads the matching GitHub
+  Release's `body` from `/releases/tags/v{version}`, not `/releases/latest`.
+  Release notes can be edited after publishing, while `latest.json` currently
+  contains only a short label. Use its notes as a fallback; a notes request
+  failure must not block installation. Render Markdown through `ChatMarkdown`.
+  Clear failed results when the dialog closes so reopening retries; keep successful
+  results cached. A failed response must not trigger a retry loop while open.
+- `installUpdate()` in the error state rechecks for updates before another install
+  attempt. The check closes the previous `Update` handle, including installer
+  bytes retained after an installation failure. Do not download again on that
+  same handle: the updater replaces its bytes reference without freeing the old
+  resource. After rechecking succeeds, the user can start installation again.
+- Download percentages come from updater byte events. If `contentLength` is
+  absent, show downloaded bytes and indeterminate progress, not a guessed
+  percentage. Use native `progress` and `output` elements.
+- This dialog is desktop-only. Keep WebUI's existing PWA toast and refresh
+  update flow unchanged; do not invoke the native updater from the browser.
+
 ## Copy
 
 - User-facing strings are Simplified Chinese (`"复制"`, `"重试"`, …), matching the

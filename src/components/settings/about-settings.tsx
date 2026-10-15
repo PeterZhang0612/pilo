@@ -6,7 +6,6 @@ import { openPath, openUrl } from "@tauri-apps/plugin-opener";
 import {
 	CheckCircle2,
 	Code2,
-	Download,
 	ExternalLink,
 	FolderOpen,
 	RefreshCw,
@@ -15,6 +14,7 @@ import {
 import appIconUrl from "../../../src-tauri/icons/128x128.png";
 import { cn } from "@/lib/utils";
 import type { DesktopUpdate } from "@/lib/use-desktop-update";
+import { RELEASES_URL, REPOSITORY_URL } from "@/lib/use-release-notes";
 import { Button } from "@/ui";
 import {
 	SETTINGS_CONTAINER_CLASS,
@@ -23,9 +23,6 @@ import {
 	SettingsSection,
 	SettingsStatus,
 } from "./compact-layout";
-
-const REPOSITORY_URL = "https://github.com/hsingjui/pilo";
-const RELEASES_URL = `${REPOSITORY_URL}/releases`;
 
 async function handleOpenLogDirectory() {
 	try {
@@ -44,7 +41,7 @@ export function AboutSettings({ update }: { update: DesktopUpdate }) {
 		error: updateError,
 		downloadProgress,
 		checkForUpdates,
-		installUpdate,
+		setDialogOpen,
 		previewUpdate,
 	} = update;
 
@@ -141,50 +138,42 @@ export function AboutSettings({ update }: { update: DesktopUpdate }) {
 						{updateStatus === "available" && availableVersion ? (
 							<SettingsStatus>v{availableVersion}</SettingsStatus>
 						) : null}
-						{updateStatus === "available" ? (
-							<Button
-								type="button"
-								variant="default"
-								size="sm"
-								className={SETTINGS_TEXT_BUTTON_CLASS}
-								onClick={() => void installUpdate()}
-							>
-								<Download className="size-3.5" />
-								{t("settings.downloadInstall")}
-							</Button>
-						) : (
-							<Button
-								type="button"
-								variant="ghost"
-								size="sm"
-								className={cn(
-									SETTINGS_TEXT_BUTTON_CLASS,
-									"leading-none text-muted-foreground hover:text-foreground",
-								)}
-								disabled={
-									updateStatus === "checking" ||
+						<Button
+							type="button"
+							variant="ghost"
+							size="sm"
+							className={cn(
+								SETTINGS_TEXT_BUTTON_CLASS,
+								"leading-none text-muted-foreground hover:text-foreground",
+							)}
+							disabled={updateStatus === "checking"}
+							onClick={() => {
+								if (
 									updateStatus === "downloading" ||
 									updateStatus === "installing"
+								) {
+									setDialogOpen(true);
+								} else {
+									void checkForUpdates();
 								}
-								onClick={() => void checkForUpdates()}
-							>
-								<RefreshCw
-									className={cn(
-										"size-3.5",
-										updateStatus === "checking" && "animate-spin",
-									)}
-								/>
-								{updateStatus === "checking"
-									? t("settings.checking")
-									: updateStatus === "downloading"
-										? downloadProgress === null
-											? t("settings.downloading")
-											: `${t("settings.downloading")} ${downloadProgress}%`
-										: updateStatus === "installing"
-											? t("settings.installing")
-											: t("settings.updateCheck")}
-							</Button>
-						)}
+							}}
+						>
+							<RefreshCw
+								className={cn(
+									"size-3.5",
+									updateStatus === "checking" && "animate-spin",
+								)}
+							/>
+							{updateStatus === "checking"
+								? t("settings.checking")
+								: updateStatus === "downloading"
+									? downloadProgress === null
+										? t("settings.downloading")
+										: `${t("settings.downloading")} ${downloadProgress}%`
+									: updateStatus === "installing"
+										? t("settings.installing")
+										: t("settings.updateCheck")}
+						</Button>
 						{import.meta.env.DEV ? (
 							<Button
 								type="button"

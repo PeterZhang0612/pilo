@@ -28,7 +28,9 @@ function formatUpdateError(error: unknown) {
 export function useDesktopUpdate() {
 	const [status, setStatus] = useState<UpdateStatus>("idle");
 	const [previewMode, setPreviewMode] = useState(false);
+	const [dialogOpen, setDialogOpen] = useState(false);
 	const [availableVersion, setAvailableVersion] = useState<string | null>(null);
+	const [releaseNotes, setReleaseNotes] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [downloadedBytes, setDownloadedBytes] = useState(0);
 	const [downloadTotalBytes, setDownloadTotalBytes] = useState<number | null>(
@@ -36,17 +38,27 @@ export function useDesktopUpdate() {
 	);
 	const updateRef = useRef<Update | null>(null);
 	const checkingRef = useRef(false);
+	const openOnAvailableRef = useRef(false);
 	const installingRef = useRef(false);
 	const requestIdRef = useRef(0);
 
-	const checkForUpdates = useCallback(async () => {
-		if (checkingRef.current || installingRef.current) return;
+	const checkForUpdates = useCallback(async ({ openDialog = true } = {}) => {
+		if (installingRef.current) {
+			if (openDialog) setDialogOpen(true);
+			return;
+		}
+		if (checkingRef.current) {
+			if (openDialog) openOnAvailableRef.current = true;
+			return;
+		}
+		openOnAvailableRef.current = openDialog;
 		checkingRef.current = true;
 		const requestId = ++requestIdRef.current;
 		setStatus("checking");
 		setPreviewMode(false);
 		setError(null);
 		setAvailableVersion(null);
+		setReleaseNotes(null);
 		setDownloadedBytes(0);
 		setDownloadTotalBytes(null);
 
@@ -66,7 +78,9 @@ export function useDesktopUpdate() {
 			}
 			updateRef.current = update;
 			setAvailableVersion(update.version);
+			setReleaseNotes(update.body ?? null);
 			setStatus("available");
+			if (openOnAvailableRef.current) setDialogOpen(true);
 		} catch (cause) {
 			if (requestId !== requestIdRef.current) return;
 			setError(formatUpdateError(cause));
@@ -85,14 +99,16 @@ export function useDesktopUpdate() {
 		if (previousUpdate) void previousUpdate.close().catch(() => undefined);
 		setPreviewMode(true);
 		setAvailableVersion("99.0.0-preview");
+		setReleaseNotes(null);
 		setError(null);
 		setStatus("available");
+		setDialogOpen(true);
 	};
 
 	/* oxlint-disable react/set-state-in-effect -- 启动时同步外部更新服务，结果反映到 UI。 */
 	/* oxlint-disable react-hooks/exhaustive-deps -- cleanup 释放当前句柄和请求，而不是 effect 启动时的旧值。 */
 	useEffect(() => {
-		if (!import.meta.env.DEV) void checkForUpdates();
+		if (!import.meta.env.DEV) void checkForUpdates({ openDialog: false });
 		return () => {
 			requestIdRef.current++;
 			checkingRef.current = false;
@@ -107,6 +123,11 @@ export function useDesktopUpdate() {
 	const installUpdate = useCallback(async () => {
 		if (import.meta.env.DEV && previewMode) {
 			toast.info(i18n.t("settings.updatePreviewOnly"));
+			return;
+		}
+		if (status === "error") {
+			// Rechecking closes the old handle and any retained installer bytes.
+			await checkForUpdates();
 			return;
 		}
 		const update = updateRef.current;
@@ -138,7 +159,7 @@ export function useDesktopUpdate() {
 		} finally {
 			installingRef.current = false;
 		}
-	}, [previewMode]);
+	}, [checkForUpdates, previewMode, status]);
 
 	const downloadProgress =
 		downloadTotalBytes && downloadTotalBytes > 0
@@ -148,8 +169,14 @@ export function useDesktopUpdate() {
 	return {
 		status,
 		availableVersion,
+		releaseNotes,
+		previewMode,
+		dialogOpen,
+		setDialogOpen,
 		error,
 		downloadProgress,
+		downloadedBytes,
+		downloadTotalBytes,
 		checkForUpdates,
 		installUpdate,
 		previewUpdate,

@@ -262,6 +262,16 @@ const enUS = {
 		upToDate: "Up to date",
 		downloadInstall: "Download and install",
 		updateAvailable: "Update",
+		updateDetails: "View update",
+		updateDialogTitle: "Update available",
+		updateDialogDescription:
+			"Pilo v{{version}} is available. The app will restart after installation.",
+		releaseNotesLoading: "Loading release notes…",
+		releaseNotesUnavailable:
+			"Release notes could not be loaded. View them on GitHub Releases, or continue with the update.",
+		releaseNotesEmpty: "No release notes were provided for this version.",
+		updateBackgroundHint:
+			"Closing this dialog will not stop the update. The app will restart after installation.",
 		updatePreview: "Preview update prompt",
 		updatePreviewOnly:
 			"Preview only — no update will be downloaded or installed.",

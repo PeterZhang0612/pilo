@@ -34,6 +34,12 @@ const SettingsDialog = lazy(() =>
 	})),
 );
 
+const UpdateDialog = lazy(() =>
+	import("@/components/update-dialog").then((module) => ({
+		default: module.UpdateDialog,
+	})),
+);
+
 const RemoteSettings = lazy(() =>
 	import("@/components/settings/remote-settings").then((module) => ({
 		default: module.RemoteSettings,
@@ -102,7 +108,7 @@ function ThemeCycleButton() {
 
 /**
  * 底栏里的更新入口：和齿轮同高的一枚小按钮，不额外占位、不遮挡会话列表。
- * 详情（版本号、失败原因、下载进度）放 tooltip，底栏只留最短的一行字。
+ * 点击打开更新弹窗，下载中也可以重新打开查看进度。
  */
 function UpdateButton({ update }: { update: DesktopUpdate }) {
 	const { t } = useTranslation();
@@ -112,7 +118,7 @@ function UpdateButton({ update }: { update: DesktopUpdate }) {
 	const progress = update.downloadProgress;
 
 	const label = failed
-		? t("common.retry")
+		? t("settings.updateDetails")
 		: update.status === "installing"
 			? t("settings.installing")
 			: update.status === "downloading"
@@ -129,7 +135,9 @@ function UpdateButton({ update }: { update: DesktopUpdate }) {
 				? progress === null
 					? t("settings.downloading")
 					: `${t("settings.downloading")} ${progress}%`
-				: `${t("settings.downloadInstall")} v${update.availableVersion ?? ""}`;
+				: t("settings.updateDialogDescription", {
+						version: update.availableVersion ?? "",
+					});
 
 	return (
 		<Tooltip>
@@ -145,11 +153,8 @@ function UpdateButton({ update }: { update: DesktopUpdate }) {
 								? "text-muted-foreground"
 								: "text-primary",
 					)}
-					disabled={busy}
 					aria-label={detail}
-					onClick={() =>
-						void (failed ? update.checkForUpdates() : update.installUpdate())
-					}
+					onClick={() => update.setDialogOpen(true)}
 				>
 					{failed ? (
 						<RefreshCw className="size-3.5" />
@@ -225,6 +230,11 @@ export function SidebarFooter() {
 						onOpenChange={setSettingsOpen}
 						update={update}
 					/>
+				</Suspense>
+			) : null}
+			{hasUpdate ? (
+				<Suspense fallback={null}>
+					<UpdateDialog update={update} />
 				</Suspense>
 			) : null}
 			<span className="ms-auto flex items-center gap-1">
