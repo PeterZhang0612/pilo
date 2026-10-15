@@ -1,4 +1,5 @@
 import type { ComposerSuggestion } from "@/components/chat/chat-composer-suggestions";
+import { fileMentionValue } from "@/lib/chat-mentions";
 
 const FILE_SUGGESTION_LIMIT = 5;
 
@@ -16,10 +17,6 @@ function fileSuggestionScore(path: string, query: string) {
 
 function fileSuggestionDepth(path: string) {
 	return path.split("/").filter(Boolean).length;
-}
-
-function fileMentionValue(path: string) {
-	return path.includes(" ") ? `@"${path}"` : `@${path}`;
 }
 
 function compareFileSuggestionEntries(

@@ -12,7 +12,13 @@ test("file suggestions show files for an empty @ query", () => {
 	assert.equal(suggestions.length, 5);
 	assert.deepEqual(
 		suggestions.map((suggestion) => suggestion.value),
-		["@src/z.ts", "@README.md", "@src/a.ts", "@docs/guide.md", "@a.txt"],
+		[
+			'@"src/z.ts"',
+			'@"README.md"',
+			'@"src/a.ts"',
+			'@"docs/guide.md"',
+			'@"a.txt"',
+		],
 	);
 });
 
@@ -29,6 +35,6 @@ test("file suggestions rank filename matches and quote paths with spaces", () =>
 
 	assert.deepEqual(
 		suggestions.map((suggestion) => suggestion.value),
-		["@src/chat.ts", "@src/chat-composer.ts", '@"docs/chat composer.md"'],
+		['@"src/chat.ts"', '@"src/chat-composer.ts"', '@"docs/chat composer.md"'],
 	);
 });

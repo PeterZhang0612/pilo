@@ -28,6 +28,7 @@ import {
 	type ChatImageAttachment,
 	type ChatSubmission,
 } from "@/lib/chat-submission";
+import { fileMentionPath } from "@/lib/chat-mentions";
 import { isImeComposingKeyboardEvent } from "@/lib/ime";
 import { type PiModel, runtimeErrorMessage } from "@/lib/pi-runtime";
 import { usePreferences } from "@/lib/preferences-provider";
@@ -52,7 +53,7 @@ export type ChatComposerInputOptions = {
 	value: string;
 	submissionText?: string;
 	onHistoryValue?: (value: string) => void;
-	onSessionSelect?: (suggestion: ComposerSuggestion, text: string) => void;
+	onMentionSelect?: (suggestion: ComposerSuggestion, text: string) => void;
 	onChange: (value: string) => void;
 	attachments: readonly ChatImageAttachment[];
 	selectedModel?: PiModel | null;
@@ -74,7 +75,7 @@ export function useChatComposerInput({
 	value,
 	submissionText = value,
 	onHistoryValue,
-	onSessionSelect,
+	onMentionSelect,
 	onChange,
 	attachments,
 	selectedModel = null,
@@ -459,13 +460,16 @@ export function useChatComposerInput({
 
 	const selectSuggestion = (suggestion: ComposerSuggestion) => {
 		if (!activeQuery) return;
-		const inserted =
-			suggestion.kind === "session" ? "" : `${suggestion.value} `;
+		const isMention =
+			suggestion.kind === "session" ||
+			(suggestion.kind === "file" &&
+				fileMentionPath(suggestion.value) !== null);
+		const inserted = isMention ? "" : `${suggestion.value} `;
 		const nextValue = `${value.slice(0, activeQuery.start)}${inserted}${value.slice(activeQuery.end)}`;
 		const nextCaret = activeQuery.start + inserted.length;
 		resetHistoryNavigation();
 		setMentionNavigation(null);
-		if (suggestion.kind === "session") onSessionSelect?.(suggestion, nextValue);
+		if (isMention) onMentionSelect?.(suggestion, nextValue);
 		else onChange(nextValue);
 		setCaret(nextCaret);
 		setDismissedQuery(

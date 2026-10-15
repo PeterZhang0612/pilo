@@ -10,6 +10,7 @@ import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronUp, Search, X } from "lucide-react";
 
 import { ChatFindMatchContext } from "@/components/chat/chat-find-context";
+import { useSessionMentions } from "@/components/chat/session-mention-context";
 import { findMessageMatches } from "@/lib/chat-message-search";
 import type { ChatMessage } from "@/lib/conversation-types";
 import { useKeyboardShortcut } from "@/lib/use-keyboard-shortcut";
@@ -37,6 +38,7 @@ export function ChatFindLayer({
 	onNavigate?: (messageIndex: number) => void;
 }) {
 	const { t } = useTranslation();
+	const { byValue } = useSessionMentions();
 	const [query, setQuery] = useState("");
 	const [activeIndex, setActiveIndex] = useState(0);
 	const [navigationRequest, setNavigationRequest] = useState(0);
@@ -92,8 +94,8 @@ export function ChatFindLayer({
 	);
 
 	const matches = useMemo(
-		() => (open ? findMessageMatches(messages, query) : []),
-		[open, messages, query],
+		() => (open ? findMessageMatches(messages, query, byValue) : []),
+		[open, messages, query, byValue],
 	);
 	const safeIndex =
 		matches.length === 0 ? 0 : Math.min(activeIndex, matches.length - 1);

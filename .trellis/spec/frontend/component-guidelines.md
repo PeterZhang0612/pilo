@@ -142,7 +142,17 @@ actions go there and appear only for persisted sessions (`session && !session.te
   it once the project index is ready (see `readSessionWindowTarget` and the boot
   effect in `src/App.tsx`, which delegates to `workspace.openSearchSession`).
 - In-conversation find uses `findMessageMatches` in `src/lib/chat-message-search.ts`.
-  User messages remain literal text. Assistant Markdown is projected through
+  User body text stays literal, but references follow their rendered labels and
+  order: optional Skill name, file/session chips, then body. Pass the same scoped
+  `byValue` catalog to `findMessageMatches(messages, query, byValue)` as to the
+  renderer. Reuse `readChatMentionDraft` for parsing/deduplication and
+  `fileMentionName` for file labels; hidden directories, serialized `@` markers
+  and resolved session paths are not search hits. Unknown sessions stay literal.
+  Sent `PathMentionBadge` buttons opt into DOM matching with
+  `data-chat-search-reference`; treat each as a text boundary while still omitting
+  other buttons, icons and popover metadata. Indexing raw reference lines while
+  ignoring their chip buttons creates counted hits with no highlight.
+  Assistant Markdown is projected through
   the same remark/GFM and raw-HTML/sanitize stages used by Streamdown, retaining
   code contents but excluding link destinations, fence markers and image alt
   attributes. Cache projections by immutable content object/source, and skip
@@ -222,22 +232,40 @@ actions go there and appear only for persisted sessions (`session && !session.te
 - User-facing strings are Simplified Chinese (`"复制"`, `"重试"`, …), matching the
   existing UI. Keep code identifiers and comments in English.
 
-## Session Path References
+## File and Session Path References
 
 - `SessionMentionProvider` derives the catalog from the existing project/session
   index. `SessionMentionScope` filters by exact `connection.id`, not transport
   type; same-connection cross-project references are allowed. The lazy-loading
   `ChatPageLoadingFallback` also needs the session connection scope so its enabled
   composer and first-message preview resolve the same references as `ChatPage`.
-- `readSessionMentionDraft` / `writeSessionMentionDraft` in
-  `src/lib/session-mentions.ts` keep references as trailing `@path` lines in the
-  ordinary draft/submission string. Do not read or inject conversation content,
-  add a second conversation store, or serialize titles instead of paths.
-- Keep the native textarea for body editing. Composer references use compact
-  `SessionMentionBadge` chips (icon + title) in the same wrapping row before the
-  textarea, not a separate attachment row. The default badge remains unchanged
-  for live/history user messages and Skill instructions. Unknown/deleted paths
-  remain visible as ordinary text.
+- `readChatMentionDraft` / `writeChatMentionDraft` in `src/lib/chat-mentions.ts`
+  keep mixed file/session references as trailing ordinary `@path` lines in the
+  draft/submission string, preserving insertion order and deduplicating picks.
+  Session values still use `sessionMentionValue` and resolve against the scoped
+  catalog. Do not read or inject conversation content, add a second conversation
+  store, or serialize titles instead of paths.
+- Completed file picks always use quoted project-relative paths, e.g.
+  `@"src/index.ts"`, including paths without spaces. This distinguishes a chip
+  from a still-editable unquoted `@src` query without separate draft metadata.
+  Only complete quoted relative-path lines are file chips; empty/incomplete
+  quotes, absolute/Windows/tilde paths and old inline mentions remain text.
+  Resolve known sessions first so a quoted session path never becomes a file.
+- Keep the native textarea for body editing. `FileMentionBadge` and
+  `SessionMentionBadge` share `PathMentionBadge`: compact icon + name chips in
+  the same wrapping row before the textarea, not a separate attachment row.
+  Both sent/history user messages and Skill instructions use the default badge
+  with a tappable path popover. Unknown/deleted absolute session paths remain
+  visible as ordinary text.
+- `tests/chat-mentions.test.ts` covers mixed-reference round-trips, plain-text
+  query preservation, deletion and slash-command submissions. Run the browser
+  fixture `/tests/chat-mentions.html` through Vite for desktop + 320px WebUI
+  selection, path popovers, keyboard/mobile Backspace and sent-message rendering.
+  Its search regression also checks file-chip/body same-name hits in visible
+  order, next/previous navigation, session titles and compact/expanded Skill
+  instructions; hidden paths and controls must not count as matches. Pure search
+  projections are covered by `tests/chat-message-search.test.ts`. Require
+  `document.body.dataset.testStatus === "passed"`.
 - Textarea autosizing keeps a whole-pixel minimum from `rows × lineHeight` plus
   padding/borders for both empty and non-empty text. Integer `scrollHeight` must
   not shrink that minimum on the first character and shift the inline chips.

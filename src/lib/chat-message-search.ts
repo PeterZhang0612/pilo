@@ -1,4 +1,6 @@
-import { skillInvocationSummary } from "./skill-invocation.ts";
+import { parseSkillInvocation } from "./skill-invocation.ts";
+import { fileMentionName, readChatMentionDraft } from "./chat-mentions.ts";
+import type { SessionMention } from "./session-mentions.ts";
 import type { ChatMessage } from "./conversation-types.ts";
 import { markdownSearchText, searchTextMatches } from "./chat-search-text.ts";
 
@@ -24,12 +26,28 @@ const markdownTextCache = new WeakMap<
 	{ source: string; text: string }
 >();
 
-/**
- * 用户输入按纯文本显示，Skill 展开块改用 `/skill:<name>` 摘要。
- */
-function searchableText(message: ChatMessage): string {
+const EMPTY_SESSIONS: ReadonlyMap<string, SessionMention> = new Map();
+
+/** Match rendered user content: Skill name, reference labels, then literal body. */
+function searchableText(
+	message: ChatMessage,
+	sessions: ReadonlyMap<string, SessionMention>,
+): string {
 	if (message.role !== "user") return message.text;
-	return skillInvocationSummary(message.text) ?? message.text;
+	const invocation = parseSkillInvocation(message.text);
+	const { references, text } = readChatMentionDraft(
+		invocation ? invocation.additionalInstructions : message.text,
+		sessions,
+	);
+	return [
+		...(invocation ? [invocation.name] : []),
+		...references.map((mention) =>
+			mention.kind === "session"
+				? mention.session.title
+				: fileMentionName(mention.path),
+		),
+		text,
+	].join("\n");
 }
 
 /**
@@ -39,6 +57,7 @@ function searchableText(message: ChatMessage): string {
 export function findMessageMatches(
 	messages: readonly ChatMessage[],
 	query: string,
+	sessions: ReadonlyMap<string, SessionMention> = EMPTY_SESSIONS,
 ): ChatMessageMatch[] {
 	if (!query.trim()) return [];
 	const matches: ChatMessageMatch[] = [];
@@ -53,7 +72,7 @@ export function findMessageMatches(
 			: [
 					{
 						id: message.role === "assistant" ? `${message.id}-text` : undefined,
-						text: searchableText(message),
+						text: searchableText(message, sessions),
 					},
 				];
 		let occurrenceIndex = 0;

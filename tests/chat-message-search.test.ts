@@ -3,6 +3,10 @@ import test from "node:test";
 
 import { findMessageMatches } from "../src/lib/chat-message-search.ts";
 import type { ChatMessage } from "../src/lib/conversation-types.ts";
+import {
+	sessionMentionValue,
+	type SessionMention,
+} from "../src/lib/session-mentions.ts";
 
 const messages: ChatMessage[] = [
 	{ id: "u1", role: "user", text: "Hello **World**", time: "" },
@@ -73,7 +77,7 @@ test("history placeholders are skipped", () => {
 	assert.deepEqual(findMessageMatches(messages, "placeholder"), []);
 });
 
-test("user skill invocation is found through its /skill:name summary", () => {
+test("user skill invocation is found through its visible name", () => {
 	const skillText = [
 		'<skill name="animate" location="/root/.agents/skills/animate/SKILL.md">',
 		"# Animate",
@@ -85,4 +89,83 @@ test("user skill invocation is found through its /skill:name summary", () => {
 		"animate",
 	);
 	assert.equal(matches.length, 1);
+});
+
+test("file references are searched by visible filename before the literal body", () => {
+	const referenced: ChatMessage[] = [
+		{
+			id: "file",
+			role: "user",
+			text: 'Check index.ts.\n@"src/index.ts"\n@"src/index.ts"',
+			time: "",
+		},
+	];
+	assert.deepEqual(
+		findMessageMatches(referenced, "index.ts").map((match) => [
+			match.occurrenceIndex,
+			match.start,
+		]),
+		[
+			[0, 0],
+			[1, 15],
+		],
+	);
+	assert.equal(findMessageMatches(referenced, "src/").length, 0);
+	assert.equal(findMessageMatches(referenced, '@"').length, 0);
+});
+
+const session: SessionMention = {
+	connectionId: "local",
+	projectId: "pilo",
+	path: "/sessions/previous.jsonl",
+	title: "Previous index.ts",
+	projectName: "Pilo",
+	updatedAt: 1,
+};
+const sessions = new Map([[sessionMentionValue(session.path), session]]);
+
+test("mixed references search session titles in rendered order within their scope", () => {
+	const referenced: ChatMessage[] = [
+		{
+			id: "mixed",
+			role: "user",
+			text: `Check index.ts.\n${sessionMentionValue(session.path)}\n@"src/index.ts"`,
+			time: "",
+		},
+	];
+	assert.deepEqual(
+		findMessageMatches(referenced, "index.ts", sessions).map(
+			(match) => match.start,
+		),
+		[9, 18, 33],
+	);
+	assert.equal(findMessageMatches(referenced, "Previous", sessions).length, 1);
+	assert.equal(
+		findMessageMatches(referenced, session.path, sessions).length,
+		0,
+	);
+	// A missing/out-of-scope session is ordinary visible text, not a chip.
+	assert.equal(findMessageMatches(referenced, session.path).length, 1);
+});
+
+test("Skill instructions project references without exposing the expanded Skill body", () => {
+	for (const prefix of [
+		"/skill:review ",
+		'<skill name="review" location="/skills/review/SKILL.md">\nHidden Skill content\n</skill>\n',
+	]) {
+		const referenced: ChatMessage[] = [
+			{
+				id: "skill",
+				role: "user",
+				text: `${prefix}Check index.ts.\n@"src/index.ts"`,
+				time: "",
+			},
+		];
+		assert.deepEqual(
+			findMessageMatches(referenced, "index.ts").map((match) => match.start),
+			[7, 22],
+		);
+		assert.equal(findMessageMatches(referenced, "Hidden Skill").length, 0);
+		assert.equal(findMessageMatches(referenced, "src/").length, 0);
+	}
 });

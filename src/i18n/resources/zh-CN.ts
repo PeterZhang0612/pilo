@@ -575,6 +575,7 @@ const zhCN = {
 		mentionCategories: "引用类型",
 		mentionTabSwitchHint: "切换分类",
 		sessionMentionPath: "查看会话“{{title}}”的路径",
+		fileMentionPath: "查看文件“{{name}}”的路径",
 		removeSessionMention: "移除会话引用“{{title}}”",
 		sessionMentionConnectionMismatch: "只能引用同一连接下的会话",
 		piCommandSuggestion: "Pi 命令",

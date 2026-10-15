@@ -4,7 +4,8 @@ import { ChevronDown, Sparkles } from "lucide-react";
 
 import { SessionMentionBadge } from "@/components/chat/session-mention-badge";
 import { useSessionMentions } from "@/components/chat/session-mention-context";
-import { readSessionMentionDraft } from "@/lib/session-mentions";
+import { FileMentionBadge } from "@/components/chat/path-mention-badge";
+import { readChatMentionDraft } from "@/lib/chat-mentions";
 import { ChatImageThumbnail } from "@/components/chat/chat-image-viewer";
 import { ConversationColumn } from "@/components/chat/chat-conversation-column";
 import { ChatCopyButton } from "@/components/chat/chat-copy-button";
@@ -41,7 +42,7 @@ function ReferencedMessageBody({ text: sourceText }: { text: string }) {
 	const { collapseLongMessages } = usePreferences();
 	const [expanded, setExpanded] = useState(false);
 	const { byValue } = useSessionMentions();
-	const { references, text } = readSessionMentionDraft(sourceText, byValue);
+	const { references, text } = readChatMentionDraft(sourceText, byValue);
 	const collapsible =
 		collapseLongMessages && text.length > LARGE_MESSAGE_PREVIEW_CHARS;
 	const visibleText = collapsible && !expanded ? plainTextPreview(text) : text;
@@ -50,9 +51,19 @@ function ReferencedMessageBody({ text: sourceText }: { text: string }) {
 		<div className="min-w-0 space-y-1.5">
 			{references.length > 0 ? (
 				<div className="flex min-w-0 flex-wrap gap-1.5">
-					{references.map((mention) => (
-						<SessionMentionBadge key={mention.path} mention={mention} />
-					))}
+					{references.map((mention) =>
+						mention.kind === "session" ? (
+							<SessionMentionBadge
+								key={`session:${mention.path}`}
+								mention={mention.session}
+							/>
+						) : (
+							<FileMentionBadge
+								key={`file:${mention.path}`}
+								path={mention.path}
+							/>
+						),
+					)}
 				</div>
 			) : null}
 			{text ? (

@@ -1,0 +1,313 @@
+<!doctype html>
+<!-- Run with pnpm exec vite, then open /tests/chat-mentions.html. -->
+<html lang="en" translate="no">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Chat mentions regression</title>
+	</head>
+	<body>
+		<pre id="results">Running…</pre>
+		<div id="root" style="padding: 16px"></div>
+		<script type="module">
+			import "../src/index.css";
+			import { createElement as h, useState } from "react";
+			import { createRoot } from "react-dom/client";
+			import { ChatComposer } from "../src/components/chat/chat-composer.tsx";
+			import { UserMessage } from "../src/components/chat/chat-user-message.tsx";
+			import { ChatFindLayer } from "../src/components/chat/chat-find-bar.tsx";
+			import { createFileSuggestions } from "../src/components/chat/chat-file-suggestions.ts";
+			import {
+				SessionMentionProvider,
+				SessionMentionScope,
+			} from "../src/components/chat/session-mention-context.tsx";
+			import { PreferencesProvider } from "../src/lib/preferences-provider.tsx";
+			import { TooltipProvider } from "../src/ui/tooltip.tsx";
+			import { initializeI18n } from "../src/i18n/index.ts";
+
+			await initializeI18n("en-US");
+			const path = "src/components/a-very-long-file-name-for-narrow-layout.tsx";
+			const sessionPath = "/sessions/previous.jsonl";
+			function Fixture({ id, width }) {
+				const [value, setValue] = useState("");
+				const [sent, setSent] = useState(null);
+				return h(
+					"section",
+					{ id, style: { width, maxWidth: "100%", marginBottom: 32 } },
+					h("h2", null, id),
+					h(
+						"div",
+						{ "data-chat-panel": "", style: { minHeight: 180 } },
+						h(ChatComposer, {
+							value,
+							onChange: setValue,
+							onSubmit: setSent,
+							suggestions: createFileSuggestions([path], ""),
+							desktopShortcuts: id === "desktop",
+						}),
+					),
+					h("pre", { "data-draft": "", hidden: true }, value),
+					sent
+						? h(UserMessage, {
+								message: { id, role: "user", text: sent.text },
+								recordRender: false,
+							})
+						: null,
+				);
+			}
+			const searchMessages = [
+				{
+					id: "plain",
+					role: "user",
+					text: `Check needle.ts.\n@"src/needle.ts"\n@"src/needle.ts"\n@${sessionPath}`,
+				},
+				{
+					id: "compact",
+					role: "user",
+					text: '/skill:review Check needle.ts.\n@"src/needle.ts"',
+				},
+				{
+					id: "expanded",
+					role: "user",
+					text: '<skill name="review" location="/skills/review/SKILL.md">\nHidden Skill content\n</skill>\nCheck needle.ts.\n@"src/needle.ts"',
+				},
+			];
+			function SearchFixture({ id, width }) {
+				return h(
+					"section",
+					{ id, style: { position: "relative", width, maxWidth: "100%" } },
+					h(ChatFindLayer, {
+						active: false,
+						open: true,
+						onOpen: () => {},
+						onClose: () => {},
+						messages: searchMessages,
+						children: searchMessages.map((message) =>
+							h(
+								"div",
+								{
+									key: message.id,
+									"data-message-id": message.id,
+									"data-message-role": message.role,
+								},
+								h(UserMessage, { message, recordRender: false }),
+							),
+						),
+					}),
+				);
+			}
+			createRoot(document.querySelector("#root")).render(
+				h(
+					PreferencesProvider,
+					null,
+					h(
+						TooltipProvider,
+						null,
+						h(
+							SessionMentionProvider,
+							{
+								projects: [
+									{ id: "pilo", name: "Pilo", connection: { id: "local" } },
+								],
+								sessions: [
+									{
+										projectId: "pilo",
+										sessionPath,
+										title: "Previous discussion",
+										latestMessageAt: new Date(),
+									},
+								],
+							},
+							h(
+								SessionMentionScope,
+								{ connectionId: "local" },
+								h(Fixture, { id: "desktop", width: 680 }),
+								h(Fixture, { id: "webui-mobile", width: 320 }),
+								h(SearchFixture, { id: "desktop-search", width: 680 }),
+								h(SearchFixture, { id: "webui-mobile-search", width: 320 }),
+							),
+						),
+					),
+				),
+			);
+			function assert(condition, message) {
+				if (!condition) throw new Error(message);
+			}
+			async function until(check) {
+				const deadline = performance.now() + 10000;
+				while (!check()) {
+					if (performance.now() > deadline) throw new Error("Timed out");
+					await new Promise(requestAnimationFrame);
+				}
+			}
+			function input(element, value) {
+				Object.getOwnPropertyDescriptor(
+					element instanceof HTMLTextAreaElement
+						? HTMLTextAreaElement.prototype
+						: HTMLInputElement.prototype,
+					"value",
+				).set.call(element, value);
+				element.dispatchEvent(new Event("input", { bubbles: true }));
+			}
+			try {
+				for (const id of ["desktop", "webui-mobile"]) {
+					await until(() => document.querySelector(`#${id} textarea`));
+					const section = document.getElementById(id);
+					const textarea = section.querySelector("textarea");
+					const fileSelector = 'button[aria-label^="View path for file"]';
+					const sessionSelector = 'button[aria-label^="View path for session"]';
+					input(textarea, "@");
+					await until(() => section.querySelector('[role="option"]'));
+					section.querySelector('[role="option"]').click();
+					await until(() => section.querySelector(fileSelector));
+					assert(textarea.value === "", "File path leaked into body editor");
+					input(textarea, "@");
+					await until(
+						() => section.querySelectorAll('[role="tab"]').length === 2,
+					);
+					section.querySelectorAll('[role="tab"]')[1].click();
+					await until(() =>
+						section
+							.querySelector('[role="option"]')
+							?.textContent.includes("Previous discussion"),
+					);
+					section.querySelector('[role="option"]').click();
+					await until(() => section.querySelector(sessionSelector));
+					input(textarea, "Please review.");
+					await until(() =>
+						section
+							.querySelector("[data-draft]")
+							.textContent.startsWith("Please review.\n"),
+					);
+					assert(
+						section.scrollWidth <= section.clientWidth,
+						"Narrow layout overflow",
+					);
+					section.querySelector(fileSelector).click();
+					await until(() =>
+						document
+							.querySelector('[role="dialog"]')
+							?.textContent.includes(path),
+					);
+					section.querySelector(fileSelector).click();
+					await until(() => !document.querySelector('[role="dialog"]'));
+					textarea.setSelectionRange(0, 0);
+					textarea.dispatchEvent(
+						new KeyboardEvent("keydown", {
+							key: "Backspace",
+							bubbles: true,
+							cancelable: true,
+						}),
+					);
+					await until(() => !section.querySelector(sessionSelector));
+					assert(
+						section.querySelector(fileSelector),
+						"Backspace removed the wrong reference",
+					);
+					textarea.dispatchEvent(
+						new InputEvent("beforeinput", {
+							inputType: "deleteContentBackward",
+							bubbles: true,
+							cancelable: true,
+						}),
+					);
+					await until(() => !section.querySelector(fileSelector));
+					assert(
+						textarea.value === "Please review.",
+						"Reference deletion changed body text",
+					);
+					input(textarea, "Please review. @");
+					await until(() => section.querySelector('[role="option"]'));
+					section.querySelector('[role="option"]').click();
+					await until(() => section.querySelector(fileSelector));
+					const draft = section.querySelector("[data-draft]").textContent;
+					assert(
+						draft.includes(`@"${path}"`),
+						"File reference lost its Pi path",
+					);
+					section.querySelector('button[aria-label="Send"]').click();
+					await until(
+						() => section.querySelectorAll(fileSelector).length === 2,
+					);
+					assert(
+						section.textContent.includes("Please review."),
+						"Sent message lost its body",
+					);
+					assert(
+						section.scrollWidth <= section.clientWidth,
+						"Sent message overflows narrow layout",
+					);
+				}
+				for (const id of ["desktop-search", "webui-mobile-search"]) {
+					const section = document.getElementById(id);
+					const field = section.querySelector("input");
+					const activeRange = () =>
+						Array.from(CSS.highlights.get("pilo-find-active") ?? [])[0];
+					input(field, "needle.ts");
+					await until(() => CSS.highlights.get("pilo-find")?.size === 6);
+					const next = section.querySelector('button[aria-label="Next match"]');
+					const previous = section.querySelector(
+						'button[aria-label="Previous match"]',
+					);
+					const all = Array.from(CSS.highlights.get("pilo-find"));
+					for (let index = 0; index < 6; index++) {
+						await until(
+							() => activeRange()?.startContainer === all[index].startContainer,
+						);
+						const parent = activeRange().startContainer.parentElement;
+						assert(
+							parent.closest("[data-message-id]").dataset.messageId ===
+								searchMessages[Math.floor(index / 2)].id,
+							"Search navigated to the wrong message",
+						);
+						assert(
+							Boolean(parent.closest("button[data-chat-search-reference]")) ===
+								(index % 2 === 0),
+							"Search must visit the file chip before the same-name body text",
+						);
+						next.click();
+					}
+					await until(
+						() => activeRange()?.startContainer === all[0].startContainer,
+					);
+					previous.click();
+					await until(
+						() => activeRange()?.startContainer === all[5].startContainer,
+					);
+					input(field, "Previous discussion");
+					await until(() => CSS.highlights.get("pilo-find")?.size === 1);
+					await until(
+						() => activeRange()?.toString() === "Previous discussion",
+					);
+					assert(
+						activeRange().startContainer.parentElement.closest(
+							'button[aria-label^="View path for session"]',
+						),
+						"Session title did not receive a visible highlight",
+					);
+					for (const query of ["src/", sessionPath, "Hidden Skill", "Copy"]) {
+						input(field, query);
+						await until(
+							() =>
+								section.textContent.includes("No matches") && !activeRange(),
+						);
+						assert(
+							!CSS.highlights.get("pilo-find"),
+							"Hidden paths or controls became search hits",
+						);
+					}
+					input(field, "");
+					await until(() => !section.textContent.includes("No matches"));
+				}
+				document.body.dataset.testStatus = "passed";
+				document.querySelector("#results").textContent =
+					"PASS: desktop + WebUI mobile chips, path popover, Backspace, submission, search highlights and next/previous navigation for files, sessions and Skill instructions";
+			} catch (error) {
+				document.body.dataset.testStatus = "failed";
+				document.querySelector("#results").textContent =
+					`FAIL: ${error.message}`;
+				throw error;
+			}
+		</script>
+	</body>
+</html>

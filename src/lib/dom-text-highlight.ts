@@ -47,8 +47,9 @@ function matchRangesInElement(element: Element, query: string): Range[] {
 			return;
 		}
 		if (!(node instanceof Element)) return;
+		const reference = node.hasAttribute("data-chat-search-reference");
 		if (
-			SEARCH_IGNORED_TAGS.has(node.localName) ||
+			(SEARCH_IGNORED_TAGS.has(node.localName) && !reference) ||
 			node.matches(
 				'[hidden], [aria-hidden="true"], [data-streamdown="code-block-header"], [data-streamdown="code-block-actions"]',
 			)
@@ -56,6 +57,7 @@ function matchRangesInElement(element: Element, query: string): Range[] {
 			return;
 		// Streamdown renders code lines as block spans without newline text nodes.
 		const boundary =
+			reference ||
 			SEARCH_BLOCK_TAGS.has(node.localName) ||
 			node.matches('[data-streamdown="code-block-body"] > pre > code > span');
 		if (boundary) append("\n");

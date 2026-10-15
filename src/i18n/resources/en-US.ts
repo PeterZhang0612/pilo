@@ -591,6 +591,7 @@ const enUS = {
 		mentionCategories: "Reference type",
 		mentionTabSwitchHint: "Switch tabs",
 		sessionMentionPath: "View path for session “{{title}}”",
+		fileMentionPath: "View path for file “{{name}}”",
 		removeSessionMention: "Remove session reference “{{title}}”",
 		sessionMentionConnectionMismatch:
 			"Only sessions in the same connection can be referenced",

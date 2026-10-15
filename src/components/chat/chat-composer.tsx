@@ -10,13 +10,17 @@ import { useTranslation } from "react-i18next";
 import { Plus, X } from "lucide-react";
 
 import { SessionMentionBadge } from "@/components/chat/session-mention-badge";
+import { FileMentionBadge } from "@/components/chat/path-mention-badge";
+import {
+	fileMentionPath,
+	readChatMentionDraft,
+	writeChatMentionDraft,
+} from "@/lib/chat-mentions";
 import {
 	useSessionMentions,
 	useSessionMentionDrag,
 } from "@/components/chat/session-mention-context";
 import {
-	readSessionMentionDraft,
-	writeSessionMentionDraft,
 	sessionMentionValue,
 	type SessionMention,
 } from "@/lib/session-mentions";
@@ -166,7 +170,7 @@ export function ChatComposer({
 	const { mentions, byValue, connectionId } = useSessionMentions();
 	const mentionDrag = useSessionMentionDrag();
 	const mentionDraft = useMemo(
-		() => readSessionMentionDraft(value, byValue),
+		() => readChatMentionDraft(value, byValue),
 		[value, byValue],
 	);
 	const allSuggestions = useMemo(
@@ -194,7 +198,13 @@ export function ChatComposer({
 				return;
 			onNextPromptDismiss?.();
 			onChange(
-				writeSessionMentionDraft([...mentionDraft.references, mention], text),
+				writeChatMentionDraft(
+					[
+						...mentionDraft.references,
+						{ kind: "session", path: mention.path, session: mention },
+					],
+					text,
+				),
 			);
 		},
 		[mentionDraft, connectionId, byValue, onChange, onNextPromptDismiss],
@@ -236,10 +246,22 @@ export function ChatComposer({
 		submissionText: value,
 		onHistoryValue: onChange,
 		onChange: (text) =>
-			onChange(writeSessionMentionDraft(mentionDraft.references, text)),
-		onSessionSelect: (suggestion, text) => {
-			const mention = byValue.get(suggestion.value);
-			if (mention) addSessionMention(mention, text);
+			onChange(writeChatMentionDraft(mentionDraft.references, text)),
+		onMentionSelect: (suggestion, text) => {
+			if (suggestion.kind === "session") {
+				const mention = byValue.get(suggestion.value);
+				if (mention) addSessionMention(mention, text);
+				return;
+			}
+			const path = fileMentionPath(suggestion.value);
+			if (!path) return;
+			onNextPromptDismiss?.();
+			onChange(
+				writeChatMentionDraft(
+					[...mentionDraft.references, { kind: "file", path }],
+					text,
+				),
+			);
 		},
 		attachments,
 		selectedModel,
@@ -256,7 +278,7 @@ export function ChatComposer({
 		desktopShortcuts,
 	});
 
-	const removeLastSessionMention = useCallback(
+	const removeLastMention = useCallback(
 		(textarea: HTMLTextAreaElement) => {
 			if (
 				disabled ||
@@ -268,7 +290,7 @@ export function ChatComposer({
 				return false;
 			onNextPromptDismiss?.();
 			onChange(
-				writeSessionMentionDraft(
+				writeChatMentionDraft(
 					mentionDraft.references.slice(0, -1),
 					mentionDraft.text,
 				),
@@ -285,11 +307,11 @@ export function ChatComposer({
 		const handleBeforeInput = (event: InputEvent) => {
 			if (event.inputType !== "deleteContentBackward" || event.isComposing)
 				return;
-			if (removeLastSessionMention(textarea)) event.preventDefault();
+			if (removeLastMention(textarea)) event.preventDefault();
 		};
 		textarea.addEventListener("beforeinput", handleBeforeInput);
 		return () => textarea.removeEventListener("beforeinput", handleBeforeInput);
-	}, [textareaRef, removeLastSessionMention]);
+	}, [textareaRef, removeLastMention]);
 
 	useEffect(() => {
 		const element = rootRef.current;
@@ -416,9 +438,21 @@ export function ChatComposer({
 				) : null}
 
 				<div className="flex max-h-[min(24rem,40dvh)] min-w-0 flex-wrap items-start gap-x-1.5 gap-y-1 overflow-y-auto overscroll-contain px-1">
-					{mentionDraft.references.map((mention) => (
-						<SessionMentionBadge key={mention.path} mention={mention} compact />
-					))}
+					{mentionDraft.references.map((mention) =>
+						mention.kind === "session" ? (
+							<SessionMentionBadge
+								key={`session:${mention.path}`}
+								mention={mention.session}
+								compact
+							/>
+						) : (
+							<FileMentionBadge
+								key={`file:${mention.path}`}
+								path={mention.path}
+								compact
+							/>
+						),
+					)}
 					<Textarea
 						data-chat-composer-input=""
 						ref={textareaRef}
@@ -457,7 +491,7 @@ export function ChatComposer({
 								!event.metaKey &&
 								!event.altKey &&
 								!isImeComposingKeyboardEvent(event) &&
-								removeLastSessionMention(event.currentTarget)
+								removeLastMention(event.currentTarget)
 							) {
 								event.preventDefault();
 								return;
@@ -511,7 +545,6 @@ export function ChatComposer({
 						className={cn(
 							CHAT_COMPOSER_TEXTAREA_CLASS_NAME,
 							"w-auto min-w-0 flex-1 basis-32 px-0",
-							mentionDraft.references.length > 0 && "pointer-coarse:pt-2",
 							ghostText ? "pr-20" : showFocusHint && "pr-16",
 						)}
 					/>
