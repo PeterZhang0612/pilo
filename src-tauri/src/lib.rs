@@ -74,6 +74,7 @@ pub fn run() {
     let exiting = std::sync::atomic::AtomicBool::new(false);
     let builder = tauri::Builder::default().plugin(
         tauri_plugin_log::Builder::new()
+            .timezone_strategy(tauri_plugin_log::TimezoneStrategy::UseLocal)
             .level(if cfg!(debug_assertions) {
                 log::LevelFilter::Debug
             } else {
