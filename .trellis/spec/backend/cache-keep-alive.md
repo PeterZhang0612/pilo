@@ -65,6 +65,10 @@ chat status notices. Owners: `runtime/cache_keep_alive.rs`,
   Usage copy shows the cumulative token cache hit rate, not raw cache-read
   tokens: `cacheReadTokens / (inputTokens + cacheReadTokens + cacheWriteTokens)`.
   Missing input usage or a zero denominator displays `—`, never an assumed 100%.
+  Scheduled notices (including `warmed`) stay hidden until 30 seconds before
+  `nextWarmAtMs`; a local display timer reveals them without polling or sending
+  requests. A scheduled status without a next request stays hidden. Warming and
+  terminal/error statuses retain their existing visibility rules.
   The shared notice has a manual close button (44px on coarse pointers), no
   auto-dismiss timer. Closing only hides it for the mounted session view;
   status refreshes never reopen it and background warming continues unchanged.

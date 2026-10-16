@@ -1,5 +1,5 @@
 import { Timer, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -91,9 +91,21 @@ export function CacheKeepAliveNotice({
 }) {
 	const { t } = useTranslation();
 	const [dismissed, setDismissed] = useState(false);
+	const [now, setNow] = useState(Date.now);
+	const nextWarmAtMs = status?.nextWarmAtMs;
+	useEffect(() => {
+		if (dismissed || nextWarmAtMs == null) return;
+		const timer = window.setTimeout(
+			() => setNow(Date.now()),
+			Math.max(0, nextWarmAtMs - 30_000 - Date.now()),
+		);
+		return () => window.clearTimeout(timer);
+	}, [dismissed, nextWarmAtMs]);
 	if (
 		dismissed ||
 		!status ||
+		(status.status === "scheduled" &&
+			(nextWarmAtMs == null || nextWarmAtMs - now > 30_000)) ||
 		["disabled", "waiting_request", "running", "context_changed"].includes(
 			status.reason,
 		)

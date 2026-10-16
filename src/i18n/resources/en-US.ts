@@ -113,10 +113,10 @@ const enUS = {
 		cacheKeepAliveNoModels: "Refresh the model list in a project first.",
 		cacheKeepAliveCostHint:
 			"Refreshes incur API charges. Failure, timeout or a cache miss stops keep-alive.",
-		cacheKeepAliveScheduled: "Next refresh: {{time}}",
+		cacheKeepAliveScheduled: "Next cache keep-alive: {{time}}",
 		cacheKeepAliveWindowEnding:
 			"The current cache covers the remaining idle window. No further refresh is needed.",
-		cacheKeepAliveWarmed: "Refreshed · Next {{time}}",
+		cacheKeepAliveWarmed: "Refreshed · Next cache keep-alive: {{time}}",
 		cacheKeepAliveWarming: "Refreshing cache…",
 		cacheKeepAliveExpired: "Stopped: the cache refresh deadline was missed.",
 		cacheKeepAliveWindowEnded: "The idle keep-alive window has ended.",

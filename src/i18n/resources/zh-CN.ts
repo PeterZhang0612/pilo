@@ -122,9 +122,9 @@ const zhCN = {
 		cacheKeepAliveNoModels: "请先在项目中刷新模型列表。",
 		cacheKeepAliveCostHint:
 			"保活会产生调用费用；失败、超时或缓存未命中后停止。",
-		cacheKeepAliveScheduled: "下次保活：{{time}}",
+		cacheKeepAliveScheduled: "下次缓存保活：{{time}}",
 		cacheKeepAliveWindowEnding: "当前缓存可覆盖剩余空闲窗口，无需再发请求。",
-		cacheKeepAliveWarmed: "已保活，下次 {{time}}",
+		cacheKeepAliveWarmed: "已保活，下次缓存保活：{{time}}",
 		cacheKeepAliveWarming: "正在保活…",
 		cacheKeepAliveExpired: "缓存保活已停止：错过有效期。",
 		cacheKeepAliveWindowEnded: "空闲保活窗口已结束。",
