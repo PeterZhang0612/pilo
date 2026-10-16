@@ -171,13 +171,22 @@ export function useChatComposerInput({
 		if (panel && panel.clientHeight === 0) return;
 		textarea.style.height = "auto";
 		const styles = window.getComputedStyle(textarea);
-		const lineHeight = Number.parseFloat(styles.lineHeight);
+		let lineHeight = Number.parseFloat(styles.lineHeight);
 		const padding =
 			Number.parseFloat(styles.paddingTop) +
 			Number.parseFloat(styles.paddingBottom);
 		const border =
 			Number.parseFloat(styles.borderTopWidth) +
 			Number.parseFloat(styles.borderBottomWidth);
+		if (!Number.isFinite(lineHeight)) {
+			// `normal` has no computed pixel value; measure the native rows without the CSS minimum.
+			const previousMinHeight = textarea.style.minHeight;
+			textarea.style.minHeight = "0";
+			lineHeight =
+				(textarea.getBoundingClientRect().height - padding - border) /
+				textarea.rows;
+			textarea.style.minHeight = previousMinHeight;
+		}
 		// Keep the empty row height after typing; scrollHeight rounds fractional line heights.
 		const minHeight = Math.max(
 			Number.parseFloat(styles.minHeight),

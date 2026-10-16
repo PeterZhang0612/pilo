@@ -389,8 +389,21 @@ actions go there and appear only for persisted sessions (`session && !session.te
   instructions; hidden paths and controls must not count as matches. Pure search
   projections are covered by `tests/unit/chat-message-search.test.ts`. Require
   `document.body.dataset.testStatus === "passed"`.
-- Composer chips and the borderless textarea share `--pilo-composer-line-height`
-  (`max(1.75rem, readingFontSize × 1.6px)`). Align them by **text baseline**, not
+- Composer chips use `--pilo-composer-line-height`
+  (`max(1.75rem, readingFontSize × 1.6px)`) for their geometry. The textarea uses
+  `leading-[normal]` (native font leading, **not** Tailwind's `leading-normal`
+  multiplier of 1.5) and symmetric block padding of
+  `max(0px, (var(--pilo-composer-line-height) - 1lh) / 2)` to align its first line
+  without inflating its text line-height. WebKit paints a trailing blank-line
+  caret at the full line-height, so do not restore chip-height leading on the
+  textarea. Reducing the multiplier only reduces the jump; it does not remove
+  the mismatch between font-height text carets and line-height blank carets.
+  The browser fixture requires native leading, checks finite autosizing and
+  covers trailing/repeated newlines. Verify actual caret painting in WebKit:
+  Chromium/style assertions alone missed this bug. Native leading removes the
+  inflated caret, though WebKit can retain a 1 CSS px native difference between
+  text and blank-line carets; do not claim pixel equality from a style assertion.
+  Align chips by **text baseline**, not
   by box center: the compact chip label carries
   `leading-(--pilo-composer-line-height)`, the chip's flex containers use
   `items-baseline` (the icon stays `self-center`), and the wrapping row uses
@@ -398,13 +411,20 @@ actions go there and appear only for persisted sessions (`session && !session.te
   chip text ~1.5px above the reading-size body baseline because the font sizes
   differ. Fixed `h-7`/`items-center` chips beside independently scaled reading
   text drift vertically. Mobile keeps its 16px font-size floor but must not
-  override this shared line-height; retain the separate coarse-pointer 44px hit
-  target. The browser fixture compares the chip label baseline with the first
-  text-line baseline for empty, single-character and multiline drafts. Check
-  independent UI/reading sizes and both pointer modes.
+  override the chip line-height or re-couple textarea leading to it; retain the
+  separate coarse-pointer 44px hit target. The browser fixture compares the chip label baseline with the first
+  text-line baseline for empty, single-character and multiline drafts. Measure
+  that baseline with a zero-height inline DOM marker and allow at most 1 CSS px
+  of native rounding; canvas font-bound estimates can falsely fail with native
+  leading and independently scaled UI/reading fonts. Check independent UI/reading
+  sizes and both pointer modes.
 - Textarea autosizing keeps a whole-pixel minimum from `rows × lineHeight` plus
-  padding/borders for both empty and non-empty text. Integer `scrollHeight` must
-  not shrink that minimum on the first character and shift the inline chips.
+  padding/borders for both empty and non-empty text. Computed `line-height: normal`
+  is not numeric: with `height: auto`, temporarily remove the CSS minimum and
+  measure the native row box, then restore the minimum before sizing. Do not
+  replace native leading with a multiplier just to make `parseFloat` work.
+  Integer `scrollHeight` must not shrink the minimum on the first character and
+  shift the inline chips.
 - With a collapsed caret at body offset 0, Backspace removes the last reference
   atomically; elsewhere, text deletion and selection stay native. Handle mobile
   `beforeinput` / `deleteContentBackward` as well as keyboard Backspace, without
