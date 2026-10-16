@@ -7,6 +7,7 @@ use desktop_notifications::{
     initialize_macos_notification_application, initialize_windows_notification_application,
     send_macos_desktop_notification, send_windows_desktop_notification,
 };
+use desktop_window::desktop_open_devtools;
 use runtime::{
     PiloRuntime,
     commands::{
@@ -120,6 +121,7 @@ pub fn run() {
         .manage(runtime::RemoteServerManager::default())
         .invoke_handler(tauri::generate_handler![
             greet,
+            desktop_open_devtools,
             debug_chat_performance_log,
             debug_runtime_trace_log,
             send_macos_desktop_notification,

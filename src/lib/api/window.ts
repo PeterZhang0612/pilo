@@ -130,7 +130,12 @@ export function openSessionInNewWindow(
 				// macOS 保留原生红绿灯并用 Overlay 让内容延伸至顶栏；
 				// Windows 移除原生装饰，交给前端自绘标题栏。
 				...(IS_WINDOWS
-					? { decorations: false, shadow: true }
+					? {
+							decorations: false,
+							shadow: true,
+							// Match the main window: only the gated shortcut opens DevTools.
+							devtools: false,
+						}
 					: {
 							hiddenTitle: true,
 							titleBarStyle: "overlay" as const,

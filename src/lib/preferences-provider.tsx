@@ -34,6 +34,7 @@ import {
 	type TerminalFontSize,
 	type UiFontSize,
 } from "@/lib/font-settings";
+import { useDeveloperTools } from "@/lib/use-developer-tools";
 import {
 	DEFAULT_KEYBOARD_SHORTCUTS,
 	normalizeKeyboardShortcut,
@@ -50,6 +51,7 @@ export type PiloPreferences = {
 	collapseLongMessages: boolean;
 	showWorkDuration: boolean;
 	desktopNotifications: boolean;
+	developerMode: boolean;
 	pageFontFamily: PageFontFamily;
 	uiFontSize: UiFontSize;
 	readingFontFamily: PageFontFamily;
@@ -69,6 +71,7 @@ type PreferencesContextValue = PiloPreferences & {
 	setCollapseLongMessages: (value: boolean) => void;
 	setShowWorkDuration: (value: boolean) => void;
 	setDesktopNotifications: (value: boolean) => void;
+	setDeveloperMode: (value: boolean) => void;
 	setPageFontFamily: (value: PageFontFamily) => void;
 	setUiFontSize: (value: UiFontSize) => void;
 	setReadingFontFamily: (value: PageFontFamily) => void;
@@ -100,6 +103,7 @@ const DEFAULT_PREFERENCES: PiloPreferences = {
 	collapseLongMessages: true,
 	showWorkDuration: true,
 	desktopNotifications: false,
+	developerMode: false,
 	pageFontFamily: DEFAULT_PAGE_FONT_FAMILY,
 	uiFontSize: DEFAULT_UI_FONT_SIZE,
 	readingFontFamily: DEFAULT_READING_FONT_FAMILY,
@@ -153,6 +157,7 @@ function readStoredPreferences(): PiloPreferences {
 				typeof parsed.desktopNotifications === "boolean"
 					? parsed.desktopNotifications
 					: DEFAULT_PREFERENCES.desktopNotifications,
+			developerMode: parsed.developerMode === true,
 			pageFontFamily,
 			uiFontSize: isUiFontSize(parsed.uiFontSize)
 				? parsed.uiFontSize
@@ -192,6 +197,7 @@ function readStoredPreferences(): PiloPreferences {
 
 export function PreferencesProvider({ children }: { children: ReactNode }) {
 	const [preferences, setPreferences] = useState(readStoredPreferences);
+	useDeveloperTools(preferences.developerMode, preferences.keyboardShortcuts);
 
 	useLayoutEffect(() => {
 		const root = document.documentElement;
@@ -267,6 +273,9 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
 	const setDesktopNotifications = useCallback((value: boolean) => {
 		setPreferences((current) => ({ ...current, desktopNotifications: value }));
 	}, []);
+	const setDeveloperMode = useCallback((value: boolean) => {
+		setPreferences((current) => ({ ...current, developerMode: value }));
+	}, []);
 	const setPageFontFamily = useCallback((value: PageFontFamily) => {
 		setPreferences((current) => ({ ...current, pageFontFamily: value }));
 	}, []);
@@ -324,6 +333,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
 			setCollapseLongMessages,
 			setShowWorkDuration,
 			setDesktopNotifications,
+			setDeveloperMode,
 			setPageFontFamily,
 			setUiFontSize,
 			setReadingFontFamily,
@@ -344,6 +354,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
 			setCollapseCompletedActivity,
 			setCollapseLongMessages,
 			setDesktopNotifications,
+			setDeveloperMode,
 			setPageFontFamily,
 			setUiFontSize,
 			setReadingFontFamily,

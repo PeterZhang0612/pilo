@@ -3,6 +3,12 @@ use tauri::{
 };
 use tauri_plugin_window_state::{StateFlags, WindowExt};
 
+#[tauri::command]
+pub(crate) fn desktop_open_devtools(window: WebviewWindow) -> Result<(), String> {
+    window.open_devtools();
+    Ok(())
+}
+
 pub(crate) fn persisted_state_flags() -> StateFlags {
     StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED
 }
@@ -50,7 +56,8 @@ pub(crate) fn create_main_window(app: &App) -> tauri::Result<()> {
     // overwrite the window-state plugin's cached size before it is restored.
     let builder = tauri::WebviewWindowBuilder::from_config(app, &config)?;
     #[cfg(target_os = "windows")]
-    let builder = builder.decorations(false).shadow(true);
+    // Disable WebView2's native inspector shortcuts; the frontend gates opening it.
+    let builder = builder.decorations(false).shadow(true).devtools(false);
     let window = builder.build()?;
 
     // Validate normal bounds before restoring maximization, so restoring the

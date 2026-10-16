@@ -209,6 +209,11 @@ const enUS = {
 		remoteRevoke: "Revoke",
 		about: "About",
 		conversation: "Conversation",
+		developer: "Developer",
+		developerMode: "Developer mode",
+		developerModeDescription:
+			"When enabled, press F12 to open developer tools for the current window.",
+		openDeveloperToolsFailed: "Unable to open developer tools",
 		sendShortcut: "Send shortcut",
 		collapseLongMessages: "Collapse long messages",
 		collapseWork: "Collapse work activity",

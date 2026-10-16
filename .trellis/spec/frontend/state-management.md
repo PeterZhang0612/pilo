@@ -116,6 +116,66 @@ subscribing shell callbacks to every streaming message change.
   the panel and composer region; ignore region changes caused only by textarea
   height, coalesce resize callbacks in animation frames and clean up on unmount.
 
+## Desktop Developer Mode
+
+### 1. Scope / Trigger
+
+Desktop Preferences exposes a device-local opt-in for inspecting the current
+main/session window. WebUI keeps browser-native tools and has no switch.
+
+### 2. Signatures
+
+- `PiloPreferences.developerMode: boolean`, `setDeveloperMode(value: boolean)`.
+- `useDeveloperTools(enabled: boolean, keyboardShortcuts: KeyboardShortcutMap)`
+  installs desktop-only key handling.
+- Tauri `desktop_open_devtools(window: WebviewWindow) -> Result<(), String>`
+  opens the invoking window's tools; there is no remote HTTP endpoint.
+
+### 3. Contracts
+
+The existing `pilo.preferences.v1` entry stores the flag. Only literal `true`
+enables it; missing/invalid values default to false. Tauri's inspector shortcut
+is captured before its built-in handler. F12 is captured only when enabled,
+not assigned to an application command, and not being recorded by a
+`[data-shortcut-recording="true"]` editor. Existing F12 bindings and recording
+keep their normal event propagation. Captured repeat/composition events never
+open tools. This is a UI opt-in, not an authorization boundary.
+
+### 4. Validation & Error Matrix
+
+IPC rejection logs the detail and shows `settings.openDeveloperToolsFailed`.
+WebUI installs no listener and must retain native browser shortcuts.
+
+### 5. Good / Base / Bad Cases
+
+Good: enabled F12 opens the invoking desktop window. Base: old preferences load
+with the feature off. Bad: enabling the Cargo feature alone exposes native
+shortcuts irrespective of the switch.
+
+### 6. Tests Required
+
+When authorized, verify off/on/off, persistence after restart, main and session
+windows, release builds and unchanged WebUI shortcuts. Cover an existing F12
+application binding with developer mode off and on, and F12 recording while
+mode is enabled. Tests/builds and actual Windows interaction have not been run
+for this feature.
+
+### 7. Wrong vs Correct
+
+Wrong: rely on a frontend F12 handler alone after enabling release DevTools.
+Correct: enable Tauri's `devtools` Cargo feature, disable native WebView2
+inspector entry points with `devtools(false)` in both Windows window-creation
+paths, and use the gated IPC call. WebView2's `OpenDevToolsWindow` still works
+when native inspector shortcuts/context-menu entries are disabled. Do not
+promise closing/toggling: Wry's Windows `close_devtools` is a no-op.
+
+Known unresolved gap: macOS/Linux still enable native inspector entry points
+regardless of the preference. Do not copy the Windows `devtools(false)` fix
+blindly: WebKitGTK requires developer extras to open its inspector at all.
+A native platform bridge is needed to control these settings without removing
+normal editing context menus; macOS bridging must first resolve the project's
+restriction on `unsafe`.
+
 ## Forbidden
 
 - Introducing Zustand/TanStack Query for a new feature without an explicit

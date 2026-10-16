@@ -29,6 +29,8 @@ export function PreferencesSettings() {
 		setCollapseCompletedActivity,
 		collapseLongMessages,
 		setCollapseLongMessages,
+		developerMode,
+		setDeveloperMode,
 	} = usePreferences();
 
 	return (
@@ -81,6 +83,18 @@ export function PreferencesSettings() {
 							</SelectItem>
 						</SelectContent>
 					</Select>
+				</SettingsRow>
+			</SettingsSection>
+			<SettingsSection title={t("settings.developer")}>
+				<SettingsRow
+					label={t("settings.developerMode")}
+					helper={t("settings.developerModeDescription")}
+				>
+					<Switch
+						aria-label={t("settings.developerMode")}
+						checked={developerMode}
+						onCheckedChange={setDeveloperMode}
+					/>
 				</SettingsRow>
 			</SettingsSection>
 		</div>
