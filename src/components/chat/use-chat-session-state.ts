@@ -53,20 +53,14 @@ export function useChatSessionState({
 	const sessionStateRequestRef = useRef(0);
 	const sessionStateAppliedRef = useRef(0);
 
-	/* oxlint-disable react/set-state-in-effect, react/exhaustive-effect-dependencies -- Session identity/config changes intentionally invalidate the displayed runtime state even when those values are only trigger keys. */
+	/* oxlint-disable react/set-state-in-effect, react/exhaustive-effect-dependencies -- Only controller/project changes invalidate live metadata; path/config updates belong to the same session. */
 	useEffect(() => {
 		void session.id;
 		const requestGeneration = ++sessionStateRequestRef.current;
 		sessionStateAppliedRef.current = requestGeneration;
 		setSessionState(null);
 		setSessionHeaderMissing(false);
-	}, [
-		session.id,
-		session.initialModel,
-		session.initialThinkingLevel,
-		session.projectRecord.id,
-		session.sessionPath,
-	]);
+	}, [session.id, session.projectRecord.id]);
 	/* oxlint-enable react/set-state-in-effect, react/exhaustive-effect-dependencies */
 
 	const applyHistoryMetadata = useCallback(

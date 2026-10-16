@@ -104,16 +104,17 @@ export function useRestoreActiveChatRuntimes({
 				setOpenedChats((current) => {
 					let next = current;
 					for (const entry of restored) {
+						const controllerId = chatUiStateKey(
+							entry.session.projectRecord.id,
+							entry.session.id,
+						);
+						// Restore missing controllers, never overwrite a live draft's inputs.
+						if (next.some((opened) => opened.controllerId === controllerId)) {
+							continue;
+						}
 						next = upsertOpenedChat(next, entry.session);
 						if (entry.piSessionId) {
-							next = identifyOpenedChat(
-								next,
-								chatUiStateKey(
-									entry.session.projectRecord.id,
-									entry.session.id,
-								),
-								entry.piSessionId,
-							);
+							next = identifyOpenedChat(next, controllerId, entry.piSessionId);
 						}
 					}
 					// These entries represent live Pi turns and their ChatPage controllers

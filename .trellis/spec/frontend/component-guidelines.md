@@ -217,6 +217,14 @@ actions go there and appear only for persisted sessions (`session && !session.te
   the previous runtime `sessionId` / `sessionPath`: history can finish after
   reattachment and otherwise erase the live identity, exposing the draft ID
   again while the indexed path remains visible.
+  `useRestoreActiveChatRuntimes` restores missing controllers only: check the
+  latest opened-chat state inside its functional updater and skip an existing
+  `controllerId`, including controllers opened while the restore request was
+  pending. Never overwrite their bootstrap inputs with a runtime/index snapshot.
+  `useChatSessionState` resets live metadata only when the controller ID or
+  project ID changes, not when the same session gains a path or initial config
+  changes. Clearing it mid-turn exposes the draft ID and loses the title until
+  turn completion; stats-only refreshes cannot restore those fields.
   Check displayed and copied values during the first reply (before it ends),
   after restoring an active draft runtime, and after history arrives on desktop.
   Also check both clients after the first message and immediately after
