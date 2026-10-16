@@ -129,7 +129,7 @@ export const UserMessage = memo(function UserMessage({
 					) : null}
 					<div className="flex min-w-0 max-w-full justify-end">
 						<div
-							className="min-w-0 max-w-full rounded-2xl border border-foreground/[0.08] bg-foreground/[0.05] px-3.5 py-2 leading-[1.6] text-foreground @min-[40rem]:px-4 @min-[40rem]:py-2.5"
+							className="min-w-0 max-w-full rounded-bubble border border-(--pilo-user-bubble-border) bg-(--pilo-user-bubble-bg) px-3.5 py-2 leading-[1.6] text-foreground @min-[40rem]:px-4 @min-[40rem]:py-2.5"
 							style={{
 								fontSize: `${readingFontSize}px`,
 								fontFamily: `var(--pilo-mobile-font-family, ${getPageFontFamilyStack(readingFontFamily)})`,

@@ -67,6 +67,31 @@ subscribing shell callbacks to every streaming message change.
   (`@tanstack/react-virtual`, `chat-history-window-store`) — keep it out of
   React state to avoid re-render storms.
 
+## Shared Theme Preferences
+
+- Theme mode, family, active custom CSS/name and saved custom themes are owned
+  by Host SQLite, not device preferences. `ThemeProvider` owns their React
+  projection and CSS injection; `PreferencesProvider` owns device-local fonts
+  and other preferences only.
+- `AppearanceSettings` is desktop-only and writes through `ThemeProvider`.
+  WebUI has no theme settings entry, dialog or switching controls in either its
+  wide sidebar or mobile navigation. `useRemoteTheme` only loads the Host theme
+  through authenticated `GET /api/v1/theme` and consumes `theme_settings_changed`
+  on its existing socket, including applied custom CSS. Refresh on initialization,
+  reconnect/resync and foreground.
+- Apply only newer Host revisions so HTTP replies and event replay cannot
+  restore an older theme. Theme writes are field patches, serialized per
+  client, and apply only after persistence succeeds; failures show a localized
+  toast and WebUI authorization failures use its existing re-pairing flow. Saved
+  theme selection patches family/CSS/name atomically. Clean editor drafts follow
+  incoming CSS/name changes without overwriting unsaved drafts. `system` resolves
+  against each device's system preference.
+- `pilo.theme.v1` and the legacy mode/family keys are startup caches only.
+  Desktop seeds an absent DB row from its legacy browser preferences once;
+  WebUI never seeds the Host theme from browser storage or exposes theme writes.
+  See
+  [Shared Theme Settings](../backend/database-guidelines.md#shared-theme-settings).
+
 ## Font Preferences
 
 - Font preferences are device-local (`pilo.preferences.v1` in `localStorage`),

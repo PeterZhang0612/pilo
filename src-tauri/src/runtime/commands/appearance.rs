@@ -1,4 +1,27 @@
+use crate::{
+    domain::{ThemeSettings, ThemeSettingsUpdate},
+    runtime::{RuntimeEventBus, appearance},
+};
 use serde::Serialize;
+use tauri::{AppHandle, State};
+
+#[tauri::command]
+pub async fn theme_settings_get(
+    app: AppHandle,
+    events: State<'_, RuntimeEventBus>,
+    initial: Option<ThemeSettings>,
+) -> Result<ThemeSettings, String> {
+    appearance::load(app, events.inner().clone(), initial).await
+}
+
+#[tauri::command]
+pub async fn theme_settings_set(
+    app: AppHandle,
+    events: State<'_, RuntimeEventBus>,
+    update: ThemeSettingsUpdate,
+) -> Result<ThemeSettings, String> {
+    appearance::save(app, events.inner().clone(), update).await
+}
 
 /// 单个系统字体族及其等宽判定。
 ///

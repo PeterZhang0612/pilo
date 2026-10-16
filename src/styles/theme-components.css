@@ -1,0 +1,116 @@
+/* One renderer for Lody, Claude and custom themes. No family-specific rules. */
+@layer components {
+	.pilo-sidebar-surface {
+		margin: var(--pilo-sidebar-margin);
+		height: var(--pilo-sidebar-height);
+		width: var(--pilo-sidebar-width);
+		border-style: solid;
+		border-width: var(--pilo-sidebar-border-width);
+		border-color: var(--pilo-sidebar-border-color);
+		border-radius: var(--pilo-sidebar-radius);
+		padding: var(--pilo-sidebar-padding);
+		box-shadow: var(--pilo-sidebar-shadow);
+	}
+
+	.pilo-mobile-sidebar {
+		border-radius: var(--pilo-mobile-sidebar-radius);
+	}
+
+	.pilo-sidebar-selected {
+		border-color: var(--pilo-sidebar-selected-border);
+		background-color: var(--pilo-sidebar-selected-background);
+		color: var(--pilo-sidebar-selected-foreground);
+	}
+
+	.pilo-field {
+		border-color: hsl(var(--input-border));
+	}
+
+	.pilo-field:enabled:hover {
+		border-color: var(--pilo-field-hover-border);
+	}
+
+	.pilo-field:focus-visible,
+	.pilo-select-trigger:focus {
+		border-color: var(--pilo-field-focus-border);
+	}
+
+	.pilo-menu-surface {
+		padding: var(--pilo-menu-padding);
+	}
+
+	.pilo-menu-item {
+		min-height: var(--pilo-menu-item-height);
+		border-radius: var(--pilo-menu-item-radius);
+	}
+
+	.pilo-menu-item + .pilo-menu-item {
+		margin-block-start: var(--pilo-menu-item-gap);
+	}
+
+	.pilo-menu-item[data-state="checked"] {
+		background-color: var(--pilo-menu-checked-background);
+	}
+
+	.pilo-select-viewport {
+		padding: var(--pilo-select-padding);
+	}
+
+	.pilo-select-viewport > :not(:last-child) {
+		margin-block-end: var(--pilo-select-gap);
+	}
+
+	.pilo-select-item {
+		min-height: var(--pilo-select-item-height);
+		border-radius: var(--pilo-select-item-radius);
+	}
+
+	.pilo-select-item[data-state="checked"] {
+		background-color: var(--pilo-select-checked-background);
+		color: var(--pilo-select-checked-foreground);
+	}
+
+	.pilo-composer-surface {
+		border-color: var(--pilo-composer-border);
+		background-color: var(--pilo-composer-background);
+	}
+
+	.pilo-composer-surface:hover {
+		--pilo-composer-elevation: var(
+			--pilo-shadow-composer-hover,
+			var(--pilo-shadow-composer)
+		);
+	}
+
+	.pilo-composer-surface:focus-within {
+		border-color: var(--pilo-composer-focus-border);
+		--pilo-composer-elevation: var(
+			--pilo-shadow-composer-focus,
+			var(--pilo-shadow-composer)
+		);
+	}
+
+	@media (pointer: coarse) {
+		.pilo-field {
+			min-height: var(--pilo-field-touch-height);
+		}
+
+		.pilo-menu-item {
+			min-height: max(
+				var(--pilo-menu-item-height),
+				var(--pilo-menu-touch-height)
+			);
+		}
+
+		.pilo-select-item {
+			min-height: max(
+				var(--pilo-select-item-height),
+				var(--pilo-menu-touch-height)
+			);
+		}
+
+		.pilo-command-item {
+			min-height: var(--pilo-command-touch-height);
+		}
+	}
+}

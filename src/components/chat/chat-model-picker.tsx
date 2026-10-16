@@ -162,6 +162,15 @@ export function ChatModelPicker({
 			setSaveError(runtimeErrorMessage(cause));
 		}
 	};
+	const listPaddingClassName = compact
+		? "px-(--pilo-menu-padding) pb-(--pilo-menu-padding)"
+		: "px-(--pilo-sheet-padding) pb-(--pilo-sheet-padding)";
+	const itemRadiusClassName = compact
+		? "rounded-(--pilo-menu-item-radius)"
+		: "rounded-(--pilo-sheet-item-radius)";
+	const actionClassName = compact
+		? undefined
+		: "min-h-11 rounded-(--pilo-sheet-item-radius)";
 	const renderCheckbox = (
 		provider: string,
 		modelId: string,
@@ -175,8 +184,11 @@ export function ChatModelPicker({
 				htmlFor={checkboxId}
 				title={`${name || modelId} · ${provider} · ${modelId}${available ? "" : ` · ${t("chat.scopeUnavailable")}`}`}
 				className={cn(
-					"flex cursor-pointer items-center gap-2 rounded-md px-2 text-sm hover:bg-hover has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:disabled]:cursor-default has-[:disabled]:opacity-50",
-					compact ? "min-h-8 py-1.5" : "min-h-11 py-2",
+					"flex cursor-pointer items-center gap-2 px-2 text-sm hover:bg-hover hover:text-hover-foreground has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:disabled]:cursor-default has-[:disabled]:opacity-50",
+					itemRadiusClassName,
+					compact
+						? "min-h-(--pilo-menu-item-height) py-1.5 pointer-coarse:min-h-11"
+						: "min-h-11 py-2",
 				)}
 			>
 				<Checkbox
@@ -242,7 +254,9 @@ export function ChatModelPicker({
 					<div
 						className={cn(
 							"flex min-w-0 gap-0.5 p-0.5",
-							compact ? "flex-1 rounded-md bg-muted" : "rounded-xl bg-muted/60",
+							compact
+								? "flex-1 rounded-md bg-muted"
+								: "rounded-[calc(var(--pilo-sheet-item-radius)+0.125rem)] bg-muted/60",
 						)}
 					>
 						{(["scope", "all"] as const).map((option) => (
@@ -254,10 +268,10 @@ export function ChatModelPicker({
 								className={cn(
 									"flex-1 px-3 text-sm font-normal text-muted-foreground",
 									compact
-										? "h-7 rounded-sm"
-										: "min-h-11 w-20 min-w-0 rounded-lg whitespace-normal",
+										? "h-7 rounded-[max(0px,calc(var(--pilo-radius-md)-0.125rem))]"
+										: "min-h-11 w-20 min-w-0 rounded-(--pilo-sheet-item-radius) whitespace-normal",
 									view === option &&
-										"bg-background text-foreground shadow-xs hover:bg-background",
+										"bg-popover text-popover-foreground shadow-xs hover:bg-popover hover:text-popover-foreground",
 								)}
 								aria-pressed={view === option}
 								onClick={() => setView(option)}
@@ -275,8 +289,10 @@ export function ChatModelPicker({
 						size="icon"
 						variant="ghost"
 						className={cn(
-							"rounded-lg text-muted-foreground",
-							compact ? "size-8" : "size-11",
+							"text-muted-foreground",
+							compact
+								? "size-8 rounded-lg"
+								: "size-11 rounded-(--pilo-sheet-item-radius)",
 						)}
 						disabled={listLoading || saving || !onRefresh}
 						aria-label={t("chat.refreshModels")}
@@ -311,8 +327,10 @@ export function ChatModelPicker({
 							aria-label={t("chat.searchModels")}
 							placeholder={t("chat.searchModels")}
 							className={cn(
-								"rounded-md ps-10 pe-3",
-								compact ? "h-8 text-sm" : "min-h-11 text-base md:text-sm",
+								"ps-10 pe-3",
+								compact
+									? "h-8 rounded-md text-sm"
+									: "min-h-11 rounded-(--pilo-sheet-item-radius) text-base md:text-sm",
 							)}
 						/>
 					</div>
@@ -328,10 +346,10 @@ export function ChatModelPicker({
 							compact ? "text-sm" : "text-base",
 						)}
 						wrapperClassName={cn(
-							"border px-3 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring",
+							"border border-input-border bg-input-field px-3 hover:border-(--pilo-field-hover-border) has-[:focus-visible]:border-(--pilo-field-focus-border) has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring",
 							compact
-								? "h-8 rounded-md border-input-border bg-input-field"
-								: "h-11 rounded-xl border-transparent bg-muted/60",
+								? "h-8 rounded-md"
+								: "h-11 rounded-(--pilo-sheet-item-radius)",
 						)}
 					/>
 				)}
@@ -342,7 +360,7 @@ export function ChatModelPicker({
 						type="button"
 						variant="ghost"
 						size="sm"
-						className={compact ? undefined : "min-h-11"}
+						className={actionClassName}
 						disabled={saving}
 						onClick={() =>
 							setDraft((current) => {
@@ -381,7 +399,7 @@ export function ChatModelPicker({
 						type="button"
 						variant="ghost"
 						size="sm"
-						className={compact ? undefined : "min-h-11"}
+						className={actionClassName}
 						disabled={saving}
 						onClick={() =>
 							setDraft((current) =>
@@ -418,7 +436,8 @@ export function ChatModelPicker({
 					className={cn(
 						"min-w-0",
 						listMaxHeight,
-						"overflow-y-auto overscroll-contain px-1 pb-1",
+						"overflow-y-auto overscroll-contain",
+						listPaddingClassName,
 					)}
 				>
 					{visibleModels.map((model) =>
@@ -443,7 +462,7 @@ export function ChatModelPicker({
 					containerClassName={listMaxHeight}
 					viewportClassName={listMaxHeight}
 				>
-					<div className={compact ? "px-1 pb-1" : "space-y-0.5 px-2 pb-2"}>
+					<div className={cn(listPaddingClassName, !compact && "space-y-0.5")}>
 						{showModels
 							? visibleModels.map((model) => (
 									<CommandItem
@@ -455,9 +474,10 @@ export function ChatModelPicker({
 										aria-label={`${model.name || model.id} · ${model.provider} · ${model.id}${piModelsMatch(model, selectedModel) ? ` · ${t("chat.currentModel")}` : ""}`}
 										className={cn(
 											"gap-2",
+											itemRadiusClassName,
 											compact
-												? "min-h-8 rounded-md px-2 py-1.5"
-												: "min-h-12 rounded-xl px-3 py-2",
+												? "min-h-(--pilo-menu-item-height) px-2 py-1.5 pointer-coarse:min-h-11"
+												: "min-h-12 px-3 py-2",
 										)}
 									>
 										{compact ? (
@@ -546,7 +566,7 @@ export function ChatModelPicker({
 							type="button"
 							variant="ghost"
 							size="sm"
-							className={cn("ms-auto", !compact && "min-h-11")}
+							className={cn("ms-auto", actionClassName)}
 							disabled={!scopeReady || saving || listLoading}
 							onClick={() => {
 								if (!modelScope.scope) return;
@@ -576,7 +596,7 @@ export function ChatModelPicker({
 							type="button"
 							variant="ghost"
 							size="sm"
-							className={cn("ms-auto", !compact && "min-h-11")}
+							className={cn("ms-auto", actionClassName)}
 							disabled={saving || modelScope?.scope?.models === null}
 							onClick={() => void save(null)}
 						>
@@ -588,7 +608,7 @@ export function ChatModelPicker({
 							type="button"
 							variant="outline"
 							size="sm"
-							className={compact ? undefined : "min-h-11"}
+							className={actionClassName}
 							disabled={saving}
 							onClick={() => {
 								setDraft(null);
@@ -600,7 +620,7 @@ export function ChatModelPicker({
 						<Button
 							type="button"
 							size="sm"
-							className={compact ? undefined : "min-h-11"}
+							className={actionClassName}
 							disabled={saving || !dirty}
 							onClick={() => void save(draft.models)}
 						>
@@ -619,7 +639,7 @@ export function ChatModelPicker({
 			shouldFilter={false}
 			value={activeValue}
 			onValueChange={(value) => setActiveSelection({ listKey, value })}
-			className="h-auto rounded-xl bg-background font-sans text-sm font-normal text-foreground"
+			className="h-auto rounded-none bg-transparent font-sans text-sm font-normal text-inherit"
 		>
 			{content}
 		</Command>

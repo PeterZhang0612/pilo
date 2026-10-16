@@ -1,3 +1,4 @@
+import type { ThemeSettings, ThemeSettingsUpdate } from "@/lib/theme-settings";
 import type { CacheKeepAliveSettings } from "@/lib/cache-keep-alive";
 import type {
 	NextPromptModel,
@@ -38,6 +39,8 @@ import {
 	deleteRemoteSession,
 	generateRemoteSessionTitle,
 	loadRemoteBootstrap,
+	loadRemoteThemeSettings,
+	saveRemoteThemeSettings,
 	loadRemoteChatState,
 	loadRemoteHistory,
 	loadRemoteHistoryImage,
@@ -77,6 +80,14 @@ export class WebPiloClient implements PiloClient {
 
 	bootstrap(): Promise<PiloClientBootstrap> {
 		return loadRemoteBootstrap(this.token);
+	}
+
+	loadThemeSettings(): Promise<ThemeSettings> {
+		return loadRemoteThemeSettings(this.token);
+	}
+
+	saveThemeSettings(update: ThemeSettingsUpdate): Promise<ThemeSettings> {
+		return saveRemoteThemeSettings(this.token, update);
 	}
 
 	listSessions(projectId: string): Promise<SessionIndexEntry[]> {

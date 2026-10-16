@@ -1,3 +1,4 @@
+import type { ThemeSettings, ThemeSettingsUpdate } from "@/lib/theme-settings";
 import type { CacheKeepAliveSettings } from "@/lib/cache-keep-alive";
 import type {
 	NextPromptModel,
@@ -57,6 +58,8 @@ export type PiloClientEventOptions = {
 
 export interface PiloClient {
 	bootstrap(): Promise<PiloClientBootstrap>;
+	loadThemeSettings(): Promise<ThemeSettings>;
+	saveThemeSettings(update: ThemeSettingsUpdate): Promise<ThemeSettings>;
 	listSessions(projectId: string): Promise<SessionIndexEntry[]>;
 	loadSessionReadStates(): Promise<SessionReadState[]>;
 	markSessionRead(

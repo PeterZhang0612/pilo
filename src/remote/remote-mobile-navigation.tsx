@@ -159,7 +159,7 @@ export function RemoteMobileNavigation({
 				<DialogPrimitive.Content
 					className={cn(
 						// Reserve at least 64px of backdrop for an easy outside-tap dismissal.
-						"fixed inset-y-0 left-0 z-[var(--z-dialog)] flex w-[min(20rem,calc(100vw-4rem))] flex-col overflow-hidden rounded-r-xl",
+						"fixed inset-y-0 left-0 z-[var(--z-dialog)] flex w-[min(20rem,calc(100vw-4rem))] flex-col overflow-hidden pilo-mobile-sidebar",
 						"border-r border-sidebar-border/60 bg-sidebar text-sidebar-foreground shadow-popover outline-none",
 						"pb-[max(0.5rem,env(safe-area-inset-bottom))] pl-[env(safe-area-inset-left)] pt-[env(safe-area-inset-top)]",
 						"[&_button]:touch-manipulation [&_button]:outline-none [&_button:focus-visible]:ring-2 [&_button:focus-visible]:ring-inset [&_button:focus-visible]:ring-sidebar-ring",
@@ -213,11 +213,11 @@ export function RemoteMobileNavigation({
 						</button>
 					</div>
 
-					<div className="relative mx-3 mb-3 grid shrink-0 grid-cols-2 rounded-lg bg-sidebar-hover/60 p-1">
+					<div className="relative mx-3 mb-3 grid shrink-0 grid-cols-2 rounded-(--pilo-segment-radius) bg-sidebar-hover/60 p-(--pilo-segment-padding)">
 						<span
 							aria-hidden="true"
 							className={cn(
-								"pointer-events-none absolute inset-y-1 left-1 w-[calc(50%-0.25rem)] rounded-md bg-sidebar transition-transform duration-[var(--dur-1)] ease-[var(--ease)] motion-reduce:transition-none",
+								"pointer-events-none absolute inset-y-(--pilo-segment-padding) left-(--pilo-segment-padding) w-[calc(50%-var(--pilo-segment-padding))] rounded-(--pilo-segment-item-radius) bg-sidebar transition-transform duration-[var(--dur-1)] ease-[var(--ease)] motion-reduce:transition-none",
 								mode === "recent" && "translate-x-full",
 							)}
 						/>
@@ -232,7 +232,7 @@ export function RemoteMobileNavigation({
 								type="button"
 								aria-pressed={mode === option.value}
 								className={cn(
-									"relative flex min-h-11 min-w-0 items-center justify-center rounded-md px-2 text-sm font-medium transition-colors duration-[var(--dur-1)] ease-[var(--ease)] motion-reduce:transition-none",
+									"relative flex min-h-11 min-w-0 items-center justify-center rounded-(--pilo-segment-item-radius) px-2 text-sm font-medium transition-colors duration-[var(--dur-1)] ease-[var(--ease)] motion-reduce:transition-none",
 									mode === option.value
 										? "text-sidebar-foreground"
 										: "text-sidebar-foreground-muted active:text-sidebar-foreground",

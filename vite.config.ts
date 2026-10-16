@@ -27,7 +27,7 @@ export default defineConfig(() => ({
 					"index.html",
 					"manifest.webmanifest",
 					"pilo-*.png",
-					"assets/index-*.css",
+					"assets/{index,theme-presets}-*.css",
 					// Group optional chunks so absent ones don't trigger unmatched-glob warnings.
 					"assets/{index,remote-app,react,rolldown-runtime,utils,i18nInstance,core,bundle-mjs,draft-project-picker,use-pi-session-features,folder,wifi,send,trash,pencil,ellipsis,sessions}-*.js",
 					"assets/inter-latin-*-normal-*.woff2",

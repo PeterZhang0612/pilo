@@ -1,3 +1,4 @@
+mod appearance;
 mod cache_keep_alive;
 mod chat_service;
 mod chat_sessions;

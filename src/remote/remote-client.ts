@@ -1,3 +1,4 @@
+import type { ThemeSettings, ThemeSettingsUpdate } from "@/lib/theme-settings";
 import type { CacheKeepAliveSettings } from "@/lib/cache-keep-alive";
 import type {
 	NextPromptModel,
@@ -190,6 +191,22 @@ async function remoteFetchBytes(
 	}
 	if (!response.ok) throw new Error(await decodeError(response));
 	return new Uint8Array(await response.arrayBuffer());
+}
+
+export function loadRemoteThemeSettings(token: string) {
+	return remoteFetch<ThemeSettings>(token, "/api/v1/theme", {
+		cache: "no-store",
+	});
+}
+
+export function saveRemoteThemeSettings(
+	token: string,
+	update: ThemeSettingsUpdate,
+) {
+	return remoteFetch<ThemeSettings>(token, "/api/v1/theme", {
+		method: "POST",
+		body: JSON.stringify(update),
+	});
 }
 
 export function loadRemoteBootstrap(token: string) {

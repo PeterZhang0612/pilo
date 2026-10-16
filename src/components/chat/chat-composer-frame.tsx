@@ -18,12 +18,13 @@ export const CHAT_COMPOSER_ATTACHMENT_BUTTON_CLASS_NAME =
 
 export const CHAT_COMPOSER_RUN_CONFIG_TRIGGER_CLASS_NAME = cn(
 	"inline-flex h-7 min-w-0 select-none items-center gap-1.5 rounded-md px-2 text-xs leading-tight",
-	"text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
-	"data-[state=open]:bg-muted data-[state=open]:text-foreground disabled:cursor-default disabled:opacity-70",
+	"text-muted-foreground transition-colors hover:bg-hover hover:text-hover-foreground motion-reduce:transition-none",
+	"focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
+	"data-[state=open]:bg-hover data-[state=open]:text-hover-foreground disabled:cursor-default disabled:opacity-70",
 );
 
 export const CHAT_COMPOSER_SEND_BUTTON_CLASS_NAME = cn(
-	"size-7 rounded-full bg-foreground text-background disabled:bg-muted-foreground",
+	"size-7 rounded-full bg-foreground text-background shadow-none disabled:bg-muted-foreground",
 	"transition-[background-color,scale] duration-100 enabled:hover:bg-foreground/85 active:scale-[0.96]",
 );
 
@@ -41,7 +42,7 @@ export function ChatComposerRoot({
 			ref={elementRef}
 			data-session-mention-target=""
 			className={cn(
-				"relative w-full rounded-xl data-[session-drop-state=allowed]:ring-2 data-[session-drop-state=allowed]:ring-ring data-[session-drop-state=denied]:ring-2 data-[session-drop-state=denied]:ring-destructive",
+				"relative w-full rounded-composer data-[session-drop-state=allowed]:ring-2 data-[session-drop-state=allowed]:ring-ring data-[session-drop-state=denied]:ring-2 data-[session-drop-state=denied]:ring-destructive",
 				className,
 			)}
 		>
@@ -60,11 +61,11 @@ export function ChatComposerSurface({
 	return (
 		<div
 			className={cn(
-				"group relative flex w-full flex-col border transition-colors duration-150",
-				"gap-1 rounded-xl px-2 py-1.5",
+				"group relative flex w-full flex-col border shadow-composer transition-colors duration-[var(--dur-1)] ease-[var(--ease)] motion-reduce:transition-none",
+				"gap-1 rounded-composer px-2 py-1.5",
 				muted
 					? "border-border/60 bg-muted text-muted-foreground dark:border-border/50 dark:bg-muted"
-					: "border-foreground/[0.10] bg-background focus-within:border-ring/40 dark:border-input-border/70 dark:bg-input",
+					: "pilo-composer-surface",
 			)}
 		>
 			{children}

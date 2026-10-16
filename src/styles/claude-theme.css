@@ -1,0 +1,227 @@
+/* Built-in Claude: values only, using the same tokens as Lody and custom themes. */
+@layer base {
+	/*
+	 * Claude 主题族（light）：参考 Claude Code 浅色界面，保留 CDS 陶土强调色。
+	 * 近白画布 #fcfcfc → 侧栏 #fafaf9 → 填充 #f0f0ef → 选中 #ececea，避免米黄偏色。
+	 * 二级文本 #666666 在填充/选中底上均 >4.8:1；
+	 * 陶土原色直接做按钮底白字只有 ~3.1:1，--primary 压暗一档，--ring 保留原色。
+	 * Syntax/status colors start from Lody; syntax is recalibrated to the code surface.
+	 */
+	:root[data-theme-family="claude"] {
+		--background: 0 0% 98.8%; /* #fcfcfc 主画布 */
+		--foreground: 0 0% 8.2%; /* #151515 */
+		--card: 0 0% 100%; /* surface-2 */
+		--card-foreground: 0 0% 32.2%; /* #525252 */
+		--popover: 0 0% 100%;
+		--popover-foreground: 0 0% 8.2%;
+		--tooltip-background: 60 2.6% 12.2%;
+		--tooltip-foreground: 48 33.3% 97.1%;
+		--primary: 14 61.7% 47%; /* clay 压暗 #c2502e：白字 4.7:1（AA） */
+		--primary-foreground: 0 0% 100%;
+		--secondary: 60 3.2% 93.9%;
+		--secondary-foreground: 0 0% 8.2%;
+		--muted: 60 3.2% 93.9%; /* #f0f0ef 填充 */
+		--muted-foreground: 0 0% 40%; /* #666666：muted 底 ~5:1 */
+		--hover: 60 9.1% 95.7%; /* #f5f5f3 */
+		--hover-foreground: 0 0% 8.2%;
+		--destructive: 355.8 71.8% 47.3%;
+		--destructive-foreground: 0 0% 100%;
+		--border: 60 4.9% 88%; /* #e2e2df */
+		--input: 60 3.2% 93.9%;
+		--input-foreground: 0 0% 8.2%;
+		--input-placeholder: var(--muted-foreground);
+		--input-border: 60 4.7% 83.1%; /* #d6d6d2 */
+		--input-field: 0 0% 100%;
+		--switch-track: 60 4.7% 83.1%;
+		--ring: 15.9 62.4% 59.6%; /* clay 原色 #d97757 */
+		--sidebar-background: 60 9.1% 97.8%; /* #fafaf9 */
+		--sidebar-foreground: 0 0% 32.2%;
+		--sidebar-foreground-muted: 0 0% 40%; /* #666666：选中底 >4.5:1 */
+		--sidebar-primary: 14 61.7% 47%;
+		--sidebar-hover: 60 3.2% 93.9%;
+		--sidebar-hover-foreground: 0 0% 8.2%;
+		--sidebar-selection: 60 5% 92.2%; /* #ececea */
+		--sidebar-selection-foreground: 0 0% 8.2%;
+		--sidebar-border: 60 4.9% 88%;
+		--sidebar-ring: 15.9 62.4% 59.6%;
+		--button-hover: 14 62% 41%;
+		--button-secondary: 60 3.2% 93.9%;
+		--button-secondary-foreground: 0 0% 8.2%;
+		--button-secondary-hover: 60 4.3% 91%; /* #e9e9e7，悬停时加深 */
+		--status-success: 137.2 66% 30%;
+		--status-warning: 24.9 58.9% 41%;
+		--status-danger: 355.8 71.8% 47.3%;
+		--scrollbar-thumb: 60 2.6% 70.2%;
+		--scrollbar-thumb-hover: 60 2.3% 57.8%;
+		--scrollbar-thumb-active: 60 2.5% 47.8%;
+		--code-background: 60 9.1% 95.7%;
+		--code-foreground: 0 0% 8.2%;
+		--code-border: 60 4.9% 88%;
+		--code-added: 137.2 66% 30%;
+		--code-removed: 355.8 71.8% 47.3%;
+		--skeleton-line: 60 5% 90.6%;
+		--skeleton-line-strong: 60 5% 87%;
+		--syntax-keyword: 230.9 60.9% 57.2%;
+		--syntax-string: 10.4 38.3% 46.8%;
+		--syntax-number: 191.2 49.2% 36.3%;
+		--syntax-comment: 120 7.3% 41%;
+		--syntax-function: 95.8 39.9% 33.8%;
+		--syntax-variable: 30.6 41.9% 39.6%;
+		--syntax-title: 172 51.3% 31.5%;
+		--syntax-attr: 30.6 41.9% 39.6%;
+		--syntax-builtin: 50.2 72.9% 28.5%;
+
+		/* Shared controls, rows and floating surfaces follow the family at runtime. */
+		--pilo-conversation-max-width: min(94%, 48rem);
+		--pilo-radius-md: 0.5rem;
+		--pilo-radius-lg: 0.75rem;
+		--pilo-radius-xl: 1rem;
+		--pilo-bubble-radius: 0.75rem;
+		--pilo-composer-radius: 1rem;
+		--pilo-floating-radius: var(--pilo-radius-xl);
+		--pilo-tooltip-border: transparent;
+		--pilo-tooltip-shadow: var(--pilo-shadow-floating);
+		--pilo-button-primary-shadow: 0 0 #0000;
+		--pilo-button-secondary-shadow: 0 0 #0000;
+		--pilo-field-shadow: 0 0 #0000;
+		--pilo-field-hover-border: hsl(var(--muted-foreground) / 0.6);
+		--pilo-field-focus-border: hsl(var(--ring));
+		--pilo-field-touch-height: 2.75rem;
+		--pilo-menu-padding: 0.375rem;
+		--pilo-menu-item-height: 2.25rem;
+		--pilo-menu-item-gap: 0.125rem;
+		--pilo-menu-checked-background: hsl(var(--muted));
+		--pilo-menu-touch-height: 2.75rem;
+		--pilo-select-padding: 0.5rem;
+		--pilo-select-gap: 0.25rem;
+		--pilo-select-item-height: 2.25rem;
+		--pilo-select-item-radius: max(
+			0px,
+			calc(var(--pilo-floating-radius) - var(--pilo-select-padding) - 1px)
+		);
+		--pilo-select-checked-background: hsl(var(--muted));
+		--pilo-select-checked-foreground: hsl(var(--foreground));
+		--pilo-command-touch-height: 2.75rem;
+		--pilo-sidebar-margin: 0;
+		--pilo-sidebar-height: 100%;
+		--pilo-sidebar-width: 100%;
+		--pilo-sidebar-border-width: 0 1px 0 0;
+		--pilo-sidebar-border-color: hsl(var(--sidebar-border) / 0.6);
+		--pilo-sidebar-radius: 0;
+		--pilo-sidebar-padding: 0.5rem;
+		--pilo-sidebar-shadow: 0 0 #0000;
+		--pilo-mobile-sidebar-radius: 0;
+		--pilo-sidebar-selected-border: transparent;
+		--pilo-sidebar-selected-background: hsl(var(--sidebar-selection));
+		--pilo-sidebar-selected-foreground: hsl(
+			var(--sidebar-selection-foreground)
+		);
+		--pilo-project-selected-foreground: hsl(
+			var(--sidebar-selection-foreground)
+		);
+		--pilo-mobile-selected-background: hsl(var(--sidebar-selection));
+		--pilo-mobile-confirm-selected-background: hsl(var(--sidebar-selection));
+		--pilo-mobile-selected-ring-width: 0px;
+		--pilo-composer-background: hsl(var(--card));
+		--pilo-composer-border: hsl(var(--border));
+		/* Solid accent keeps focus above 3:1 against both adjacent surfaces. */
+		--pilo-composer-focus-border: hsl(var(--primary));
+		/* CDS 标题衬线（Copernicus 为商业字体，用系统衬线栈近似） */
+		--pilo-display-font-family:
+			"Copernicus", "Source Serif 4", "Noto Serif SC", "Songti SC", Georgia,
+			serif;
+		--pilo-shadow-composer: 0 2px 8px rgb(0 0 0 / 0.04);
+		/* Claude 用户消息气泡：中性浅灰，无边框。 */
+		--pilo-user-bubble-bg: #f0f0ef;
+		--pilo-user-bubble-border: transparent;
+
+		--pilo-shadow-panel:
+			0 1px 2px rgb(0 0 0 / 0.05), 0 2px 8px rgb(0 0 0 / 0.08);
+		--pilo-shadow-floating:
+			0 2px 6px rgb(0 0 0 / 0.08), 0 8px 24px rgb(0 0 0 / 0.12);
+		--pilo-shadow-popover: var(--pilo-shadow-floating);
+		--pilo-menu-background: hsl(var(--popover));
+		--pilo-menu-edge: hsl(var(--border));
+		--pilo-menu-shadow:
+			0 0 0 1px var(--pilo-menu-edge), var(--pilo-shadow-floating);
+	}
+
+	/* Claude 主题族（dark）：CDS 暗色阶梯 surface-0 #0b0b0a → surface-3 #20201e。 */
+	.dark:root[data-theme-family="claude"] {
+		--background: 0 0% 8.2%; /* #151515 surface-1 */
+		--foreground: 0 0% 96.1%; /* #f5f5f5 */
+		--card: 60 2.9% 10.2%; /* #1a1a19 surface-2 */
+		--card-foreground: 0 0% 63.9%; /* #a3a3a3 */
+		--popover: 60 3.2% 12.9%; /* #222220 */
+		--popover-foreground: 0 0% 96.1%;
+		--tooltip-background: 60 2.1% 18.4%;
+		--primary: 15.9 62.4% 59.6%; /* clay：深字 6.7:1（AA） */
+		--primary-foreground: 0 0% 8.2%;
+		--secondary: 0 0% 16.5%;
+		--secondary-foreground: 0 0% 96.1%;
+		--muted: 0 0% 16.5%;
+		--muted-foreground: 60 2.3% 57.1%; /* #94948f：hover 底 ~4.6:1 */
+		--hover: 60 2.3% 16.9%; /* Lift above the popover, not into it. */
+		--hover-foreground: 0 0% 96.1%;
+		--destructive: 0 100% 75.1%;
+		--destructive-foreground: 0 0% 0%;
+		--border: 60 2% 16.3%;
+		--input: 60 2.9% 10.2%;
+		--input-foreground: var(--foreground);
+		--input-placeholder: var(--muted-foreground);
+		--input-border: 60 1.8% 24.7%;
+		--input-field: 60 2.6% 12.2%; /* #20201e surface-3 */
+		--switch-track: 0 0% 16.5%;
+		--ring: 15.9 62.4% 59.6%;
+		--sidebar-background: 60 4.3% 4.1%; /* #0b0b0a surface-0 */
+		--sidebar-foreground: 0 0% 96.1%;
+		--sidebar-foreground-muted: 60 2.3% 57.1%; /* 选中底 >5:1 */
+		--sidebar-primary: 15.9 62.4% 59.6%;
+		--sidebar-hover: 60 2.7% 14.7%;
+		--sidebar-hover-foreground: 0 0% 96.1%;
+		--sidebar-selection: 60 2.1% 16.5%;
+		--sidebar-selection-foreground: 0 0% 96.1%;
+		--sidebar-border: 0 0% 13%;
+		--sidebar-ring: 15.9 62.4% 59.6%;
+		--button-hover: 14.6 65.7% 63.5%; /* #e08264 clay hover */
+		--button-secondary: 60 2.9% 10.2%;
+		--button-secondary-foreground: 0 0% 96.1%;
+		--button-secondary-hover: 0 0% 16.5%;
+		--status-success: 151 60% 52%;
+		/* 主色是 16° 陶土橙，警告沿用 50° 黄避免混淆（同 Lody dark 的理由） */
+		--status-warning: 50 100% 72%;
+		--status-danger: 0 100% 75.1%;
+		--scrollbar-thumb: 0 0% 14.5%;
+		--scrollbar-thumb-hover: 0 0% 20.4%;
+		--scrollbar-thumb-active: 0 0% 20.4%;
+		--code-background: 60 4.3% 4.1%; /* #0b0b0a */
+		--code-foreground: 0 0% 96.1%;
+		--code-border: 0 0% 13%;
+		--code-added: 164.1 100% 80%;
+		--code-removed: 0 100% 75.1%;
+		--skeleton-line: 0 0% 13.7%;
+		--skeleton-line-strong: 0 0% 16.5%;
+		--syntax-keyword: 0 0% 62.7%;
+		--syntax-string: 164.1 100% 80%;
+		--syntax-number: 27.1 100% 80%;
+		--syntax-comment: 0 0% 54.5%;
+		--syntax-function: 27.1 100% 80%;
+		--syntax-variable: 0 0% 100%;
+		--syntax-title: 27.1 100% 80%;
+		--syntax-attr: 0 0% 100%;
+		--syntax-builtin: 27.1 100% 80%;
+
+		--pilo-project-selected-foreground: hsl(
+			var(--sidebar-selection-foreground)
+		);
+		--pilo-composer-background: hsl(var(--card));
+		--pilo-composer-border: hsl(var(--input-border) / 0.7);
+		--pilo-shadow-composer: 0 2px 8px rgb(0 0 0 / 0.25);
+		--pilo-user-bubble-bg: hsl(60 2.1% 18.4%); /* 暖深灰 #30302e */
+		--pilo-user-bubble-border: transparent;
+
+		--pilo-shadow-panel: 0 1px 2px rgb(0 0 0 / 0.4), 0 2px 8px rgb(0 0 0 / 0.4);
+		--pilo-shadow-floating:
+			0 2px 8px rgb(0 0 0 / 0.45), 0 8px 28px rgb(0 0 0 / 0.65);
+	}
+}

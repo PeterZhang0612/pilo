@@ -18,6 +18,10 @@
 		<link rel="icon" type="image/png" href="/pilo-192.png" />
 		<link rel="apple-touch-icon" sizes="180x180" href="/pilo-180.png" />
 		<title>Pilo</title>
+		<style>
+			@layer theme, base, components, utilities;
+		</style>
+		<link rel="stylesheet" href="/src/styles/theme-presets.css" />
 		<script>
 			(() => {
 				const sidebarWidthStorageKey = "pilo.sidebarWidth";
@@ -54,6 +58,33 @@
 					(selectedTheme === "system" &&
 						window.matchMedia("(prefers-color-scheme: dark)").matches);
 				if (dark) document.documentElement.classList.add("dark");
+				const storedFamily = localStorage.getItem("pilo-ui-theme-family");
+				const themeFamily =
+					storedFamily === "claude" || storedFamily === "custom"
+						? storedFamily
+						: "lody";
+				document.documentElement.dataset.themeFamily = themeFamily;
+				// 自定义主题 CSS 提前注入（与 ThemeProvider 共用同 id 元素，后者挂载后接管）
+				if (themeFamily === "custom") {
+					try {
+						const prefs = JSON.parse(
+							localStorage.getItem("pilo.theme.v1") ||
+								localStorage.getItem("pilo.preferences.v1") ||
+								"{}",
+						);
+						if (
+							typeof prefs.themeCustomCss === "string" &&
+							prefs.themeCustomCss
+						) {
+							const customStyle = document.createElement("style");
+							customStyle.id = "pilo-custom-theme-css";
+							customStyle.textContent = prefs.themeCustomCss;
+							document.head.appendChild(customStyle);
+						}
+					} catch {
+						// 存储不可用时跳过，React 挂载后仍会注入。
+					}
+				}
 				if (/Mac|iPhone|iPad|iPod/.test(navigator.platform)) {
 					document.documentElement.classList.add("pilo-macos");
 				}
@@ -65,399 +96,424 @@
 				document
 					.querySelector('meta[name="color-scheme"]')
 					?.setAttribute("content", colorScheme);
-				const themeColor = dark ? "#101010" : "#ffffff";
+				const customBackground = getComputedStyle(document.documentElement)
+					.getPropertyValue("--background")
+					.trim();
+				const themeColor = customBackground
+					? `hsl(${customBackground})`
+					: dark
+						? "#101010"
+						: "#ffffff";
 				document
 					.querySelector('meta[name="theme-color"]')
 					?.setAttribute("content", themeColor);
 			})();
 		</script>
 		<style>
-			html,
-			body,
-			#root {
-				width: 100%;
-				height: 100%;
-				margin: 0;
-			}
-			html,
-			body {
-				background: #ffffff;
-			}
-			html.dark,
-			.dark body {
-				background: #101010;
-			}
-			body {
-				overflow: hidden;
-			}
-			#pilo-boot-shell {
-				/* token 快照，供 index.css 加载前使用；改动 tokens 时同步这里 */
-				--boot-bg: #ffffff;
-				--boot-panel: #f7f8fa; /* --sidebar-background */
-				--boot-panel-border: #d5d8df; /* --sidebar-border */
-				--boot-line: #e8eaef; /* --skeleton-line */
-				--boot-line-strong: #dfe2e8; /* --skeleton-line-strong */
-				--boot-input: #ffffff; /* --input-field */
-				--boot-input-border: #d9dde4; /* --input-border */
-				position: fixed;
-				inset: 0;
-				z-index: 2147483647;
-				display: grid;
-				grid-template-columns: var(--pilo-boot-sidebar-width, 292px) minmax(
-						0,
-						1fr
-					);
-				background: var(--boot-bg);
-				color-scheme: light;
-				pointer-events: none;
-			}
-			.dark #pilo-boot-shell {
-				--boot-bg: #101010; /* --background */
-				--boot-panel: #161616; /* --sidebar-background */
-				--boot-panel-border: #282828; /* --sidebar-border */
-				--boot-line: #232323; /* --skeleton-line */
-				--boot-line-strong: #2a2a2a; /* --skeleton-line-strong */
-				--boot-input: #1c1c1c; /* --input */
-				--boot-input-border: #282828; /* --input-border */
-				color-scheme: dark;
-			}
-			.pilo-browser #pilo-boot-shell {
-				grid-template-columns: minmax(0, 1fr);
-			}
-			.pilo-browser .pilo-boot-sidebar {
-				display: none;
-			}
-			.pilo-boot-sidebar {
-				margin: 8px 4px 8px 8px;
-				min-width: 0;
-				border: 1px solid var(--boot-panel-border);
-				border-radius: 12px;
-				background: var(--boot-panel);
-				box-shadow: 0 1px 4px -1px rgb(0 0 0 / 0.12);
-				box-sizing: border-box;
-				overflow: hidden;
-			}
-			.pilo-boot-sidebar-inner {
-				display: flex;
-				height: 100%;
-				flex-direction: column;
-				padding: 2px;
-				box-sizing: border-box;
-			}
-			.pilo-boot-sidebar-header {
-				position: relative;
-				display: flex;
-				flex: 0 0 auto;
-				align-items: center;
-				height: 44px;
-				padding: 0 6px;
-				box-sizing: border-box;
-			}
-			.pilo-macos .pilo-boot-sidebar-header {
-				height: 72px;
-				padding-top: 28px;
-			}
-			.pilo-boot-brand {
-				width: 36px;
-				height: 16px;
-				margin-left: 8px;
-				border-radius: 5px;
-				background: var(--boot-line-strong);
-			}
-			.pilo-boot-header-actions {
-				position: absolute;
-				right: 6px;
-				top: 8px;
-				display: flex;
-				align-items: center;
-				gap: 2px;
-			}
-			.pilo-macos .pilo-boot-header-actions {
-				top: -2px;
-			}
-			.pilo-boot-header-button,
-			.pilo-boot-footer-button {
-				display: flex;
-				align-items: center;
-				justify-content: center;
-				box-sizing: border-box;
-			}
-			.pilo-boot-header-button {
-				width: 28px;
-				height: 28px;
-			}
-			.pilo-boot-header-icon,
-			.pilo-boot-footer-icon {
-				width: 16px;
-				height: 16px;
-				border-radius: 5px;
-				background: var(--boot-line-strong);
-			}
-			.pilo-boot-line {
-				height: 8px;
-				border-radius: 999px;
-				background: var(--boot-line);
-			}
-			.pilo-boot-new-chat-wrap {
-				margin-top: -4px;
-				padding: 0 6px;
-			}
-			.pilo-boot-new-chat {
-				display: flex;
-				align-items: center;
-				gap: 8px;
-				height: 32px;
-				padding: 0 8px;
-				box-sizing: border-box;
-			}
-			.pilo-boot-row-icon {
-				width: 16px;
-				height: 16px;
-				border-radius: 5px;
-				background: var(--boot-line-strong);
-				flex: 0 0 auto;
-			}
-			.pilo-boot-new-chat .pilo-boot-line {
-				width: 64px;
-			}
-			.pilo-boot-sidebar-scroll {
-				min-height: 0;
-				min-width: 0;
-				flex: 1;
-				margin-top: 8px;
-				padding: 0 10px 12px 6px;
-				box-sizing: border-box;
-				overflow: hidden;
-			}
-			.pilo-boot-sidebar-list {
-				padding-top: 4px;
-			}
-			.pilo-boot-env-row,
-			.pilo-boot-project-row,
-			.pilo-boot-session-row {
-				display: flex;
-				width: 100%;
-				align-items: center;
-				box-sizing: border-box;
-			}
-			.pilo-boot-env-row {
-				height: 28px;
-				gap: 8px;
-				padding: 0 8px;
-			}
-			.pilo-boot-env-row .pilo-boot-line {
-				width: 34px;
-			}
-			.pilo-boot-project-row {
-				height: 30px;
-				margin-top: 2px;
-				gap: 8px;
-				padding: 0 12px 0 8px;
-			}
-			.pilo-boot-project-row .pilo-boot-line {
-				width: 76px;
-			}
-			.pilo-boot-session-row {
-				height: 30px;
-				gap: 6px;
-				padding: 0 8px;
-			}
-			.pilo-boot-session-slot {
-				width: 16px;
-				height: 16px;
-				flex: 0 0 auto;
-			}
-			.pilo-boot-session-row .pilo-boot-line {
-				width: 116px;
-			}
-			.pilo-boot-session-row:nth-of-type(4) .pilo-boot-line {
-				width: 148px;
-			}
-			.pilo-boot-session-row:nth-of-type(5) .pilo-boot-line {
-				width: 92px;
-			}
-			.pilo-boot-project-row-secondary {
-				margin-top: 10px;
-			}
-			.pilo-boot-footer {
-				display: flex;
-				flex: 0 0 auto;
-				align-items: center;
-				gap: 4px;
-				border-top: 1px solid var(--boot-panel-border);
-				padding: 4px 6px;
-				box-sizing: border-box;
-			}
-			.pilo-boot-footer-button {
-				width: 36px;
-				height: 36px;
-			}
-			.pilo-boot-footer-button:last-child {
-				margin-left: auto;
-			}
-			.pilo-boot-main {
-				position: relative;
-				display: flex;
-				min-width: 0;
-				flex-direction: column;
-				container-type: inline-size;
-				background: var(--boot-bg);
-			}
-			.pilo-boot-page {
-				position: relative;
-				display: flex;
-				min-height: 0;
-				flex: 1;
-				flex-direction: column;
-			}
-			.pilo-boot-content {
-				display: flex;
-				min-height: 0;
-				width: 100%;
-				flex: 1;
-				flex-direction: column;
-			}
-			.pilo-boot-center-column,
-			.pilo-boot-composer-column {
-				width: min(80%, 52rem);
-				margin-inline: auto;
-				box-sizing: border-box;
-				padding-inline: 16px;
-			}
-			.pilo-boot-center-column {
-				display: flex;
-				flex: 1;
-				align-items: center;
-				justify-content: center;
-			}
-			.pilo-boot-center {
-				display: flex;
-				width: min(234px, 100%);
-				flex-direction: column;
-				align-items: center;
-				justify-content: center;
-				gap: 12px;
-			}
-			.pilo-boot-mark {
-				width: 64px;
-				height: 64px;
-				flex: 0 0 auto;
-				color: var(--boot-line-strong);
-				opacity: 0.88;
-			}
-			.pilo-boot-mark path {
-				fill: currentColor;
-			}
-			.pilo-boot-heading {
-				width: 100%;
-				height: 36px;
-				border-radius: 8px;
-				background: var(--boot-line);
-			}
-			.pilo-boot-composer-dock {
-				position: relative;
-				width: 100%;
-				flex: 0 0 auto;
-				margin-top: -16px;
-				box-sizing: border-box;
-				padding-bottom: 16px;
-			}
-			.pilo-boot-composer {
-				position: relative;
-				display: flex;
-				width: 100%;
-				flex-direction: column;
-				gap: 4px;
-				border: 1px solid var(--boot-input-border);
-				border-radius: 12px;
-				background: var(--boot-input);
-				box-shadow: 0 1px 2px rgb(0 0 0 / 0.035);
-				box-sizing: border-box;
-				padding: 6px 8px;
-			}
-			.pilo-boot-composer-input {
-				height: 48px;
-				flex: 0 0 48px;
-			}
-			.pilo-boot-composer-line {
-				width: 42%;
-				height: 9px;
-				margin: 8px 4px 0;
-				border-radius: 999px;
-				background: var(--boot-line);
-			}
-			.pilo-boot-composer-toolbar {
-				display: flex;
-				height: 30px;
-				box-sizing: border-box;
-				align-items: center;
-				gap: 8px;
-				padding-top: 2px;
-			}
-			.pilo-boot-composer-button {
-				width: 28px;
-				height: 28px;
-				border-radius: 8px;
-				background: var(--boot-line);
-			}
-			.pilo-boot-composer-model {
-				width: 110px;
-				height: 9px;
-				border-radius: 999px;
-				background: var(--boot-line);
-			}
-			.pilo-boot-composer-send {
-				margin-left: auto;
-				width: 28px;
-				height: 28px;
-				border-radius: 999px;
-				background: var(--boot-line-strong);
-			}
-			/* 浏览器（Remote WebUI）的骨架宽度与 remote-app 的
-			   --conversation-max-width 对齐，避免加载完成后消息列跳动。 */
-			.pilo-browser .pilo-boot-center-column,
-			.pilo-browser .pilo-boot-composer-column {
-				width: min(94%, 56rem);
-			}
-			.pilo-boot-line,
-			.pilo-boot-brand,
-			.pilo-boot-header-icon,
-			.pilo-boot-row-icon,
-			.pilo-boot-footer-icon,
-			.pilo-boot-composer-line,
-			.pilo-boot-composer-button,
-			.pilo-boot-composer-model,
-			.pilo-boot-composer-send,
-			.pilo-boot-mark,
-			.pilo-boot-heading {
-				animation: pilo-boot-breathe 1.65s ease-in-out infinite alternate;
-			}
-			@keyframes pilo-boot-breathe {
-				from {
-					opacity: 0.72;
-				}
-				to {
-					opacity: 1;
-				}
-			}
-			@media (prefers-reduced-motion: reduce) {
-				#pilo-boot-shell * {
-					animation: none !important;
-				}
-			}
-			@container (max-width: 639px) {
-				.pilo-browser .pilo-boot-center-column,
-				.pilo-browser .pilo-boot-composer-column {
+			@layer base {
+				html,
+				body,
+				#root {
 					width: 100%;
+					height: 100%;
+					margin: 0;
+				}
+				html,
+				body {
+					background: hsl(var(--background, 0 0% 100%));
+				}
+				html.dark,
+				.dark body {
+					background: hsl(var(--background, 0 0% 6.3%));
+				}
+				body {
+					overflow: hidden;
+				}
+				#pilo-boot-shell {
+					/* Read the same preset/custom tokens as the mounted UI. */
+					--boot-bg: hsl(var(--background, 0 0% 100%));
+					--boot-panel: hsl(
+						var(--sidebar-background, 220 23.1% 97.5%)
+					); /* --sidebar-background */
+					--boot-panel-border: hsl(
+						var(--sidebar-border, 222 13.5% 85.5%)
+					); /* --sidebar-border */
+					--boot-line: hsl(
+						var(--skeleton-line, 222.9 17.9% 92.4%)
+					); /* --skeleton-line */
+					--boot-line-strong: hsl(
+						var(--skeleton-line-strong, 220 16.3% 89.2%)
+					); /* --skeleton-line-strong */
+					position: fixed;
+					inset: 0;
+					z-index: 2147483647;
+					display: grid;
+					grid-template-columns: var(--pilo-boot-sidebar-width, 292px) minmax(
+							0,
+							1fr
+						);
+					background: var(--boot-bg);
+					color-scheme: light;
+					pointer-events: none;
+				}
+				.dark #pilo-boot-shell {
+					--boot-bg: hsl(var(--background, 0 0% 6.3%)); /* --background */
+					--boot-panel: hsl(
+						var(--sidebar-background, 0 0% 8.6%)
+					); /* --sidebar-background */
+					--boot-panel-border: hsl(
+						var(--sidebar-border, 0 0% 15.7%)
+					); /* --sidebar-border */
+					--boot-line: hsl(
+						var(--skeleton-line, 0 0% 13.7%)
+					); /* --skeleton-line */
+					--boot-line-strong: hsl(
+						var(--skeleton-line-strong, 0 0% 16.5%)
+					); /* --skeleton-line-strong */
+					color-scheme: dark;
+				}
+				.pilo-browser #pilo-boot-shell {
+					grid-template-columns: minmax(0, 1fr);
+				}
+				.pilo-browser .pilo-boot-sidebar {
+					display: none;
+				}
+				.pilo-boot-sidebar {
+					margin: var(--pilo-sidebar-margin);
+					height: var(--pilo-sidebar-height);
+					width: var(--pilo-sidebar-width);
+					min-width: 0;
+					border-style: solid;
+					border-width: var(--pilo-sidebar-border-width);
+					border-color: var(--pilo-sidebar-border-color);
+					border-radius: var(--pilo-sidebar-radius);
+					background: var(--boot-panel);
+					box-shadow: var(--pilo-sidebar-shadow);
+					box-sizing: border-box;
+					overflow: hidden;
+				}
+				.pilo-boot-sidebar-inner {
+					display: flex;
+					height: 100%;
+					flex-direction: column;
+					padding: var(--pilo-sidebar-padding);
+					box-sizing: border-box;
+				}
+				.pilo-boot-sidebar-header {
+					position: relative;
+					display: flex;
+					flex: 0 0 auto;
+					align-items: center;
+					height: 44px;
+					padding: 0 6px;
+					box-sizing: border-box;
+				}
+				.pilo-macos .pilo-boot-sidebar-header {
+					height: 72px;
+					padding-top: 28px;
+				}
+				.pilo-boot-brand {
+					width: 36px;
+					height: 16px;
+					margin-left: 8px;
+					border-radius: 5px;
+					background: var(--boot-line-strong);
+				}
+				.pilo-boot-header-actions {
+					position: absolute;
+					right: 6px;
+					top: 8px;
+					display: flex;
+					align-items: center;
+					gap: 2px;
+				}
+				.pilo-macos .pilo-boot-header-actions {
+					top: -2px;
+				}
+				.pilo-boot-header-button,
+				.pilo-boot-footer-button {
+					display: flex;
+					align-items: center;
+					justify-content: center;
+					box-sizing: border-box;
+				}
+				.pilo-boot-header-button {
+					width: 28px;
+					height: 28px;
+				}
+				.pilo-boot-header-icon,
+				.pilo-boot-footer-icon {
+					width: 16px;
+					height: 16px;
+					border-radius: 5px;
+					background: var(--boot-line-strong);
+				}
+				.pilo-boot-line {
+					height: 8px;
+					border-radius: 999px;
+					background: var(--boot-line);
+				}
+				.pilo-boot-new-chat-wrap {
+					margin-top: -4px;
+					padding: 0 6px;
+				}
+				.pilo-boot-new-chat {
+					display: flex;
+					align-items: center;
+					gap: 8px;
+					height: 32px;
+					padding: 0 8px;
+					box-sizing: border-box;
+				}
+				.pilo-boot-row-icon {
+					width: 16px;
+					height: 16px;
+					border-radius: 5px;
+					background: var(--boot-line-strong);
+					flex: 0 0 auto;
+				}
+				.pilo-boot-new-chat .pilo-boot-line {
+					width: 64px;
+				}
+				.pilo-boot-sidebar-scroll {
+					min-height: 0;
+					min-width: 0;
+					flex: 1;
+					margin-top: 8px;
+					padding: 0 10px 12px 6px;
+					box-sizing: border-box;
+					overflow: hidden;
+				}
+				.pilo-boot-sidebar-list {
+					padding-top: 4px;
+				}
+				.pilo-boot-env-row,
+				.pilo-boot-project-row,
+				.pilo-boot-session-row {
+					display: flex;
+					width: 100%;
+					align-items: center;
+					box-sizing: border-box;
+				}
+				.pilo-boot-env-row {
+					height: 28px;
+					gap: 8px;
+					padding: 0 8px;
+				}
+				.pilo-boot-env-row .pilo-boot-line {
+					width: 34px;
+				}
+				.pilo-boot-project-row {
+					height: 30px;
+					margin-top: 2px;
+					gap: 8px;
+					padding: 0 12px 0 8px;
+				}
+				.pilo-boot-project-row .pilo-boot-line {
+					width: 76px;
+				}
+				.pilo-boot-session-row {
+					height: 30px;
+					gap: 6px;
+					padding: 0 8px;
+				}
+				.pilo-boot-session-slot {
+					width: 16px;
+					height: 16px;
+					flex: 0 0 auto;
+				}
+				.pilo-boot-session-row .pilo-boot-line {
+					width: 116px;
+				}
+				.pilo-boot-session-row:nth-of-type(4) .pilo-boot-line {
+					width: 148px;
+				}
+				.pilo-boot-session-row:nth-of-type(5) .pilo-boot-line {
+					width: 92px;
+				}
+				.pilo-boot-project-row-secondary {
+					margin-top: 10px;
+				}
+				.pilo-boot-footer {
+					display: flex;
+					flex: 0 0 auto;
+					align-items: center;
+					gap: 4px;
+					border-top: 1px solid var(--boot-panel-border);
+					padding: 4px 6px;
+					box-sizing: border-box;
+				}
+				.pilo-boot-footer-button {
+					width: 36px;
+					height: 36px;
+				}
+				.pilo-boot-footer-button:last-child {
+					margin-left: auto;
+				}
+				.pilo-boot-main {
+					position: relative;
+					display: flex;
+					min-width: 0;
+					flex-direction: column;
+					container-type: inline-size;
+					background: var(--boot-bg);
+				}
+				.pilo-boot-page {
+					position: relative;
+					display: flex;
+					min-height: 0;
+					flex: 1;
+					flex-direction: column;
+				}
+				.pilo-boot-content {
+					display: flex;
+					min-height: 0;
+					width: 100%;
+					flex: 1;
+					flex-direction: column;
 				}
 				.pilo-boot-center-column,
 				.pilo-boot-composer-column {
-					padding-inline: 12px;
+					width: var(--pilo-conversation-max-width, min(80%, 52rem));
+					margin-inline: auto;
+					box-sizing: border-box;
+					padding-inline: 16px;
 				}
-			}
-			@media (max-width: 639px) {
+				.pilo-boot-center-column {
+					display: flex;
+					flex: 1;
+					align-items: center;
+					justify-content: center;
+				}
+				.pilo-boot-center {
+					display: flex;
+					width: min(234px, 100%);
+					flex-direction: column;
+					align-items: center;
+					justify-content: center;
+					gap: 12px;
+				}
+				.pilo-boot-mark {
+					width: 64px;
+					height: 64px;
+					flex: 0 0 auto;
+					color: var(--boot-line-strong);
+					opacity: 0.88;
+				}
+				.pilo-boot-mark path {
+					fill: currentColor;
+				}
 				.pilo-boot-heading {
-					height: 32px;
+					width: 100%;
+					height: 36px;
+					border-radius: 8px;
+					background: var(--boot-line);
+				}
+				.pilo-boot-composer-dock {
+					position: relative;
+					width: 100%;
+					flex: 0 0 auto;
+					margin-top: -16px;
+					box-sizing: border-box;
+					padding-bottom: 16px;
+				}
+				.pilo-boot-composer {
+					position: relative;
+					display: flex;
+					width: 100%;
+					flex-direction: column;
+					gap: 4px;
+					border: 1px solid var(--pilo-composer-border);
+					border-radius: var(--pilo-composer-radius);
+					background: var(--pilo-composer-background);
+					box-shadow: var(--pilo-shadow-composer);
+					box-sizing: border-box;
+					padding: 6px 8px;
+				}
+				.pilo-boot-composer-input {
+					height: 48px;
+					flex: 0 0 48px;
+				}
+				.pilo-boot-composer-line {
+					width: 42%;
+					height: 9px;
+					margin: 8px 4px 0;
+					border-radius: 999px;
+					background: var(--boot-line);
+				}
+				.pilo-boot-composer-toolbar {
+					display: flex;
+					height: 30px;
+					box-sizing: border-box;
+					align-items: center;
+					gap: 8px;
+					padding-top: 2px;
+				}
+				.pilo-boot-composer-button {
+					width: 28px;
+					height: 28px;
+					border-radius: 8px;
+					background: var(--boot-line);
+				}
+				.pilo-boot-composer-model {
+					width: 110px;
+					height: 9px;
+					border-radius: 999px;
+					background: var(--boot-line);
+				}
+				.pilo-boot-composer-send {
+					margin-left: auto;
+					width: 28px;
+					height: 28px;
+					border-radius: 999px;
+					background: var(--boot-line-strong);
+				}
+				/* 浏览器（Remote WebUI）的骨架宽度与 remote-app 的
+			   --conversation-max-width 对齐，避免加载完成后消息列跳动。 */
+				.pilo-browser .pilo-boot-center-column,
+				.pilo-browser .pilo-boot-composer-column {
+					width: var(--pilo-conversation-max-width, min(94%, 56rem));
+				}
+				.pilo-boot-line,
+				.pilo-boot-brand,
+				.pilo-boot-header-icon,
+				.pilo-boot-row-icon,
+				.pilo-boot-footer-icon,
+				.pilo-boot-composer-line,
+				.pilo-boot-composer-button,
+				.pilo-boot-composer-model,
+				.pilo-boot-composer-send,
+				.pilo-boot-mark,
+				.pilo-boot-heading {
+					animation: pilo-boot-breathe 1.65s ease-in-out infinite alternate;
+				}
+				@keyframes pilo-boot-breathe {
+					from {
+						opacity: 0.72;
+					}
+					to {
+						opacity: 1;
+					}
+				}
+				@media (prefers-reduced-motion: reduce) {
+					#pilo-boot-shell * {
+						animation: none !important;
+					}
+				}
+				@container (max-width: 639px) {
+					.pilo-browser .pilo-boot-center-column,
+					.pilo-browser .pilo-boot-composer-column {
+						width: 100%;
+					}
+					.pilo-boot-center-column,
+					.pilo-boot-composer-column {
+						padding-inline: 12px;
+					}
+				}
+				@media (max-width: 639px) {
+					.pilo-boot-heading {
+						height: 32px;
+					}
 				}
 			}
 		</style>

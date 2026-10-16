@@ -41,7 +41,6 @@ import {
 	type KeyboardShortcutMap,
 	type ShortcutCommandId,
 } from "@/lib/keyboard-shortcuts";
-
 export type SendMessageShortcut = "enter" | "mod-enter";
 
 export type PiloPreferences = {
@@ -314,7 +313,6 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
 		if (!isTerminalFontSize(value)) return;
 		setPreferences((current) => ({ ...current, terminalFontSize: value }));
 	}, []);
-
 	const value = useMemo<PreferencesContextValue>(
 		() => ({
 			...preferences,

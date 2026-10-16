@@ -1,0 +1,273 @@
+/* Default theme values. Custom themes override the same tokens. */
+@layer base {
+	:root {
+		--pilo-page-font-family:
+			"Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+			"Roboto", "Helvetica Neue", Arial, "Noto Sans SC", "PingFang SC",
+			"Microsoft YaHei", "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+		--pilo-code-font-family:
+			"JetBrains Mono", ui-monospace, "SF Mono", "SFMono-Regular", "Monaco",
+			"Menlo", "Consolas", "Liberation Mono", "Courier New", monospace;
+		--pilo-code-font-size: 12px;
+
+		/*
+		 * Lody Light，解析自内置主题 lody-light.json（经 Lody LODY_ALIAS_RULES
+		 * 解析后的生效值；-ring 因 focusBorder 全透明回落到主色）。
+		 * 侧栏 #F7F8FA。文本色按各自实际渲染的底校准到 ≥4.5:1（含 12px 代码）。
+		 */
+		--background: 0 0% 100%;
+		--foreground: 225 7.1% 11%;
+		--card: 220 23.1% 97.5%;
+		--card-foreground: 220 7.5% 39%;
+		--popover: 0 0% 100%;
+		--popover-foreground: 225 7.1% 11%;
+		--primary: 219.7 82.2% 54%; /* Lody #5B8DEF 压暗一档：白字 4.8:1（AA 正文） */
+		--primary-foreground: 0 0% 100%;
+		--secondary: 216 17.2% 94.3%;
+		--secondary-foreground: 225 7.1% 11%;
+		--muted: 216 17.2% 94.3%;
+		/* 按 muted 面 #eef0f3 校准：4.6:1；白底 5.3:1、card 底 5.0:1 */
+		--muted-foreground: 220 8.9% 43.8%;
+		--hover: 225 15.4% 94.9%;
+		--hover-foreground: 225 7.1% 11%;
+		--destructive: 355.8 71.8% 47.3%;
+		--destructive-foreground: 0 0% 100%;
+		--border: 222.9 16.3% 91.6%;
+		--input: 216 12.2% 92%;
+		--input-foreground: 225 7.1% 11%;
+		--input-placeholder: var(--muted-foreground);
+		--input-border: 222 14.7% 86.7%;
+		/* Fill of an editable control; stays white on a light canvas. */
+		--input-field: 0 0% 100%;
+		--switch-track: 222 14.7% 86.7%;
+		--ring: 219.7 82.2% 64.7%;
+		--sidebar-background: 220 23.1% 97.5%;
+		--sidebar-foreground: var(--card-foreground);
+		/* 环境名/占位符/图标：与二级文本同色，侧栏底 5.0:1 */
+		--sidebar-foreground-muted: var(--muted-foreground);
+		--sidebar-primary: 219.7 82.2% 64.7%;
+		--sidebar-hover: 225 15.4% 94.9%;
+		--sidebar-hover-foreground: 225 7.1% 11%;
+		--sidebar-selection-foreground: 225 7.1% 11%;
+		--sidebar-border: 222 13.5% 85.5%;
+		--sidebar-ring: 219.7 82.2% 64.7%;
+		--button-hover: 218.6 65.3% 47%; /* 主按钮 hover 底，白字 5.8:1 */
+		--button-secondary: 216 12.2% 92%;
+		--button-secondary-foreground: 225 7.1% 11%;
+		--button-secondary-hover: 225 15.4% 94.9%;
+		--status-success: 137.2 66% 30%;
+		--status-warning: 24.9 58.9% 41%;
+		--status-danger: 355.8 71.8% 47.3%;
+		--scrollbar-thumb: 220 6.1% 90.4%;
+		--scrollbar-thumb-hover: 220 3.5% 83.3%;
+		--scrollbar-thumb-active: 225 3.1% 74.9%;
+		--code-background: 220 23.1% 97.5%;
+		--code-foreground: 225 7.1% 11%;
+		--code-border: 222 14.7% 86.7%;
+		--code-added: 137.2 66% 30%; /* = status-success */
+		--code-removed: 355.8 71.8% 47.3%; /* = status-danger */
+		--skeleton-line: 222.9 17.9% 92.4%;
+		--skeleton-line-strong: 220 16.3% 89.2%;
+		/* 代码底 #f7f8fa 上全部 ≥4.5:1（12px 代码也是正文） */
+		--syntax-keyword: 230.9 60.9% 58.2%;
+		--syntax-string: 10.4 38.3% 47.8%;
+		--syntax-number: 191.2 49.2% 36.3%;
+		--syntax-comment: 120 7.3% 41%;
+		--syntax-function: 95.8 39.9% 34.8%;
+		--syntax-variable: 30.6 41.9% 40.6%;
+		--syntax-title: 172 51.3% 32.5%;
+		--syntax-attr: 30.6 41.9% 40.6%;
+		--syntax-builtin: 50.2 72.9% 29.5%;
+
+		/* Sizing / motion */
+		--control-h: 36px;
+		--dur-1: 120ms;
+		--dur-2: 180ms;
+		--ease: cubic-bezier(0.2, 0, 0, 1);
+
+		/* 主题族可调维度：lody 默认值。气泡圆角 = rounded-2xl，composer = rounded-xl。 */
+		--pilo-bubble-radius: 1rem;
+		--pilo-composer-radius: 0.75rem;
+		--pilo-display-font-family: var(--pilo-page-font-family);
+		--pilo-shadow-composer: 0 0 #0000;
+		--pilo-user-bubble-bg: hsl(var(--foreground) / 0.05);
+		--pilo-user-bubble-border: hsl(var(--foreground) / 0.08);
+
+		/* Shared component contract: built-ins and custom themes set the same values. */
+		--pilo-radius-xs: 0.125rem;
+		--pilo-radius-sm: 0.25rem;
+		--pilo-radius-md: 0.375rem;
+		--pilo-radius-lg: 0.5rem;
+		--pilo-radius-xl: 0.75rem;
+		--pilo-shadow-2xs: 0px 2px 4px 0px hsl(0 0% 0% / 0.05);
+		--pilo-shadow-xs: var(--pilo-shadow-2xs);
+		--pilo-shadow-sm:
+			0px 2px 4px 0px hsl(0 0% 0% / 0.1), 0px 1px 2px -1px hsl(0 0% 0% / 0.1);
+		--pilo-shadow-md:
+			0px 2px 4px 0px hsl(0 0% 0% / 0.1), 0px 2px 4px -1px hsl(0 0% 0% / 0.1);
+		--pilo-shadow-lg:
+			0px 2px 4px 0px hsl(0 0% 0% / 0.1), 0px 4px 6px -1px hsl(0 0% 0% / 0.1);
+		--pilo-shadow-xl:
+			0px 2px 4px 0px hsl(0 0% 0% / 0.1), 0px 8px 10px -1px hsl(0 0% 0% / 0.1);
+		--pilo-shadow-2xl: 0px 2px 4px 0px hsl(0 0% 0% / 0.25);
+		--pilo-shadow-panel:
+			0 1px 2px hsl(0 0% 0% / 0.08), 0 10px 30px hsl(0 0% 0% / 0.1);
+		--pilo-shadow-popover:
+			0 2px 6px hsl(0 0% 0% / 0.1), 0 18px 50px hsl(0 0% 0% / 0.14);
+		--pilo-floating-radius: var(--pilo-radius-md);
+		--pilo-context-details-radius: var(--pilo-radius-xl);
+		--pilo-sheet-radius: 1rem;
+		--pilo-sheet-padding: 0.5rem;
+		--pilo-sheet-item-radius: max(
+			0px,
+			calc(var(--pilo-sheet-radius) - var(--pilo-sheet-padding))
+		);
+		--pilo-segment-radius: var(--pilo-radius-lg);
+		--pilo-segment-padding: 0.25rem;
+		--pilo-segment-item-radius: max(
+			0px,
+			calc(var(--pilo-segment-radius) - var(--pilo-segment-padding))
+		);
+		--pilo-shadow-floating: var(--pilo-shadow-md);
+		--pilo-tooltip-border: hsl(var(--border));
+		--pilo-tooltip-shadow: var(--pilo-shadow-md);
+		--pilo-button-primary-shadow: var(--pilo-shadow-sm);
+		--pilo-button-secondary-shadow: var(--pilo-shadow-xs);
+		--pilo-field-shadow: var(--pilo-shadow-xs);
+		--pilo-field-hover-border: hsl(var(--input-border));
+		--pilo-field-focus-border: hsl(var(--input-border));
+		--pilo-field-touch-height: 0px;
+		--pilo-menu-background: hsl(var(--background));
+		--pilo-menu-edge: color-mix(
+			in oklab,
+			hsl(var(--background)) 90%,
+			hsl(var(--foreground)) 10%
+		);
+		--pilo-menu-shadow:
+			0 0 0 1px var(--pilo-menu-edge), 0 4px 12px 0 rgb(0 0 0 / 0.08),
+			0 1px 3px 0 rgb(0 0 0 / 0.06);
+		--pilo-menu-radius: var(--pilo-radius-xl);
+		--pilo-menu-padding: 0.25rem;
+		--pilo-menu-item-height: 2rem;
+		--pilo-menu-item-radius: max(
+			0px,
+			calc(var(--pilo-menu-radius) - var(--pilo-menu-padding))
+		);
+		--pilo-menu-item-gap: 0px;
+		--pilo-menu-checked-background: transparent;
+		--pilo-menu-touch-height: 0px;
+		--pilo-select-padding: 0.25rem;
+		--pilo-select-gap: 0px;
+		--pilo-select-item-height: 0px;
+		--pilo-select-item-radius: var(--pilo-radius-xs);
+		--pilo-select-checked-background: transparent;
+		--pilo-select-checked-foreground: currentColor;
+		--pilo-command-touch-height: 0px;
+		--pilo-sidebar-margin: 0.5rem 0.25rem 0.5rem 0.5rem;
+		--pilo-sidebar-height: calc(100% - 1rem);
+		--pilo-sidebar-width: calc(100% - 12px);
+		--pilo-sidebar-border-width: 1px;
+		--pilo-sidebar-border-color: hsl(var(--sidebar-border) / 0.8);
+		--pilo-sidebar-radius: var(--pilo-radius-xl);
+		--pilo-sidebar-padding: 2px;
+		--pilo-sidebar-shadow: var(--pilo-shadow-sm);
+		--pilo-mobile-sidebar-radius: 0 var(--pilo-radius-xl) var(--pilo-radius-xl)
+			0;
+		--pilo-sidebar-selected-border: hsl(var(--sidebar-foreground) / 0.1);
+		--pilo-sidebar-selected-background: hsl(var(--sidebar-foreground) / 0.1);
+		--pilo-sidebar-selected-foreground: hsl(var(--sidebar-foreground));
+		--pilo-project-selected-foreground: hsl(var(--sidebar-foreground));
+		--pilo-mobile-selected-background: hsl(var(--sidebar-foreground) / 0.1);
+		--pilo-mobile-confirm-selected-background: hsl(var(--sidebar-background));
+		--pilo-mobile-selected-ring-width: 1px;
+		--pilo-composer-background: hsl(var(--background));
+		--pilo-composer-border: hsl(var(--foreground) / 0.1);
+		--pilo-composer-focus-border: hsl(var(--ring) / 0.4);
+		--pilo-context-usage-color: hsl(var(--primary));
+
+		/* Overlay stacking */
+		--z-dialog-overlay: 70;
+		--z-dialog: 80;
+		--z-popover: 80;
+		--z-tooltip: 90;
+		--z-toast: 100;
+	}
+
+	.dark {
+		/*
+		 * Lody Dark = bundled Vesper. Keep these values aligned with
+		 * packages/components/.../Vesper-dark-color-theme.json and Lody's alias rules.
+		 * 例外：Vesper 只有一个橙，status-warning 本地改成 50° 黄，否则警告与主色/焦点环同色。
+		 */
+		--background: 0 0% 6.3%;
+		--foreground: 0 0% 100%;
+		--card: 0 0% 8.6%;
+		--card-foreground: 0 0% 62.7%;
+		--popover: 0 0% 6.3%;
+		--popover-foreground: 0 0% 100%;
+		--primary: 27.1 100% 80%;
+		--primary-foreground: 0 0% 0%;
+		--secondary: 0 0% 13.7%;
+		--secondary-foreground: 0 0% 62.7%;
+		/* 与页面底 #101010 拉开一档，选中/悬停底在深色下才可见 */
+		--muted: 0 0% 13.7%;
+		--muted-foreground: 0 0% 62.7%;
+		--hover: 0 0% 15.7%;
+		--hover-foreground: 0 0% 100%;
+		--destructive: 0 100% 75.1%;
+		--destructive-foreground: 0 0% 0%;
+		--border: 0 0% 15.7%;
+		--input: 0 0% 11%;
+		--input-foreground: var(--foreground);
+		--input-placeholder: var(--muted-foreground);
+		--input-border: 0 0% 15.7%;
+		--input-field: var(--input);
+		--switch-track: 0 0% 15.7%;
+		--ring: 27.1 100% 80%;
+		--sidebar-background: 0 0% 8.6%;
+		--sidebar-foreground: 0 0% 100%;
+		--sidebar-foreground-muted: 0 0% 62.7%;
+		--sidebar-primary: 27.1 100% 80%;
+		--sidebar-hover: 0 0% 15.7%;
+		--sidebar-hover-foreground: 0 0% 62.7%;
+		--sidebar-selection-foreground: 27.1 100% 80%;
+		--sidebar-border: 0 0% 15.7%;
+		--sidebar-ring: 27.1 100% 80%;
+		--button-hover: 26.9 100% 82.9%;
+		--button-secondary: 0 0% 11%;
+		--button-secondary-foreground: 0 0% 100%;
+		--button-secondary-hover: 0 0% 15.7%;
+		--status-success: 151 60% 52%;
+		/* 主色是 27° 橙，警告取 50° 黄：并排时不会与主色/焦点环混淆 */
+		--status-warning: 50 100% 72%;
+		--status-danger: 0 100% 75.1%;
+		--scrollbar-thumb: 0 0% 14.5%;
+		--scrollbar-thumb-hover: 0 0% 20.4%;
+		--scrollbar-thumb-active: 0 0% 20.4%;
+		--code-background: 0 0% 5.5%;
+		--code-foreground: 0 0% 100%;
+		--code-border: 0 0% 15.7%;
+		--code-added: 164.1 100% 80%;
+		--code-removed: 0 100% 75.1%;
+		--skeleton-line: 0 0% 13.7%;
+		--skeleton-line-strong: 0 0% 16.5%;
+		--syntax-keyword: 0 0% 62.7%;
+		--syntax-string: 164.1 100% 80%;
+		--syntax-number: 27.1 100% 80%;
+		--syntax-comment: 0 0% 54.5%;
+		--syntax-function: 27.1 100% 80%;
+		--syntax-variable: 0 0% 100%;
+		--syntax-title: 27.1 100% 80%;
+		--syntax-attr: 0 0% 100%;
+		--syntax-builtin: 27.1 100% 80%;
+
+		--pilo-project-selected-foreground: hsl(var(--sidebar-foreground) / 0.75);
+		--pilo-composer-background: hsl(var(--input));
+		--pilo-composer-border: hsl(var(--input-border) / 0.7);
+
+		--pilo-shadow-panel:
+			0 1px 1px hsl(0 0% 0% / 0.35), 0 14px 44px hsl(0 0% 0% / 0.55);
+		--pilo-shadow-popover:
+			0 2px 6px hsl(0 0% 0% / 0.45), 0 22px 70px hsl(0 0% 0% / 0.65);
+	}
+}

@@ -247,7 +247,7 @@ export function ComposerRunConfig(props: ComposerRunConfigProps) {
 				<DialogPrimitive.Overlay className="fixed inset-0 z-[var(--z-dialog-overlay)] bg-black/40" />
 				<DialogPrimitive.Content
 					className={cn(
-						"fixed inset-x-0 bottom-[var(--remote-keyboard-bottom,0px)] z-[var(--z-dialog)] mx-auto max-h-[calc(var(--remote-viewport-height,100dvh)*0.85)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-t-2xl border-t border-border/70 bg-background pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-popover",
+						"fixed inset-x-0 bottom-[var(--remote-keyboard-bottom,0px)] z-[var(--z-dialog)] mx-auto max-h-[calc(var(--remote-viewport-height,100dvh)*0.85)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-t-(--pilo-sheet-radius) border-t border-border/70 bg-popover pb-[max(0.75rem,env(safe-area-inset-bottom))] text-popover-foreground shadow-(--pilo-shadow-floating)",
 						"motion-safe:duration-200 motion-safe:data-[state=open]:animate-in motion-safe:data-[state=open]:slide-in-from-bottom motion-safe:data-[state=closed]:animate-out motion-safe:data-[state=closed]:slide-out-to-bottom",
 					)}
 				>
@@ -345,7 +345,7 @@ function RunConfigPanel(props: ComposerRunConfigProps) {
 							variant={
 								props.selectedThinkingLevel === level ? "secondary" : "ghost"
 							}
-							className="min-h-11 rounded-lg px-2 font-normal shadow-none"
+							className="min-h-11 rounded-(--pilo-sheet-item-radius) px-2 font-normal shadow-none"
 							disabled={props.thinkingDisabled || !props.onThinkingChange}
 							aria-pressed={props.selectedThinkingLevel === level}
 							onClick={() => props.onThinkingChange?.(level)}

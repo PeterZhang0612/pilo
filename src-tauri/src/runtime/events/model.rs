@@ -53,6 +53,9 @@ pub struct ExtensionUiRequestPayload {
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum RuntimeEvent {
+    ThemeSettingsChanged {
+        settings: crate::domain::ThemeSettings,
+    },
     SessionTurnCompleted {
         #[serde(rename = "projectId")]
         project_id: String,

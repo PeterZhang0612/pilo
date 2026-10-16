@@ -226,6 +226,82 @@ Wrong: persist a boolean, use Pi process generation as a turn ID, or synchronize
 which session is selected. Correct: persist Host-issued completion/read revisions
 and acknowledge only the revision actually observed by the focused client.
 
+## Shared Theme Settings
+
+### 1. Scope / Trigger
+
+Host-owned appearance shared by desktop windows and authenticated WebUI.
+
+### 2. Signatures
+
+- SQLite `theme_settings(id INTEGER PRIMARY KEY CHECK(id = 1), settings_json TEXT)`.
+- `theme_settings_get(initial?: ThemeSettings) -> ThemeSettings` (desktop IPC).
+- `theme_settings_set(update: ThemeSettingsUpdate) -> ThemeSettings` (desktop IPC).
+- Authenticated `GET /api/v1/theme -> ThemeSettings` and `POST /api/v1/theme`
+  with a `ThemeSettingsUpdate` body -> committed `ThemeSettings`.
+- `PiloClient.loadThemeSettings()` / `saveThemeSettings(update)` expose the same
+  snapshot and patch transport contracts. The authenticated HTTP write endpoint
+  remains available, but WebUI has no theme editing UI and does not call it.
+- Global `theme_settings_changed { settings }` uses the existing runtime bus.
+- Settings: `{ revision, theme, themeFamily, themeCustomCss, themeCustomName,
+  savedCustomThemes: [{ name, css }] }`. Mode is light/dark/system; family is
+  lody/claude/custom. Updates contain optional mode/family/CSS/name fields plus
+  `saveCustomTheme: { name, css }` or `deleteCustomTheme: string`.
+
+### 3. Contracts
+
+Initialize with idempotent DDL. Only desktop supplies legacy initial settings;
+insert revision 1 with `ON CONFLICT DO NOTHING`, never replace an existing row.
+A Web read before initialization returns defaults at revision 0 without inserting.
+Patches read/merge/write in an immediate transaction, increment revision and
+broadcast only after commit. Save/delete actions merge against the persisted
+custom-theme list, not a stale window snapshot. Saving trims/requires a name,
+replaces an exact-name saved theme and sets active CSS/name. Deleting preserves
+active CSS, matching existing behavior. SQLite runs in blocking workers.
+Clients discard equal/older revisions; startup caches are never authoritative.
+Desktop serializes its writes and applies responses only after persistence
+succeeds. Selecting a saved theme patches family, CSS and name in one request,
+not separate writes. `AppearanceSettings` is desktop-only; WebUI has no theme
+settings entry, editor or switching controls in either wide or mobile layouts.
+WebUI follows the Host through authenticated snapshot reads and existing global
+theme events, with refresh on initialization, reconnect/resync and foreground.
+Clean desktop CSS/name drafts follow other windows' changes; unsaved local drafts
+are preserved. Global theme events bypass conversation reducers. Font settings
+remain local.
+
+### 4. Validation & Error Matrix
+
+- Unknown mode/family/update fields: reject at serde decoding.
+- Blank saved-theme name: error, transaction rolls back.
+- Load failure: IPC error or HTTP 500. Save failure: IPC error or HTTP 400
+  (the existing remote settings-write convention); no change event for a failed write.
+- Missing/expired Web token: existing authenticated-route 401 handling.
+
+### 5. Good / Base / Bad Cases
+
+- Good: desktop switches a built-in/custom theme; other desktop windows and
+  connected wide/mobile WebUI clients follow without WebUI editing controls.
+- Base: restart/refresh reads SQLite; legacy desktop themes migrate once.
+- Bad: stale browser settings overwrite an existing row, or an old HTTP/event
+  snapshot reverts a newer revision.
+
+### 6. Tests Required
+
+Pending explicit authorization (no tests added/run): migration idempotency and
+legacy theme retention; restart persistence; concurrent field patches and
+save/delete merges; unknown enums and blank-name rollback; failed commit emits
+nothing; snapshot/replay reordering; reconnect/foreground recovery; custom CSS
+removal on family change; desktop edits synchronizing to other desktop windows,
+wide WebUI and mobile WebUI; no WebUI theme editing/switching controls;
+authenticated-only writes; atomic saved-theme selection; clean desktop draft
+synchronization and dirty draft preservation.
+
+### 7. Wrong vs Correct
+
+Wrong: synchronize theme via browser `storage` events or persist fonts with it.
+Correct: SQLite theme patches -> committed revision -> existing desktop/Web event
+channel, with authenticated snapshot reads for recovery.
+
 ## Testing
 
 Storage unit tests live in `src-tauri/src/runtime/storage.rs` under `#[cfg(test)]`

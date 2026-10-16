@@ -126,6 +126,7 @@ export function useRemoteChatTransport({
 					continue;
 				}
 				if (
+					event.type === "theme_settings_changed" ||
 					event.type === "session_read_state_changed" ||
 					event.type === "session_turn_completed"
 				)

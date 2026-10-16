@@ -85,7 +85,7 @@ export function ProjectRow({
 						"hover:bg-sidebar-hover hover:text-sidebar-hover-foreground data-[menu-open]:bg-sidebar-hover data-[menu-open]:text-sidebar-hover-foreground",
 						"focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring",
 						selected &&
-							"border-sidebar-foreground/10 bg-sidebar-foreground/10 text-sidebar-foreground hover:bg-sidebar-foreground/10",
+							"border-[color:var(--pilo-sidebar-selected-border)] bg-(--pilo-sidebar-selected-background) text-[color:var(--pilo-project-selected-foreground)] dark:text-[color:var(--pilo-project-selected-foreground)] hover:bg-(--pilo-sidebar-selected-background) pilo-sidebar-selected",
 						refreshing &&
 							"cursor-default text-sidebar-foreground-muted hover:bg-transparent hover:text-sidebar-foreground-muted",
 					)}

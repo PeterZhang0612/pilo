@@ -47,6 +47,7 @@ import { useRemoteConnection } from "./use-remote-connection";
 import { useRemoteNetworkLifecycle } from "./use-remote-network-lifecycle";
 import { useRemotePwa } from "./use-remote-pwa";
 import { useRemoteSessions } from "./use-remote-sessions";
+import { useRemoteTheme } from "./use-remote-theme";
 
 export function RemoteApp() {
 	return isRemotePairingLocation() ? (
@@ -70,6 +71,11 @@ function RemoteWorkspace() {
 		recoveryGeneration,
 		onSocketMessageRef: socketHandlerRef,
 		onReconnectProbeRef: reconnectProbeRef,
+	});
+	const { handleThemeEvent } = useRemoteTheme({
+		client: connection.client,
+		refreshKey: `${connection.resyncKey}:${connection.snapshotRefreshKey}`,
+		onError: connection.handleExpiredAuth,
 	});
 	const sessions = useRemoteSessions({
 		client: connection.client,
@@ -252,7 +258,10 @@ function RemoteWorkspace() {
 	useEffect(() => {
 		socketHandlerRef.current = (message) => {
 			if (message.type === "events") {
-				for (const event of message.events) handleReadEvent(event);
+				for (const event of message.events) {
+					handleThemeEvent(event);
+					handleReadEvent(event);
+				}
 			}
 			handleCacheKeepAliveMessage(message);
 			handleNextPromptMessage(message);
@@ -261,6 +270,7 @@ function RemoteWorkspace() {
 	}, [
 		handleSocketMessage,
 		handleReadEvent,
+		handleThemeEvent,
 		handleNextPromptMessage,
 		handleCacheKeepAliveMessage,
 	]);
@@ -341,13 +351,13 @@ function RemoteWorkspace() {
 			}
 			refreshingProjectIds={refreshingProjectIds}
 			footer={
-				<div className="flex min-w-0 items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground">
+				<div className="flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground">
 					{networkState === "connected" ? (
 						<Wifi className="size-3 shrink-0" />
 					) : (
 						<WifiOff className="size-3 shrink-0" />
 					)}
-					<span className="truncate">
+					<span className="min-w-0 flex-1 truncate">
 						{t(remoteConnectionLabelKey(networkState))}
 					</span>
 				</div>

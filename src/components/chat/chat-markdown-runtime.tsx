@@ -15,7 +15,6 @@ import {
 import {
 	createMarkdownMermaidConfig,
 	createMarkdownMermaidPlugin,
-	type MarkdownTheme,
 } from "@/components/chat/markdown-mermaid";
 import {
 	MARKDOWN_CODE_PLUGIN,
@@ -27,7 +26,7 @@ import {
 	recordMarkdownRender,
 } from "@/lib/chat/chat-performance";
 import { createStreamingMarkdownBlockParser } from "@/lib/chat/chat-streaming-markdown";
-import { useResolvedTheme } from "@/lib/theme-provider";
+import { useTheme } from "@/lib/theme-provider";
 import { cn } from "@/lib/utils";
 
 const MARKDOWN_MERMAID_PLUGIN = createMarkdownMermaidPlugin();
@@ -274,7 +273,7 @@ const ChatMarkdownBody = memo(function ChatMarkdownBody({
 }) {
 	recordMarkdownRender(text.length);
 	const { t } = useTranslation();
-	const theme: MarkdownTheme = useResolvedTheme();
+	const { resolvedTheme: theme, themeFamily, themeCustomCss } = useTheme();
 	const streamingVisual = isStreaming || presentationLagging;
 	const needsMath = useMemo(() => hasPotentialMathMarkup(text), [text]);
 	const blockParser = useMemo(
@@ -282,9 +281,22 @@ const ChatMarkdownBody = memo(function ChatMarkdownBody({
 			createStreamingMarkdownBlockParser({ onMetrics: recordMarkdownParse }),
 		[],
 	);
-	const mermaidOptions = useMemo(
-		() => ({ config: createMarkdownMermaidConfig(theme) }),
-		[theme],
+	const [mermaidOptions, setMermaidOptions] = useState(() => ({
+		config: createMarkdownMermaidConfig(theme),
+	}));
+	/* oxlint-disable react/set-state-in-effect, react/exhaustive-effect-dependencies -- Read the DOM palette after ThemeProvider's layout effects; family and CSS are explicit invalidation triggers even when mode is unchanged. */
+	useEffect(() => {
+		setMermaidOptions({ config: createMarkdownMermaidConfig(theme) });
+	}, [theme, themeFamily, themeCustomCss]);
+	/* oxlint-enable react/set-state-in-effect, react/exhaustive-effect-dependencies */
+	// Streamdown's memo ignores mermaid options; a new diagram plugin also refreshes existing SVGs.
+	const mermaidPlugin = useMemo(
+		() => ({
+			...MARKDOWN_MERMAID_PLUGIN,
+			getMermaid: (config = mermaidOptions.config) =>
+				MARKDOWN_MERMAID_PLUGIN.getMermaid(config),
+		}),
+		[mermaidOptions],
 	);
 	const [enhanceRichContent, setEnhanceRichContent] = useState(false);
 	const [mathPlugin, setMathPlugin] = useState<MarkdownMathPlugin | null>(() =>
@@ -337,13 +349,13 @@ const ChatMarkdownBody = memo(function ChatMarkdownBody({
 						? MARKDOWN_CODE_PLUGIN
 						: MARKDOWN_STREAMING_CODE_PLUGIN,
 				...(!streamingVisual && enhanceRichContent
-					? { mermaid: MARKDOWN_MERMAID_PLUGIN }
+					? { mermaid: mermaidPlugin }
 					: {}),
 				...(!streamingVisual && needsMath && mathPlugin
 					? { math: mathPlugin }
 					: {}),
 			}) satisfies PluginConfig,
-		[enhanceRichContent, mathPlugin, needsMath, streamingVisual],
+		[enhanceRichContent, mathPlugin, mermaidPlugin, needsMath, streamingVisual],
 	);
 	const shouldAnimate =
 		isStreaming && text.length < MAX_ANIMATED_STREAMING_CHARS;

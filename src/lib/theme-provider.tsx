@@ -9,8 +9,24 @@ import {
 	useState,
 } from "react";
 
-export type Theme = "dark" | "light" | "system";
+import { invoke } from "@tauri-apps/api/core";
+import { toast } from "sonner";
+import { i18n } from "@/i18n";
+import { listenRuntimeEvents } from "@/lib/api/pi-runtime";
+import { CUSTOM_THEME_STYLE_ID } from "@/lib/theme-custom";
+import {
+	readCachedTheme,
+	THEME_CACHE_KEY,
+	type Theme,
+	type ThemeSettings,
+	type ThemeSettingsUpdate,
+} from "@/lib/theme-settings";
+
+export type { Theme, ThemeFamily } from "@/lib/theme-settings";
 export type ResolvedTheme = "light" | "dark";
+
+const DESKTOP_RUNTIME =
+	typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 export const THEME_CYCLE_ORDER: readonly Theme[] = ["light", "dark", "system"];
 
@@ -19,45 +35,119 @@ export function nextCycledTheme(current: Theme): Theme {
 	return THEME_CYCLE_ORDER[(index + 1) % THEME_CYCLE_ORDER.length];
 }
 
-type ThemeProviderState = {
-	theme: Theme;
+type ThemeProviderState = ThemeSettings & {
 	resolvedTheme: ResolvedTheme;
 	setTheme: (theme: Theme) => void;
+	applyThemeSettings: (settings: ThemeSettings) => void;
+	updateThemeSettings: (update: ThemeSettingsUpdate) => void;
 };
 
 const ThemeProviderContext = createContext<ThemeProviderState>({
+	revision: 0,
 	theme: "system",
+	themeFamily: "lody",
+	themeCustomCss: "",
+	themeCustomName: "",
+	savedCustomThemes: [],
 	resolvedTheme: "light",
-	setTheme: () => null,
+	setTheme: () => {},
+	applyThemeSettings: () => {},
+	updateThemeSettings: () => {},
 });
 
 const getSystemTheme = (): ResolvedTheme =>
 	window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 
-function parseStoredTheme(value: string | null): Theme | null {
-	return value === "dark" || value === "light" || value === "system"
-		? value
-		: null;
-}
-
 export function ThemeProvider({
 	children,
 	defaultTheme = "system",
 	storageKey = "pilo-ui-theme",
+	familyStorageKey = "pilo-ui-theme-family",
 }: {
 	children: React.ReactNode;
 	defaultTheme?: Theme;
 	storageKey?: string;
+	familyStorageKey?: string;
 }) {
-	const [theme, setStoredTheme] = useState<Theme>(
-		() => parseStoredTheme(localStorage.getItem(storageKey)) ?? defaultTheme,
+	const [settings, setSettings] = useState(() =>
+		readCachedTheme(defaultTheme, storageKey, familyStorageKey),
 	);
+	const { theme, themeFamily, themeCustomCss } = settings;
+	const initialSettingsRef = useRef(settings);
+	const revisionRef = useRef(-1);
+	const writeQueueRef = useRef<Promise<void>>(Promise.resolve());
+	const applyThemeSettings = useCallback((next: ThemeSettings) => {
+		if (next.revision <= revisionRef.current) return;
+		revisionRef.current = next.revision;
+		setSettings(next);
+	}, []);
+
+	useEffect(() => {
+		if (!DESKTOP_RUNTIME) return;
+		let disposed = false;
+		let unlisten: (() => void) | undefined;
+		const refresh = async () => {
+			const next = await invoke<ThemeSettings>("theme_settings_get", {
+				initial: initialSettingsRef.current,
+			});
+			if (!disposed) applyThemeSettings(next);
+		};
+		const onVisible = () => {
+			if (document.visibilityState === "visible")
+				void refresh().catch(reportLoadError);
+		};
+		const reportLoadError = (error: unknown) => {
+			if (!disposed)
+				toast.error(i18n.t("settings.themeLoadFailed"), {
+					description: String(error),
+				});
+		};
+		void (async () => {
+			const cleanup = await listenRuntimeEvents((event) => {
+				if (!disposed && event.type === "theme_settings_changed")
+					applyThemeSettings(event.settings);
+			});
+			if (disposed) {
+				cleanup();
+				return;
+			}
+			unlisten = cleanup;
+			await refresh();
+		})().catch(reportLoadError);
+		document.addEventListener("visibilitychange", onVisible);
+		return () => {
+			disposed = true;
+			unlisten?.();
+			document.removeEventListener("visibilitychange", onVisible);
+		};
+	}, [applyThemeSettings]);
+
+	useEffect(() => {
+		try {
+			localStorage.setItem(THEME_CACHE_KEY, JSON.stringify(settings));
+			localStorage.setItem(storageKey, theme);
+			localStorage.setItem(familyStorageKey, themeFamily);
+		} catch {
+			// Cache failure must not prevent the Host theme from being applied.
+		}
+	}, [settings, theme, themeFamily, storageKey, familyStorageKey]);
+
+	useLayoutEffect(() => {
+		let el = document.getElementById(CUSTOM_THEME_STYLE_ID);
+		if (!el) {
+			el = document.createElement("style");
+			el.id = CUSTOM_THEME_STYLE_ID;
+			document.head.appendChild(el);
+		}
+		el.textContent = themeFamily === "custom" ? themeCustomCss : "";
+	}, [themeFamily, themeCustomCss]);
+
 	const [systemTheme, setSystemTheme] = useState<ResolvedTheme>(getSystemTheme);
 
 	const resolvedTheme: ResolvedTheme = theme === "system" ? systemTheme : theme;
 
 	// null = 尚未应用过主题（首次挂载不做过渡抑制）。
-	const appliedThemeRef = useRef<ResolvedTheme | null>(null);
+	const appliedThemeRef = useRef<string | null>(null);
 
 	useEffect(() => {
 		const media = window.matchMedia("(prefers-color-scheme: dark)");
@@ -80,10 +170,10 @@ export function ThemeProvider({
 		const root = window.document.documentElement;
 		// 主题翻转会让几乎所有元素的颜色/边框/阴影同时变化，任由过渡播放会整页拖影。
 		// 先挂上禁用类、强制 reflow，翻转后在下一帧移除，让后续交互恢复过渡。
+		const applied = `${themeFamily}:${resolvedTheme}:${themeFamily === "custom" ? themeCustomCss : ""}`;
 		const switching =
-			appliedThemeRef.current !== null &&
-			appliedThemeRef.current !== resolvedTheme;
-		appliedThemeRef.current = resolvedTheme;
+			appliedThemeRef.current !== null && appliedThemeRef.current !== applied;
+		appliedThemeRef.current = applied;
 
 		if (switching) {
 			root.classList.add("pilo-theme-switch");
@@ -92,6 +182,7 @@ export function ThemeProvider({
 
 		root.classList.remove("light", "dark");
 		root.classList.add(resolvedTheme);
+		root.dataset.themeFamily = themeFamily;
 		const colorScheme = resolvedTheme;
 		root.style.colorScheme = colorScheme;
 		document
@@ -99,7 +190,10 @@ export function ThemeProvider({
 			?.setAttribute("content", colorScheme);
 
 		// Explicitly update Android's system bars instead of relying on meta media queries.
-		const themeColor = resolvedTheme === "dark" ? "#101010" : "#ffffff";
+		const background = getComputedStyle(root)
+			.getPropertyValue("--background")
+			.trim();
+		const themeColor = `hsl(${background})`;
 		document
 			.querySelector('meta[name="theme-color"]')
 			?.setAttribute("content", themeColor);
@@ -111,19 +205,44 @@ export function ThemeProvider({
 				});
 			});
 		}
-	}, [resolvedTheme]);
+	}, [resolvedTheme, themeFamily, themeCustomCss]);
 
-	const setTheme = useCallback(
-		(nextTheme: Theme) => {
-			localStorage.setItem(storageKey, nextTheme);
-			setStoredTheme(nextTheme);
+	const updateSettings = useCallback(
+		(update: ThemeSettingsUpdate) => {
+			if (!DESKTOP_RUNTIME) return;
+			writeQueueRef.current = writeQueueRef.current
+				.then(async () => {
+					// Initialize legacy desktop settings before the first edit, even if startup loading failed.
+					await invoke<ThemeSettings>("theme_settings_get", {
+						initial: initialSettingsRef.current,
+					});
+					const next = await invoke<ThemeSettings>("theme_settings_set", {
+						update,
+					});
+					applyThemeSettings(next);
+				})
+				.catch((error: unknown) => {
+					toast.error(i18n.t("settings.themeSaveFailed"), {
+						description: String(error),
+					});
+				});
 		},
-		[storageKey],
+		[applyThemeSettings],
+	);
+	const setTheme = useCallback(
+		(nextTheme: Theme) => updateSettings({ theme: nextTheme }),
+		[updateSettings],
 	);
 
 	const value = useMemo(
-		() => ({ theme, resolvedTheme, setTheme }),
-		[theme, resolvedTheme, setTheme],
+		() => ({
+			...settings,
+			resolvedTheme,
+			setTheme,
+			applyThemeSettings,
+			updateThemeSettings: updateSettings,
+		}),
+		[settings, resolvedTheme, setTheme, applyThemeSettings, updateSettings],
 	);
 
 	return (

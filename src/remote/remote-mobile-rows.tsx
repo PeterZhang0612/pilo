@@ -65,7 +65,8 @@ export function MobileSessionRow({
 				className={cn(
 					"flex min-h-11 w-full min-w-0 items-center gap-2 rounded-md bg-sidebar pl-2 pr-1",
 					projectName && "min-h-14",
-					selected && "ring-1 ring-inset ring-sidebar-foreground/10",
+					selected &&
+						"bg-(--pilo-mobile-confirm-selected-background) ring-[length:var(--pilo-mobile-selected-ring-width)] ring-inset ring-sidebar-foreground/10 pilo-mobile-selected",
 				)}
 			>
 				<span className="flex h-5 w-4 shrink-0 items-center justify-center">
@@ -116,7 +117,7 @@ export function MobileSessionRow({
 			className={cn(
 				"flex min-w-0 items-center rounded-md transition-colors duration-[var(--dur-1)] ease-[var(--ease)] motion-reduce:transition-none",
 				selected &&
-					"bg-sidebar-foreground/10 ring-1 ring-inset ring-sidebar-foreground/10",
+					"bg-(--pilo-mobile-selected-background) ring-[length:var(--pilo-mobile-selected-ring-width)] ring-inset ring-sidebar-foreground/10 pilo-mobile-selected",
 			)}
 		>
 			<button
@@ -241,7 +242,7 @@ export function MobileProjectRow({
 			className={cn(
 				"flex min-h-11 min-w-0 items-center rounded-md",
 				selected &&
-					"bg-sidebar-foreground/10 ring-1 ring-inset ring-sidebar-foreground/10",
+					"bg-(--pilo-mobile-selected-background) ring-[length:var(--pilo-mobile-selected-ring-width)] ring-inset ring-sidebar-foreground/10 pilo-mobile-selected",
 			)}
 		>
 			<button

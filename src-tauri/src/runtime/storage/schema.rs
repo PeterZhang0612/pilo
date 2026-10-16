@@ -54,6 +54,10 @@ pub(super) fn initialize_schema(db: &SqliteConnection) -> Result<(), String> {
     migrate_legacy_workspaces_schema(db)?;
     db.execute_batch(
         "PRAGMA journal_mode = WAL;
+         CREATE TABLE IF NOT EXISTS theme_settings (
+           id INTEGER PRIMARY KEY CHECK(id = 1),
+           settings_json TEXT NOT NULL
+         );
          CREATE TABLE IF NOT EXISTS connections (
            id TEXT PRIMARY KEY,
            name TEXT NOT NULL,

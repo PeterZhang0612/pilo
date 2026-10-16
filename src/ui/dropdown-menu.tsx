@@ -62,18 +62,21 @@ const DropdownMenuSubContent = React.forwardRef<
 	React.ElementRef<typeof DropdownMenuPrimitive.SubContent>,
 	React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubContent>
 >(({ className, sideOffset = 6, style, ...props }, ref) => (
-	<DropdownMenuPrimitive.SubContent
-		ref={ref}
-		sideOffset={sideOffset}
-		style={{ ...menuSurfaceStyle, ...style }}
-		className={cn(
-			"scroll-pro scrollbar-pro [scrollbar-gutter:auto] z-[var(--z-popover)] max-h-[var(--radix-dropdown-menu-content-available-height)] overflow-y-auto overflow-x-hidden",
-			dropdownMenuAnimationClasses,
-			menuSurfaceClassName,
-			className,
-		)}
-		{...props}
-	/>
+	// Keep submenu positioning outside the parent menu's scroll and animation container.
+	<DropdownMenuPrimitive.Portal>
+		<DropdownMenuPrimitive.SubContent
+			ref={ref}
+			sideOffset={sideOffset}
+			style={{ ...menuSurfaceStyle, ...style }}
+			className={cn(
+				"scroll-pro scrollbar-pro [scrollbar-gutter:auto] z-[var(--z-popover)] max-h-[var(--radix-dropdown-menu-content-available-height)] overflow-y-auto overflow-x-hidden",
+				dropdownMenuAnimationClasses,
+				menuSurfaceClassName,
+				className,
+			)}
+			{...props}
+		/>
+	</DropdownMenuPrimitive.Portal>
 ));
 DropdownMenuSubContent.displayName =
 	DropdownMenuPrimitive.SubContent.displayName;

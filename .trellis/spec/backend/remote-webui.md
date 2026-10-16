@@ -68,6 +68,8 @@ Authenticated (`require_auth` middleware):
 
 ```text
 GET  /api/v1/bootstrap       -> { projects, chatSessions, latestSequence }
+GET  /api/v1/theme           -> ThemeSettings (Host SQLite)
+POST /api/v1/theme           -> ThemeSettingsUpdate body -> committed ThemeSettings
 GET  /api/v1/sessions?projectId=...
 GET  /api/v1/history?projectId=&sessionPath=&startMessage=&messageLimit=&includeMessageIndex=
 GET  /api/v1/models?projectId=... -> ProjectModelCache | null  (Host-cached model and command catalog)

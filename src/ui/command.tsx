@@ -14,7 +14,7 @@ const Command = React.forwardRef<
 	<CommandPrimitive
 		ref={ref}
 		className={cn(
-			"flex h-full w-full flex-col overflow-hidden rounded-md bg-popover text-popover-foreground",
+			"flex h-full w-full flex-col overflow-hidden rounded-[inherit] bg-popover text-popover-foreground",
 			className,
 		)}
 		{...props}
@@ -30,7 +30,7 @@ const CommandDialog = ({
 	<Dialog {...props}>
 		<DialogContentWithoutClose
 			noAnimation
-			className="top-[12%] flex h-[min(560px,72vh)] w-[640px] max-w-[calc(100vw-3rem)] translate-y-0 flex-col gap-0 overflow-hidden border-0 bg-transparent p-0 shadow-none sm:p-0"
+			className="top-[12%] flex h-[min(560px,72vh)] w-[640px] max-w-[calc(100vw-3rem)] translate-y-0 flex-col gap-0 overflow-hidden rounded-xl border-0 bg-transparent p-0 shadow-none sm:p-0"
 		>
 			<Command
 				shouldFilter={shouldFilter}
@@ -145,7 +145,7 @@ const CommandItem = React.forwardRef<
 	<CommandPrimitive.Item
 		ref={ref}
 		className={cn(
-			"relative flex cursor-default select-none items-center gap-2.5 rounded-md px-2.5 py-2 text-sm outline-hidden data-[selected=true]:bg-hover data-[selected=true]:text-hover-foreground data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+			"relative flex cursor-default select-none items-center gap-2.5 rounded-md px-2.5 py-2 text-sm outline-hidden pilo-command-item data-[selected=true]:bg-hover data-[selected=true]:text-hover-foreground data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
 			className,
 		)}
 		{...props}

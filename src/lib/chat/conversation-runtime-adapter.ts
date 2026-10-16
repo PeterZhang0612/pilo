@@ -45,6 +45,7 @@ export function toConversationAction(
 				stopReason: event.stopReason,
 				errorMessage: event.errorMessage,
 			};
+		case "theme_settings_changed":
 		case "project_model_scope_changed":
 		case "next_prompt_settings_changed":
 		case "cache_keep_alive_settings_changed":

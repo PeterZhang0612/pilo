@@ -108,6 +108,14 @@ bash scripts/build-pilo-server.sh <target>
 
 对于 WSL 或 SSH，Pilo 会先探测目标平台并部署匹配的 `pilo-server` 运行时。如果对应运行时尚未准备，Pilo 会明确报告缺失的资源，而不是使用不兼容的二进制。
 
+## 自定义主题
+
+在 **设置 → 外观** 中选择 **Lody**、**Claude** 或已保存的 CSS 主题。
+创建主题时，在 **自定义 CSS** 中填写名称和 CSS，点击 **保存并应用**。
+已连接的 WebUI 会跟随桌面 Host 的主题。
+
+入门示例、明暗模式覆盖、可用令牌及恢复方法见[主题编写指南](docs/THEMES.md)（英文）。
+
 ## 回复中的图片
 
 让 Pi 将截图保存在项目目录内，并在回复中使用普通 Markdown 引用：

@@ -1,3 +1,4 @@
+import type { ThemeSettings, ThemeSettingsUpdate } from "@/lib/theme-settings";
 import type { CacheKeepAliveSettings } from "@/lib/cache-keep-alive";
 import type {
 	NextPromptModel,
@@ -65,6 +66,14 @@ export class TauriPiloClient implements PiloClient {
 	async listSessions(projectId: string): Promise<SessionIndexEntry[]> {
 		const result = await reconcileSessions(projectId);
 		return result.sessions;
+	}
+
+	loadThemeSettings(): Promise<ThemeSettings> {
+		return invoke<ThemeSettings>("theme_settings_get");
+	}
+
+	saveThemeSettings(update: ThemeSettingsUpdate): Promise<ThemeSettings> {
+		return invoke<ThemeSettings>("theme_settings_set", { update });
 	}
 
 	loadSessionReadStates(): Promise<SessionReadState[]> {

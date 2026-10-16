@@ -28,7 +28,7 @@ const HoverCardContent = React.forwardRef<
 				sideOffset={sideOffset}
 				collisionPadding={collisionPadding}
 				className={cn(
-					"z-[var(--z-popover)] w-64 rounded-md border border-border bg-popover text-popover-foreground shadow-md outline-hidden data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0 motion-safe:data-[state=closed]:zoom-out-95 motion-safe:data-[state=open]:zoom-in-95 motion-safe:data-[side=bottom]:slide-in-from-top-2 motion-safe:data-[side=left]:slide-in-from-right-2 motion-safe:data-[side=right]:slide-in-from-left-2 motion-safe:data-[side=top]:slide-in-from-bottom-2",
+					"z-[var(--z-popover)] w-64 rounded-(--pilo-floating-radius) border border-border bg-popover text-popover-foreground shadow-(--pilo-shadow-floating) pilo-floating-surface outline-hidden data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0 motion-safe:data-[state=closed]:zoom-out-95 motion-safe:data-[state=open]:zoom-in-95 motion-safe:data-[side=bottom]:slide-in-from-top-2 motion-safe:data-[side=left]:slide-in-from-right-2 motion-safe:data-[side=right]:slide-in-from-left-2 motion-safe:data-[side=top]:slide-in-from-bottom-2",
 					className,
 				)}
 				{...props}

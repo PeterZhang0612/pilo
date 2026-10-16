@@ -108,6 +108,15 @@ bash scripts/build-pilo-server.sh <target>
 
 For WSL or SSH, Pilo probes the target platform and deploys the matching `pilo-server` runtime before starting it. If that runtime has not been staged, Pilo reports the missing resource instead of silently using an incompatible binary.
 
+## Custom themes
+
+Choose **Lody**, **Claude**, or a saved CSS theme in **Settings → Appearance**.
+To create a theme, enter a name and CSS in **Custom CSS**, then choose
+**Save and apply**. Connected WebUI clients follow the desktop Host theme.
+
+See the [theme customization guide](docs/THEMES.md) for a starter theme,
+light/dark overrides, supported tokens, and recovery tips.
+
 ## Images in replies
 
 Ask Pi to save screenshots inside the project and include them in its reply using ordinary Markdown:

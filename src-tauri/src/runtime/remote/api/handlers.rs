@@ -42,6 +42,35 @@ pub(super) async fn bootstrap(State(state): State<RemoteHttpState>) -> Response 
     .into_response()
 }
 
+pub(super) async fn theme_settings(State(state): State<RemoteHttpState>) -> Response {
+    match crate::runtime::appearance::load(
+        state.app.clone(),
+        state.app.state::<RuntimeEventBus>().inner().clone(),
+        None,
+    )
+    .await
+    {
+        Ok(settings) => Json(settings).into_response(),
+        Err(error) => api_error(StatusCode::INTERNAL_SERVER_ERROR, &error),
+    }
+}
+
+pub(super) async fn theme_settings_set(
+    State(state): State<RemoteHttpState>,
+    Json(update): Json<crate::domain::ThemeSettingsUpdate>,
+) -> Response {
+    match crate::runtime::appearance::save(
+        state.app.clone(),
+        state.app.state::<RuntimeEventBus>().inner().clone(),
+        update,
+    )
+    .await
+    {
+        Ok(settings) => Json(settings).into_response(),
+        Err(error) => api_error(StatusCode::BAD_REQUEST, &error),
+    }
+}
+
 pub(super) async fn session_read_states(State(state): State<RemoteHttpState>) -> Response {
     match crate::runtime::commands::session_read_states(state.app.state::<RuntimeEventBus>()).await
     {

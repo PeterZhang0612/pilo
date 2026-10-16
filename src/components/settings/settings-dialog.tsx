@@ -28,6 +28,7 @@ import {
 } from "@/ui";
 import { AboutSettings } from "./about-settings";
 import { AppearanceSettings } from "./appearance-settings";
+import { FontSettings } from "./font-settings";
 import { ConnectionsSettings } from "./connections-settings";
 import { KeyboardShortcutsSettings } from "./keyboard-shortcuts-settings";
 import { NotificationSettings } from "./notification-settings";
@@ -40,6 +41,7 @@ type SettingsTabId =
 	| "preferences"
 	| "notifications"
 	| "appearance"
+	| "fonts"
 	| "shortcuts"
 	| "connections"
 	| "next-prompt"
@@ -57,8 +59,14 @@ const SETTINGS_TABS = [
 	{
 		id: "appearance" as const,
 		section: "personal",
-		labelKey: "settings.appearance",
+		labelKey: "settings.theme",
 		icon: Palette,
+	},
+	{
+		id: "fonts" as const,
+		section: "personal",
+		labelKey: "settings.font",
+		icon: Type,
 	},
 	{
 		id: "notifications" as const,
@@ -140,6 +148,7 @@ export function SettingsDialog({
 									const tabs = SETTINGS_TABS.filter(
 										(tab) => tab.section === section.id,
 									);
+									if (tabs.length === 0) return null;
 									return (
 										<section
 											key={section.id}
@@ -165,7 +174,7 @@ export function SettingsDialog({
 																activeTab === tab.id ? "page" : undefined
 															}
 															className={cn(
-																"flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-start text-sm font-medium transition-colors",
+																"flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-start text-sm font-medium transition-colors pointer-coarse:min-h-11",
 																activeTab === tab.id
 																	? "bg-secondary text-secondary-foreground"
 																	: "text-muted-foreground hover:bg-secondary/50 hover:text-secondary-foreground",
@@ -231,6 +240,7 @@ export function SettingsDialog({
 											<NotificationSettings />
 										) : null}
 										{activeTab === "appearance" ? <AppearanceSettings /> : null}
+										{activeTab === "fonts" ? <FontSettings /> : null}
 										{activeTab === "shortcuts" ? (
 											<KeyboardShortcutsSettings />
 										) : null}

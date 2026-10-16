@@ -11,7 +11,7 @@ mod sessions;
 
 pub use session_reads::{session_mark_read, session_read_states};
 
-pub use appearance::system_font_families;
+pub use appearance::{system_font_families, theme_settings_get, theme_settings_set};
 pub use cache_keep_alive::{cache_keep_alive_settings_list, cache_keep_alive_settings_set};
 
 pub use connections::{

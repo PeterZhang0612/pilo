@@ -294,7 +294,7 @@ export const SessionRow = memo(function SessionRow({
 						"hover:bg-sidebar-hover hover:text-sidebar-hover-foreground data-[menu-open]:bg-sidebar-hover",
 						"focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sidebar-ring",
 						selected &&
-							"border-sidebar-foreground/10 bg-sidebar-foreground/10 text-sidebar-foreground hover:bg-sidebar-foreground/10",
+							"border-[color:var(--pilo-sidebar-selected-border)] bg-(--pilo-sidebar-selected-background) text-[color:var(--pilo-sidebar-selected-foreground)] hover:bg-(--pilo-sidebar-selected-background) group-hover/glide:hover:bg-(--pilo-sidebar-selected-background) pilo-sidebar-selected",
 					)}
 				>
 					<div

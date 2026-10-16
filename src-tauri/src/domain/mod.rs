@@ -1,3 +1,5 @@
+mod appearance;
+pub use appearance::{ThemeSettings, ThemeSettingsUpdate};
 mod cache_keep_alive;
 pub use cache_keep_alive::{CacheKeepAliveSettings, CacheKeepAliveStatus};
 mod connection;

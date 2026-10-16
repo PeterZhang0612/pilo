@@ -90,13 +90,12 @@ function ContextIcon({
 				cy="12"
 				r={RING_RADIUS}
 				fill="none"
-				stroke="currentColor"
+				stroke="var(--pilo-context-usage-color)"
 				strokeWidth="2"
 				strokeLinecap="round"
 				strokeDasharray={RING_CIRCUMFERENCE}
 				strokeDashoffset={dashOffset}
-				style={{ transition: "stroke-dashoffset 400ms ease-out" }}
-				className="-rotate-90 origin-center opacity-70"
+				className="-rotate-90 origin-center motion-safe:transition-[stroke-dashoffset] motion-safe:duration-200 motion-safe:ease-out"
 			/>
 		</svg>
 	);
@@ -137,7 +136,7 @@ function ContextDetails({
 					{t("chat.contextSection")}
 				</p>
 				<div className="flex items-baseline justify-between gap-3">
-					<p className="text-sm font-semibold tabular-nums text-foreground">
+					<p className="text-sm font-semibold tabular-nums text-popover-foreground">
 						{formatPercent(contextPercent)}
 					</p>
 					<p className="font-mono text-2xs tabular-nums text-muted-foreground">
@@ -147,7 +146,7 @@ function ContextDetails({
 				</div>
 				<div className="relative h-1.5 w-full overflow-hidden rounded-full bg-muted">
 					<div
-						className="h-full rounded-full bg-foreground/70 transition-[width] duration-200"
+						className="h-full rounded-full bg-(--pilo-context-usage-color) transition-[width] duration-200"
 						style={{ width: `${ringPercent}%` }}
 					/>
 				</div>
@@ -174,7 +173,7 @@ function ContextDetails({
 								className="flex items-center justify-between text-xs"
 							>
 								<span className="text-muted-foreground">{label}</span>
-								<span className="font-mono text-2xs tabular-nums text-foreground">
+								<span className="font-mono text-2xs tabular-nums text-popover-foreground">
 									{formatCompactTokens(value)}
 								</span>
 							</div>
@@ -185,7 +184,7 @@ function ContextDetails({
 							<span className="text-muted-foreground">
 								{t("chat.cacheHitRate")}
 							</span>
-							<span className="font-mono text-2xs tabular-nums text-foreground">
+							<span className="font-mono text-2xs tabular-nums text-popover-foreground">
 								{formatPercent(cacheHitRate)}
 							</span>
 						</div>
@@ -194,7 +193,7 @@ function ContextDetails({
 						<span className="text-muted-foreground">
 							{t("chat.tokensTotal")}
 						</span>
-						<span className="font-mono text-2xs tabular-nums text-foreground">
+						<span className="font-mono text-2xs tabular-nums text-popover-foreground">
 							{formatCompactTokens(breakdownTotal)}
 						</span>
 					</div>
@@ -301,8 +300,8 @@ export const ComposerContextUsage = memo(function ComposerContextUsage({
 		<button
 			type="button"
 			className={cn(
-				"flex h-7 shrink-0 select-none items-center gap-1 rounded-md px-2 text-xs leading-tight text-muted-foreground transition-colors",
-				"hover:bg-muted hover:text-foreground data-[state=open]:bg-muted data-[state=open]:text-foreground",
+				"flex h-7 shrink-0 select-none items-center gap-1 rounded-md px-2 text-xs leading-tight text-muted-foreground transition-colors motion-reduce:transition-none",
+				"hover:bg-hover hover:text-hover-foreground data-[state=open]:bg-hover data-[state=open]:text-hover-foreground",
 				"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
 				contextStale && "opacity-60",
 			)}
@@ -346,7 +345,7 @@ export const ComposerContextUsage = memo(function ComposerContextUsage({
 					align="end"
 					sideOffset={8}
 					collisionPadding={8}
-					className="w-[248px] divide-y divide-border/60 overflow-hidden rounded-xl border-border/70 bg-background p-0 shadow-panel"
+					className="w-[248px] max-w-[calc(100vw-2rem)] divide-y divide-border/60 overflow-hidden rounded-(--pilo-context-details-radius) p-0"
 				>
 					{details}
 				</PopoverContent>
@@ -366,7 +365,7 @@ export const ComposerContextUsage = memo(function ComposerContextUsage({
 				side="top"
 				align="end"
 				sideOffset={8}
-				className="w-[248px] divide-y divide-border/60 overflow-hidden rounded-xl border-border/70 bg-background p-0 shadow-panel"
+				className="w-[248px] max-w-[calc(100vw-2rem)] divide-y divide-border/60 overflow-hidden rounded-(--pilo-context-details-radius) p-0"
 			>
 				{details}
 			</HoverCardContent>

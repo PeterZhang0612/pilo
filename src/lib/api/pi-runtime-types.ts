@@ -1,6 +1,7 @@
 import type { CacheKeepAliveSettings } from "@/lib/cache-keep-alive";
 import type { NextPromptSettings } from "../next-prompt";
 import type { ProjectModelScope } from "../project-model-scope";
+import type { ThemeSettings } from "../theme-settings";
 import type { SessionReadState } from "../session-read-state";
 
 export type PiProcessState =
@@ -160,6 +161,7 @@ export type PiloRuntimeEvent = {
 	sessionKey?: string;
 	projectId?: string;
 } & (
+	| { type: "theme_settings_changed"; settings: ThemeSettings }
 	| { type: "project_model_scope_changed"; scope: ProjectModelScope }
 	| {
 			type: "cache_keep_alive_settings_changed";

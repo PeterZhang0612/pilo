@@ -297,7 +297,7 @@ export function AppSidebar({
 						: "overflow-visible opacity-100",
 				)}
 			>
-				<div className="relative mb-2 ml-2 mr-1 mt-2 flex h-[calc(100%_-_1rem)] w-[calc(100%-12px)] flex-col overflow-hidden rounded-xl border border-sidebar-border/80 bg-sidebar p-[2px] text-sidebar-foreground shadow-sm">
+				<div className="relative flex flex-col overflow-hidden bg-sidebar text-sidebar-foreground pilo-sidebar-surface">
 					<header
 						data-tauri-drag-region="deep"
 						className={cn(

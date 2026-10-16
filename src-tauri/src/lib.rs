@@ -34,8 +34,9 @@ use runtime::{
         session_reconcile, session_search, session_update_ui_state, session_watch_start,
         session_watch_stop, ssh_connection_list, ssh_connection_password_get,
         ssh_connection_remove, ssh_connection_save, ssh_connection_test, ssh_connection_test_draft,
-        system_font_families, terminal_close, terminal_resize, terminal_write, wsl_connection_list,
-        wsl_connection_remove, wsl_connection_save, wsl_connection_test, wsl_list_distributions,
+        system_font_families, terminal_close, terminal_resize, terminal_write, theme_settings_get,
+        theme_settings_set, wsl_connection_list, wsl_connection_remove, wsl_connection_save,
+        wsl_connection_test, wsl_list_distributions,
     },
 };
 use std::{fs::OpenOptions, io::Write};
@@ -222,6 +223,8 @@ pub fn run() {
             remote_device_revoke,
             remote_device_rename,
             system_font_families,
+            theme_settings_get,
+            theme_settings_set,
         ])
         .on_window_event(|window, event| {
             if matches!(event, tauri::WindowEvent::Destroyed) {

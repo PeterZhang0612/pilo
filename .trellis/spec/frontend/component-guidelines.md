@@ -81,6 +81,78 @@ spacing, type sizes, or control heights.
 - Use `size-4` (not `h-4 w-4`) for square icons.
 - Icons come from `lucide-react`; pass them as children to primitives.
 
+## Theme Families
+
+- Lody and Claude are built-in token configurations, not privileged component
+  branches. `src/styles/lody-theme.css` owns the defaults, and
+  `src/styles/claude-theme.css` only overrides token values. Custom CSS overrides
+  that same contract. `theme-components.css` is the family-independent native
+  renderer; `src/index.css` maps runtime aliases into Tailwind. Do not add
+  `claude:` variants, family-conditioned component rules or a template-loading
+  path to implement built-in effects. Every new built-in difference must have
+  the same customization point available to Custom. See `docs/THEMES.md`.
+- Shared native rules belong in the components layer so explicit caller utilities
+  still win (e.g. the composer's transparent, borderless textarea). Remove
+  conflicting hardcoded utility defaults when moving a property into the token
+  renderer. Keep `cn()` overrides working. Shadow utilities reference runtime
+  aliases (`--pilo-field-shadow`, `--pilo-button-primary-shadow`, etc.) so focus
+  rings are not replaced by a plain `box-shadow` override. Composer hover/focus
+  changes its elevation alias, not Tailwind's shadow stack directly.
+- Shared sidebar/composer geometry, menu density, selection, floating surfaces,
+  field states and touch heights all read public `--pilo-*` tokens. Both presets
+  configure these same fields. Claude's edge-attached sidebar and Lody's floating
+  sidebar are values of margin/width/height/border/radius/padding/shadow, not
+  boolean layout modes. Preserve the compact single-surface composer, mobile
+  safe areas, existing touch targets and reduced-motion behavior.
+- Theme-dependent `@theme inline` utilities must reference runtime aliases:
+  `--radius-md: var(--pilo-radius-md)` rather than trying to override the inlined
+  `--radius-md` in a family scope. Claude's 8/12/16px md/lg/xl scale, 12px bubble
+  and 16px composer remain preset values. Tooltip colors and elevation are
+  independent roles; include project/session `TooltipContent` when adapting them.
+- Keep small floating surfaces, context details, bottom sheets and menus on their
+  separate radius roles. Menu/sheet/segment item curves derive from their public
+  outer-radius and padding tokens; rendering must use that same padding in both
+  normal and scope-editing states. Subtract real border widths, not shadow rings.
+  Expose shared geometry through `--pilo-*` tokens instead of family selectors;
+  see the radius recipes in `docs/THEMES.md`.
+- Review a whole composite surface, not only its parent/list nesting. Touch
+  run-config search (normal and scope-editing), scope tabs, refresh, model rows
+  and reasoning/scope-editing action buttons share `--pilo-sheet-item-radius`;
+  the tab strip adds its 2px inset to that inner curve. Do not leave unrelated
+  `xl`/`lg` tiers on these sibling controls after adapting the model rows. Compact
+  desktop stays separate.
+- `theme-presets.css` is loaded before the inline boot script and imported by
+  `index.css` for other shared entry points. Boot styles read the same public
+  geometry/palette tokens; never add a second Claude snapshot. Keep its asset
+  in VitePWA's CSS precache pattern. Declare
+  `@layer theme, base, components, utilities` before injecting cached custom CSS
+  so that user CSS cannot accidentally establish the wrong layer order.
+- `--pilo-conversation-max-width` is the shared desktop/session/WebUI measure;
+  omitting it uses device defaults, and narrow WebUI stays full-width.
+  Android `theme-color` follows computed `--background` after family/mode/CSS
+  changes, not a hardcoded family palette.
+- Mermaid SVG colors are snapshots, not live CSS references. In the shared
+  `ChatMarkdownBody`, reread tokens in a passive effect after `ThemeProvider`'s
+  layout effects for mode, family and custom-CSS changes. Update the memoized
+  diagram plugin identity as well as `mermaid.config`: Streamdown 2.6's memo
+  comparison ignores the latter, while its Mermaid renderer observes plugin
+  identity. Preserve the shared runtime loader and existing Markdown/component
+  state; do not remount the whole message to refresh diagrams. When verification
+  is authorized, check an existing diagram after Lody/Claude switches, custom-CSS
+  updates and system-mode changes on desktop and wide/mobile WebUI.
+
+## Shared Chat Interaction Contracts
+
+- Keep the composer's original single-row toolbar, model label truncation,
+  visible reasoning level and context percentage across theme families. Preserve
+  WebUI's narrow-screen rules in `src/index.css`, including its compact attachment
+  gutter and enlarged touch hit areas. Theme changes must not add wrapping or
+  hide metadata through container queries.
+- The delivery-mode picker stays icon-based and visible while idle or running.
+  Send and stop share one primary button: show stop only while running with no
+  draft text or attachments; otherwise show send. Do not add a separate stop
+  button as part of theme adaptation.
+
 ## Accessibility
 
 - Interactive icon-only controls need `aria-label`.
