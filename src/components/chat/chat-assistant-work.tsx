@@ -122,7 +122,7 @@ const CollapsibleMessageBody = memo(function CollapsibleMessageBody({
 			{collapsible ? (
 				<button
 					type="button"
-					className="mt-2 inline-flex items-center gap-1 text-2xs text-muted-foreground transition-colors hover:text-foreground"
+					className="mt-2 inline-flex items-center gap-1 rounded-md text-2xs text-muted-foreground transition-colors hover:text-foreground pointer-coarse:min-h-11 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
 					onClick={(event) =>
 						toggleChatExpansionWithAnchor(event.currentTarget, () =>
 							setExpanded((value) => !value),
@@ -361,7 +361,7 @@ export function AssistantWorkedRegion({
 		>
 			<button
 				type="button"
-				className="group/work flex w-full items-center gap-1.5 rounded-md py-0.5 pr-1 text-left font-medium leading-snug text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+				className="group/work flex min-h-7 w-full items-center gap-1.5 rounded-md py-0.5 pr-1 text-left font-medium leading-snug text-muted-foreground transition-colors hover:bg-hover hover:text-foreground pointer-coarse:min-h-11 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
 				onClick={(event) =>
 					toggleChatExpansionWithAnchor(event.currentTarget, () => {
 						setSearchDisclosure({ key: searchKey, dismissed: open });
@@ -372,7 +372,7 @@ export function AssistantWorkedRegion({
 			>
 				<ChevronRight
 					className={cn(
-						"size-3.5 shrink-0 transition-transform duration-150 ease-out",
+						"size-3.5 shrink-0 transition-transform duration-150 ease-out motion-reduce:transition-none",
 						open && "rotate-90",
 					)}
 				/>

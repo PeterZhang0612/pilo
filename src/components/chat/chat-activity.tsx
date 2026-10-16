@@ -183,7 +183,10 @@ function ThinkingActivityView({ activity }: { activity: ThinkingActivity }) {
 		<ActivityProcessStep
 			icon={
 				<Sparkles
-					className={cn(PROCESS_ICON_CLASS, running && "animate-pulse")}
+					className={cn(
+						PROCESS_ICON_CLASS,
+						running && "motion-safe:animate-pulse",
+					)}
 				/>
 			}
 		>
@@ -328,12 +331,12 @@ function ToolCallActivityView({
 			<button
 				type="button"
 				className={cn(
-					"group/tool -mx-1 flex min-h-6 w-[calc(100%+0.5rem)] items-center gap-1.5 rounded-md px-1 py-0.5 text-left transition-colors",
+					"group/tool -mx-1 flex min-h-7 w-[calc(100%+0.5rem)] items-center gap-1.5 rounded-md px-1 py-0.5 text-left transition-colors pointer-coarse:min-h-11 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none",
 					PROCESS_TEXT_CLASS,
 					hasDetails
-						? "hover:bg-muted/40 hover:text-foreground"
+						? "hover:bg-hover hover:text-foreground"
 						: "cursor-default",
-					open && "bg-muted/35 text-foreground",
+					open && "bg-hover text-foreground",
 					activity.isError && "text-destructive",
 				)}
 				onClick={(event) =>
@@ -462,7 +465,7 @@ export function AssistantActivityView({
 			<button
 				type="button"
 				className={cn(
-					"group/activity -mx-1 flex min-h-7 w-[calc(100%+0.5rem)] items-center gap-1.5 rounded-md px-1 py-0.5 text-left transition-colors hover:bg-muted/40 hover:text-foreground",
+					"group/activity -mx-1 flex min-h-7 w-[calc(100%+0.5rem)] items-center gap-1.5 rounded-md px-1 py-0.5 text-left transition-colors hover:bg-hover hover:text-foreground pointer-coarse:min-h-11 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none",
 					PROCESS_TEXT_CLASS,
 				)}
 				onClick={(event) =>
@@ -475,7 +478,7 @@ export function AssistantActivityView({
 				<ChevronRight
 					className={cn(
 						PROCESS_ICON_CLASS,
-						"transition-transform duration-150 ease-out",
+						"transition-transform duration-150 ease-out motion-reduce:transition-none",
 						groupOpen && "rotate-90",
 					)}
 				/>

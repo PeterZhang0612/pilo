@@ -152,6 +152,11 @@ spacing, type sizes, or control heights.
   Send and stop share one primary button: show stop only while running with no
   draft text or attachments; otherwise show send. Do not add a separate stop
   button as part of theme adaptation.
+- `summarizeAssistantActivity` counts only completed, non-error tools. Both the
+  outer work disclosure and inner activity group retain a failure count; collapsed
+  work retains the first error summary. Failed groups do not auto-collapse when
+  following text arrives, and failed tool output defaults open. Preserve manual
+  disclosure state and search expansion behavior.
 
 ## Accessibility
 
