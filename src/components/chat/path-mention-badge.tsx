@@ -32,23 +32,33 @@ export function PathMentionBadge({
 						className={cn(
 							"group/mention inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-md border border-foreground/10 bg-background/40 px-2 py-1 text-xs align-middle focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:min-h-11",
 							compact &&
-								"h-7 max-w-[min(12rem,calc(100%_-_8.5rem))] shrink-0 items-start border-0 bg-transparent p-0",
+								"h-(--pilo-composer-line-height) max-w-[min(12rem,calc(100%_-_8.5rem))] shrink-0 items-baseline border-0 bg-transparent p-0",
 						)}
 					>
 						{/* Keep the chip compact inside the full-height touch target. */}
 						<span
 							className={
 								compact
-									? "inline-flex h-7 min-w-0 max-w-full items-center gap-1.5 rounded-md bg-muted/60 px-2 transition-[background-color] duration-150 ease-(--ease) group-hover/mention:bg-hover group-data-[state=open]/mention:bg-hover"
+									? "inline-flex h-(--pilo-composer-line-height) min-w-0 max-w-full items-baseline gap-1.5 rounded-md bg-muted/60 px-2 transition-[background-color] duration-150 ease-(--ease) group-hover/mention:bg-hover group-data-[state=open]/mention:bg-hover"
 									: "contents"
 							}
 						>
 							<Icon
-								className="size-3.5 shrink-0 text-muted-foreground"
+								className={cn(
+									"size-3.5 shrink-0 text-muted-foreground",
+									compact && "self-center",
+								)}
 								strokeWidth={1.5}
 								aria-hidden="true"
 							/>
-							<span className="min-w-0 truncate">{title}</span>
+							<span
+								className={cn(
+									"min-w-0 truncate",
+									compact && "leading-(--pilo-composer-line-height)",
+								)}
+							>
+								{title}
+							</span>
 						</span>
 					</button>
 				</PopoverTrigger>

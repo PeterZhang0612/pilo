@@ -161,6 +161,55 @@
 					section.querySelector('[role="option"]').click();
 					await until(() => section.querySelector(fileSelector));
 					assert(textarea.value === "", "File path leaked into body editor");
+					const firstLineBaseline = (element) => {
+						const styles = getComputedStyle(element);
+						const rect = element.getBoundingClientRect();
+						const canvas = document.createElement("canvas").getContext("2d");
+						canvas.font = `${styles.fontStyle} ${styles.fontWeight} ${styles.fontSize} ${styles.fontFamily}`;
+						const metrics = canvas.measureText("H");
+						return (
+							rect.top +
+							Number.parseFloat(styles.borderTopWidth) +
+							Number.parseFloat(styles.paddingTop) +
+							(Number.parseFloat(styles.lineHeight) -
+								metrics.fontBoundingBoxAscent -
+								metrics.fontBoundingBoxDescent) /
+								2 +
+							metrics.fontBoundingBoxAscent
+						);
+					};
+					const assertFirstLineAlignment = () => {
+						const chip = section.querySelector(fileSelector);
+						assert(
+							Math.abs(
+								firstLineBaseline(chip.querySelector(".truncate")) -
+									firstLineBaseline(textarea),
+							) < 1,
+							`${id}: file chip text is not baseline-aligned with the first text line`,
+						);
+						assert(
+							!matchMedia("(pointer: coarse)").matches ||
+								chip.getBoundingClientRect().height >= 44,
+							"Compact chip lost its touch target",
+						);
+					};
+					assertFirstLineAlignment();
+					const emptyHeight = textarea.getBoundingClientRect().height;
+					for (const text of ["字", "后续文字 hello\n第二行\nThird line"]) {
+						input(textarea, text);
+						await until(() =>
+							section
+								.querySelector("[data-draft]")
+								.textContent.startsWith(text),
+						);
+						assertFirstLineAlignment();
+						if (text === "字") {
+							assert(
+								textarea.getBoundingClientRect().height === emptyHeight,
+								"First character shifted the composer height",
+							);
+						}
+					}
 					input(textarea, "@");
 					await until(
 						() => section.querySelectorAll('[role="tab"]').length === 2,
@@ -301,7 +350,7 @@
 				}
 				document.body.dataset.testStatus = "passed";
 				document.querySelector("#results").textContent =
-					"PASS: desktop + WebUI mobile chips, path popover, Backspace, submission, search highlights and next/previous navigation for files, sessions and Skill instructions";
+					"PASS: desktop + WebUI mobile chip/body baseline alignment, stable autosizing, touch targets, path popover, Backspace, submission, search highlights and next/previous navigation for files, sessions and Skill instructions";
 			} catch (error) {
 				document.body.dataset.testStatus = "failed";
 				document.querySelector("#results").textContent =

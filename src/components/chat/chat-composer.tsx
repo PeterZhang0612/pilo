@@ -437,7 +437,14 @@ export function ChatComposer({
 					</div>
 				) : null}
 
-				<div className="flex max-h-[min(24rem,40dvh)] min-w-0 flex-wrap items-start gap-x-1.5 gap-y-1 overflow-y-auto overscroll-contain px-1">
+				<div
+					className="flex max-h-[min(24rem,40dvh)] min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-1 overflow-y-auto overscroll-contain px-1"
+					style={
+						{
+							"--pilo-composer-line-height": `max(1.75rem, ${readingFontSize * 1.6}px)`,
+						} as CSSProperties
+					}
+				>
 					{mentionDraft.references.map((mention) =>
 						mention.kind === "session" ? (
 							<SessionMentionBadge

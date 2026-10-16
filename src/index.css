@@ -913,7 +913,6 @@
 	/* Keep the iOS focus-zoom floor in landscape and on tablets too. */
 	:root[data-remote-webui] [data-chat-composer-input] {
 		font-size: max(16px, var(--pilo-reading-font-size));
-		line-height: 1.6;
 	}
 }
 

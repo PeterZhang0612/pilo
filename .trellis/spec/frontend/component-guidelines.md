@@ -266,6 +266,19 @@ actions go there and appear only for persisted sessions (`session && !session.te
   instructions; hidden paths and controls must not count as matches. Pure search
   projections are covered by `tests/chat-message-search.test.ts`. Require
   `document.body.dataset.testStatus === "passed"`.
+- Composer chips and the borderless textarea share `--pilo-composer-line-height`
+  (`max(1.75rem, readingFontSize × 1.6px)`). Align them by **text baseline**, not
+  by box center: the compact chip label carries
+  `leading-(--pilo-composer-line-height)`, the chip's flex containers use
+  `items-baseline` (the icon stays `self-center`), and the wrapping row uses
+  `items-baseline`. Centering the chip box instead leaves the smaller `text-xs`
+  chip text ~1.5px above the reading-size body baseline because the font sizes
+  differ. Fixed `h-7`/`items-center` chips beside independently scaled reading
+  text drift vertically. Mobile keeps its 16px font-size floor but must not
+  override this shared line-height; retain the separate coarse-pointer 44px hit
+  target. The browser fixture compares the chip label baseline with the first
+  text-line baseline for empty, single-character and multiline drafts. Check
+  independent UI/reading sizes and both pointer modes.
 - Textarea autosizing keeps a whole-pixel minimum from `rows × lineHeight` plus
   padding/borders for both empty and non-empty text. Integer `scrollHeight` must
   not shrink that minimum on the first character and shift the inline chips.
