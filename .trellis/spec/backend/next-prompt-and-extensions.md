@@ -216,6 +216,14 @@ share `useNextPrompt`, `useNextPromptSettings`, settings fields and `ChatCompose
   See [Manual development runtime builds](./quality-guidelines.md#manual-development-runtime-builds)
   for manual builds and cache isolation.
 - Server maps only typed built-in IDs to canonical absolute deployed paths.
+  Before passing any built-in or inline extension path as `--extension`, the
+  Server converts Windows verbatim drive paths (`\\?\C:\...` to `C:\...`) and
+  verbatim UNC paths (`\\?\UNC\server\share\...` to `\\server\share\...`) to
+  loader-compatible syntax. Bun's module loader may reject canonical Windows
+  paths even when the file exists. Preserve ordinary Windows paths, spaces,
+  Unicode, and all non-Windows paths; keep canonical paths for filesystem IO.
+  Regression tests in `runtime_streams/pi.rs` cover both conversions and
+  platform gating without requiring a Windows host for the string cases.
   Normal chat loads next-prompt; model probe loads model-catalog (plus SSH tools
   only when required by its profile); parallel/direct Pi load only their profile.
   A disabled setting does not unload the script, but causes no prediction calls.

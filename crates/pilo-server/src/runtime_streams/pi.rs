@@ -281,6 +281,23 @@ fn prune_stale_extensions(dir: &std::path::Path) {
     }
 }
 
+fn extension_path_argument(path: &std::path::Path) -> String {
+    let value = path.to_string_lossy();
+    if cfg!(windows) {
+        normalize_windows_extension_path(&value)
+    } else {
+        value.into_owned()
+    }
+}
+
+fn normalize_windows_extension_path(value: &str) -> String {
+    // Bun's module loader cannot resolve the verbatim paths returned by canonicalize.
+    if let Some(value) = value.strip_prefix(r"\\?\UNC\") {
+        return format!(r"\\{value}");
+    }
+    value.strip_prefix(r"\\?\").unwrap_or(value).to_owned()
+}
+
 fn trace_pi_rpc_line(stream_id: &str, bytes: &[u8]) {
     #[cfg(debug_assertions)]
     {
@@ -390,10 +407,7 @@ pub(crate) async fn pi_start(state: &ServerState, params: PiStartParams) -> Resu
         }
         let path = materialize_extension(source)?;
         // Explicit --extension paths still load when discovery is disabled.
-        args.extend([
-            "--extension".to_owned(),
-            path.to_string_lossy().into_owned(),
-        ]);
+        args.extend(["--extension".to_owned(), extension_path_argument(&path)]);
     }
     let mut ssh_workspace_config = None;
     let mut builtin_names = std::collections::HashSet::new();
@@ -418,11 +432,7 @@ pub(crate) async fn pi_start(state: &ServerState, params: PiStartParams) -> Resu
         }
         args.extend([
             "--extension".to_owned(),
-            state
-                .extensions_dir
-                .join(filename)
-                .to_string_lossy()
-                .into_owned(),
+            extension_path_argument(&state.extensions_dir.join(filename)),
         ]);
     }
     if let Some(provider) = params.provider.as_ref() {
@@ -696,4 +706,57 @@ pub(crate) async fn pi_stop(state: &ServerState, params: PiStopParams) -> Result
     )
     .await?;
     Ok(Value::Null)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{extension_path_argument, normalize_windows_extension_path};
+    use std::path::Path;
+
+    #[test]
+    fn windows_extension_paths_use_loader_compatible_syntax() {
+        for (input, expected) in [
+            (
+                r"\\?\C:\Users\Lenovo\AppData\Local\Pilo\server\extensions\model-catalog.js",
+                r"C:\Users\Lenovo\AppData\Local\Pilo\server\extensions\model-catalog.js",
+            ),
+            (
+                r"\\?\C:\Users\测试 用户\Pilo\extensions\next-prompt.js",
+                r"C:\Users\测试 用户\Pilo\extensions\next-prompt.js",
+            ),
+            (
+                r"\\?\UNC\server\shared folder\extensions\model-catalog.js",
+                r"\\server\shared folder\extensions\model-catalog.js",
+            ),
+            (
+                r"C:\Temp\pilo-extensions\inline.js",
+                r"C:\Temp\pilo-extensions\inline.js",
+            ),
+            (
+                r"\\server\share\extension.js",
+                r"\\server\share\extension.js",
+            ),
+        ] {
+            assert_eq!(normalize_windows_extension_path(input), expected);
+        }
+    }
+
+    #[test]
+    fn extension_path_arguments_only_normalize_on_windows() {
+        let verbatim = r"\\?\C:\Pilo\extensions\model-catalog.js";
+        assert_eq!(
+            extension_path_argument(Path::new(verbatim)),
+            if cfg!(windows) {
+                r"C:\Pilo\extensions\model-catalog.js"
+            } else {
+                verbatim
+            }
+        );
+        let ordinary = if cfg!(windows) {
+            r"C:\Users\测试 用户\extensions\inline.js"
+        } else {
+            "/home/测试 用户/.cache/pilo/server/extensions/model-catalog.js"
+        };
+        assert_eq!(extension_path_argument(Path::new(ordinary)), ordinary);
+    }
 }
