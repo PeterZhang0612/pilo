@@ -157,6 +157,11 @@ spacing, type sizes, or control heights.
   work retains the first error summary. Failed groups do not auto-collapse when
   following text arrives, and failed tool output defaults open. Preserve manual
   disclosure state and search expansion behavior.
+- `ChatImageViewport` anchors Ctrl-wheel zoom to the cursor and touch pinch to
+  the gesture midpoint. Ordinary wheel pans only a zoomed image; double-click
+  toggles zoom/reset. Pointer capture retargets click/double-click events to the
+  viewport: check the recorded gesture origin/movement, not `event.target`, to
+  distinguish image gestures from background dismissal.
 
 ## Accessibility
 

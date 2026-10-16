@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Minus, Plus } from "lucide-react";
 
+import { cn } from "@/lib/utils";
+
 const MAX_SCALE = 5;
 const CONTROL_CLASS =
 	"inline-flex min-w-11 min-h-11 items-center justify-center rounded-md px-3 text-white/80 hover:bg-white/15 hover:text-white disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-ring";
@@ -54,13 +56,17 @@ export function ChatImageViewport({
 	}, []);
 
 	const zoom = useCallback(
-		(factor: number) => {
+		(factor: number, anchor?: Point) => {
 			const current = transformRef.current;
 			const scale = Math.max(1, Math.min(MAX_SCALE, current.scale * factor));
+			const rect = viewportRef.current?.getBoundingClientRect();
+			const x = anchor && rect ? anchor.x - rect.left - rect.width / 2 : 0;
+			const y = anchor && rect ? anchor.y - rect.top - rect.height / 2 : 0;
+			const ratio = scale / current.scale;
 			applyTransform({
 				scale,
-				x: current.x * (scale / current.scale),
-				y: current.y * (scale / current.scale),
+				x: x - (x - current.x) * ratio,
+				y: y - (y - current.y) * ratio,
 			});
 		},
 		[applyTransform],
@@ -70,7 +76,8 @@ export function ChatImageViewport({
 		const viewport = viewportRef.current;
 		if (!viewport) return;
 		const handleWheel = (event: WheelEvent) => {
-			if (!event.ctrlKey) return;
+			const current = transformRef.current;
+			if (!event.ctrlKey && current.scale <= 1) return;
 			event.preventDefault();
 			const unit =
 				event.deltaMode === WheelEvent.DOM_DELTA_LINE
@@ -78,12 +85,25 @@ export function ChatImageViewport({
 					: event.deltaMode === WheelEvent.DOM_DELTA_PAGE
 						? viewport.clientHeight
 						: 1;
-			zoom(Math.exp(-event.deltaY * unit * 0.002));
+			if (event.ctrlKey) {
+				zoom(Math.exp(-event.deltaY * unit * 0.002), {
+					x: event.clientX,
+					y: event.clientY,
+				});
+			} else {
+				applyTransform({
+					...current,
+					x:
+						current.x -
+						(event.deltaX || (event.shiftKey ? event.deltaY : 0)) * unit,
+					y: current.y - (event.shiftKey ? 0 : event.deltaY) * unit,
+				});
+			}
 		};
 		// React wheel listeners are passive and cannot prevent page zoom.
 		viewport.addEventListener("wheel", handleWheel, { passive: false });
 		return () => viewport.removeEventListener("wheel", handleWheel);
-	}, [zoom]);
+	}, [applyTransform, zoom]);
 
 	useEffect(() => {
 		const viewport = viewportRef.current;
@@ -135,6 +155,16 @@ export function ChatImageViewport({
 							return;
 					}
 					event.preventDefault();
+				}}
+				onDoubleClick={(event) => {
+					// Pointer capture retargets clicks to the viewport; use the gesture origin.
+					if (gestureRef.current.background || gestureRef.current.moved) return;
+					event.preventDefault();
+					if (transformRef.current.scale > 1) {
+						applyTransform({ x: 0, y: 0, scale: 1 });
+					} else {
+						zoom(2, { x: event.clientX, y: event.clientY });
+					}
 				}}
 				onPointerDown={(event) => {
 					if (event.button !== 0 || pointersRef.current.size >= 2) return;
@@ -227,7 +257,12 @@ export function ChatImageViewport({
 						alt={name}
 						draggable={false}
 						decoding="async"
-						className="max-h-full max-w-full shrink-0 select-none rounded-md object-contain shadow-2xl"
+						className={cn(
+							"max-h-full max-w-full shrink-0 select-none rounded-md object-contain shadow-2xl",
+							transform.scale > 1
+								? "cursor-grab active:cursor-grabbing"
+								: "cursor-zoom-in",
+						)}
 						style={{
 							transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
 						}}
