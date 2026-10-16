@@ -90,6 +90,7 @@
 				}
 				if (!("__TAURI_INTERNALS__" in window)) {
 					document.documentElement.classList.add("pilo-browser");
+					document.documentElement.setAttribute("data-remote-webui", "");
 				}
 				const colorScheme = dark ? "dark" : "light";
 				document.documentElement.style.colorScheme = colorScheme;
@@ -422,17 +423,17 @@
 					display: flex;
 					width: 100%;
 					flex-direction: column;
-					gap: 4px;
+					gap: var(--pilo-ui-composer-gap);
 					border: 1px solid var(--pilo-composer-border);
-					border-radius: var(--pilo-composer-radius);
+					border-radius: var(--pilo-ui-composer-radius);
 					background: var(--pilo-composer-background);
 					box-shadow: var(--pilo-shadow-composer);
 					box-sizing: border-box;
-					padding: 6px 8px;
+					padding: var(--pilo-ui-composer-padding);
 				}
 				.pilo-boot-composer-input {
-					height: 48px;
-					flex: 0 0 48px;
+					height: var(--pilo-ui-composer-input-height);
+					flex: 0 0 var(--pilo-ui-composer-input-height);
 				}
 				.pilo-boot-composer-line {
 					width: 42%;
@@ -443,16 +444,25 @@
 				}
 				.pilo-boot-composer-toolbar {
 					display: flex;
-					height: 30px;
+					height: calc(
+						max(
+								var(--pilo-ui-composer-control-size),
+								var(--pilo-ui-composer-attachment-hit-size)
+							) +
+							2px
+					);
 					box-sizing: border-box;
 					align-items: center;
-					gap: 8px;
+					gap: var(--pilo-ui-composer-toolbar-gap);
 					padding-top: 2px;
 				}
 				.pilo-boot-composer-button {
-					width: 28px;
-					height: 28px;
-					border-radius: 8px;
+					width: var(--pilo-ui-composer-attachment-width);
+					height: max(
+						var(--pilo-ui-composer-control-size),
+						var(--pilo-ui-composer-attachment-hit-size)
+					);
+					border-radius: var(--pilo-ui-radius-md);
 					background: var(--boot-line);
 				}
 				.pilo-boot-composer-model {
@@ -463,8 +473,8 @@
 				}
 				.pilo-boot-composer-send {
 					margin-left: auto;
-					width: 28px;
-					height: 28px;
+					width: var(--pilo-ui-composer-control-size);
+					height: var(--pilo-ui-composer-control-size);
 					border-radius: 999px;
 					background: var(--boot-line-strong);
 				}

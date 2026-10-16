@@ -19,6 +19,11 @@ export const CUSTOM_CSS_PLACEHOLDER = `/*
  * :root {
  *   --primary: 15.9 62.4% 59.6%;
  *   --pilo-bubble-radius: 1.25rem;
+ *   --pilo-mobile-bubble-radius: 1rem;
+ *   --pilo-button-height: 36px;
+ *   --pilo-mobile-button-height: 48px;
+ *   --pilo-field-height: 36px;
+ *   --pilo-mobile-field-height: 48px;
  *   --pilo-sidebar-margin: 0;
  *   --pilo-sidebar-radius: 0;
  *   --pilo-sidebar-border-width: 0 1px 0 0;
@@ -39,6 +44,8 @@ export const CUSTOM_CSS_PLACEHOLDER = `/*
  * 菜单：.pilo-menu-surface / .pilo-menu-item / .pilo-select-item
  *
  * 直接在 :root 内覆盖令牌即可，无需修改主题标识或复制组件规则。
+ * 尺寸令牌 --pilo-* 控制桌面端，对应 --pilo-mobile-* 独立控制移动端。
+ * 移动端未填写时保留默认值；颜色、阴影和字体仍共享。
  * 全部令牌见 src/styles/lody-theme.css 和 claude-theme.css。
  * 修改明暗配色时分别使用 :root 和 :root.dark。
  * 完整入口与说明见 docs/THEMES.md。

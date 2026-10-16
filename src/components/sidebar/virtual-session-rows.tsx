@@ -8,6 +8,7 @@ import {
 	type RefObject,
 } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { cn } from "@/lib/utils";
 
 import { SessionRowHighlightBlock, useSessionRowGlide } from "./session-row";
 import type { SidebarSession } from "./types";
@@ -78,7 +79,11 @@ export const VirtualSessionRows = memo(function VirtualSessionRows({
 						key={item.key}
 						data-index={item.index}
 						ref={virtualizer.measureElement}
-						className="absolute left-0 top-0 w-full min-w-0 overflow-hidden"
+						className={cn(
+							"absolute left-0 top-0 w-full min-w-0 overflow-hidden",
+							item.index < sessions.length - 1 &&
+								"pb-(--pilo-sidebar-session-gap)",
+						)}
 					>
 						{renderSession(session)}
 					</div>

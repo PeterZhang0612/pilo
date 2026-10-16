@@ -80,14 +80,14 @@
 	--color-syntax-attr: hsl(var(--syntax-attr));
 	--color-syntax-builtin: hsl(var(--syntax-builtin));
 
-	--radius-xs: var(--pilo-radius-xs);
-	--radius-sm: var(--pilo-radius-sm);
-	--radius-md: var(--pilo-radius-md, 0.375rem);
-	--radius-lg: var(--pilo-radius-lg, 0.5rem);
-	--radius-xl: var(--pilo-radius-xl, 0.75rem);
+	--radius-xs: var(--pilo-ui-radius-xs);
+	--radius-sm: var(--pilo-ui-radius-sm);
+	--radius-md: var(--pilo-ui-radius-md, 0.375rem);
+	--radius-lg: var(--pilo-ui-radius-lg, 0.5rem);
+	--radius-xl: var(--pilo-ui-radius-xl, 0.75rem);
 	/* 运行时变量引用：主题族/自定义覆盖可在作用域里改写（rounded-bubble / rounded-composer）。 */
-	--radius-bubble: var(--pilo-bubble-radius);
-	--radius-composer: var(--pilo-composer-radius);
+	--radius-bubble: var(--pilo-ui-bubble-radius);
+	--radius-composer: var(--pilo-ui-composer-radius);
 
 	--shadow-2xs: var(--pilo-shadow-2xs);
 	--shadow-xs: var(--pilo-shadow-xs);
@@ -212,7 +212,7 @@
 		overflow: hidden;
 		gap: 0 !important;
 		border: 1px solid var(--markdown-code-block-border) !important;
-		border-radius: var(--pilo-radius-lg) !important;
+		border-radius: var(--pilo-ui-radius-lg) !important;
 		background: var(--markdown-code-block-bg) !important;
 		padding: 0 !important;
 		color: var(--markdown-code-block-foreground);
@@ -230,7 +230,7 @@
 		margin: 0;
 		padding-inline: 0.75rem;
 		background: var(--markdown-code-block-bg);
-		border-end-start-radius: var(--pilo-radius-md);
+		border-end-start-radius: var(--pilo-ui-radius-md);
 		color: var(--markdown-code-block-language);
 		font-family: var(--font-mono);
 		font-size: var(--text-2xs);
@@ -260,7 +260,7 @@
 		margin-top: 0;
 		padding: 0.25rem !important;
 		border: 1px solid var(--markdown-code-block-action-border) !important;
-		border-radius: var(--pilo-radius-md);
+		border-radius: var(--pilo-ui-radius-md);
 		background: var(--markdown-code-block-action-bg) !important;
 		color: var(--markdown-code-block-language);
 		opacity: 0;
@@ -289,7 +289,7 @@
 		align-items: center;
 		justify-content: center;
 		padding: 0;
-		border-radius: max(0px, calc(var(--pilo-radius-md) - 0.25rem - 1px));
+		border-radius: max(0px, calc(var(--pilo-ui-radius-md) - 0.25rem - 1px));
 	}
 
 	.markdown-renderer [data-streamdown="code-block-actions"] button svg {
@@ -349,7 +349,7 @@
 		overflow: hidden;
 		gap: 0 !important;
 		border: 1px solid var(--markdown-mermaid-border);
-		border-radius: var(--pilo-radius-md);
+		border-radius: var(--pilo-ui-radius-md);
 		background: var(--markdown-mermaid-bg);
 		padding: 0 !important;
 		color: var(--markdown-mermaid-foreground);
@@ -380,7 +380,7 @@
 	.markdown-renderer [data-streamdown="mermaid-block-actions"] {
 		gap: 0.125rem;
 		border-color: var(--markdown-mermaid-control-border);
-		border-radius: var(--pilo-radius-md);
+		border-radius: var(--pilo-ui-radius-md);
 		background: var(--markdown-mermaid-control-bg);
 		color: var(--markdown-mermaid-muted);
 		opacity: 0;
@@ -398,7 +398,7 @@
 	}
 
 	.markdown-renderer [data-streamdown="mermaid-block-actions"] button {
-		border-radius: var(--pilo-radius-sm);
+		border-radius: var(--pilo-ui-radius-sm);
 		padding: 0.25rem;
 	}
 
@@ -780,12 +780,12 @@
 @media (max-width: 639px) {
 	/* Enlarge compact desktop composer controls for touch without changing desktop density. */
 	[data-remote-webui] [data-chat-composer-toolbar] {
-		gap: 0.25rem;
+		gap: var(--pilo-ui-composer-toolbar-gap);
 	}
 
 	[data-remote-webui] [data-chat-composer-toolbar] button {
-		min-width: 2.5rem;
-		min-height: 2.5rem;
+		min-width: var(--pilo-ui-composer-control-size);
+		min-height: var(--pilo-ui-composer-control-size);
 	}
 
 	/* Keep the upload hit area in the left gutter without pushing the model right. */
@@ -793,23 +793,15 @@
 		[data-chat-composer-toolbar]
 		[data-chat-composer-attachment] {
 		position: relative;
-		width: 1.75rem;
-		min-width: 1.75rem;
-		min-height: 2.75rem;
-	}
-
-	[data-remote-webui] [data-chat-composer-attachment]::after {
-		position: absolute;
-		inset-block: 0;
-		right: 0;
-		width: 2.75rem;
-		content: "";
+		width: var(--pilo-ui-composer-attachment-width);
+		min-width: var(--pilo-ui-composer-attachment-width);
+		min-height: var(--pilo-ui-composer-attachment-hit-size);
 	}
 
 	[data-remote-webui] [data-chat-run-config-trigger] {
 		min-width: 0;
-		min-height: 2.5rem;
-		padding-inline: 0.5rem;
+		min-height: var(--pilo-ui-composer-control-size);
+		padding: var(--pilo-ui-composer-run-config-padding);
 	}
 
 	/* 手机上消息与输入框应该占满宽度，94% 在 390px 下仍会浪费掉两侧各 12px。 */

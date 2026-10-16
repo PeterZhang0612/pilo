@@ -155,6 +155,74 @@ supported point. All values assigned in either file can also be assigned in
 Custom. Existing saved CSS remains supported; arbitrary selector overrides
 are still available when needed, but are not required for built-in effects.
 
+## Desktop and mobile dimensions
+
+Shared controls use desktop tokens named `--pilo-*` and independent mobile tokens
+named `--pilo-mobile-*`. For example, `--pilo-button-height` controls desktop
+buttons, while `--pilo-mobile-button-height` controls mobile buttons. Leaving a
+mobile token unset preserves its preset default, not a custom desktop value.
+Colors, shadows, font preferences and motion remain shared.
+
+Mobile dimensions apply to WebUI at widths up to 1023px (matching its navigation
+layout), and to devices matching `(hover: none) and (pointer: coarse)`. Wide WebUI
+with a mouse uses desktop dimensions. Menus and dialogs rendered in portals use
+the same device selection; CSS responds to resizing without reloading or syncing
+a different theme back to the Host.
+
+The following suffixes support both prefixes. Slash-separated suffixes list
+separate variables, not a literal token name:
+
+| Component             | Suffixes after `--pilo-` or `--pilo-mobile-`                                                                                                                                                             |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Radius scale          | `radius-xs`, `radius-sm`, `radius-md`, `radius-lg`, `radius-xl`                                                                                                                                          |
+| Messages and composer | `bubble-radius`, `composer-radius`                                                                                                                                                                       |
+| Floating surfaces     | `floating-radius`, `context-details-radius`, `menu-radius`                                                                                                                                               |
+| Menu                  | `menu-padding`, `menu-item-height`, `menu-item-radius`, `menu-item-gap`, `menu-item-padding`, `menu-item-content-gap`                                                                                    |
+| Select                | `select-padding`, `select-gap`, `select-item-height`, `select-item-radius`, `select-item-padding`, `select-trigger-padding`                                                                              |
+| Buttons               | `button-height`, `button-sm-height`, `button-lg-height`, `button-icon-size`, `button-padding`, `button-sm-padding`, `button-lg-padding`, `button-gap`                                                    |
+| Fields                | `field-height`, `input-padding`, `textarea-padding`                                                                                                                                                      |
+| Command/search        | `command-input-height`, `command-input-padding`, `command-item-height`, `command-item-padding`, `command-item-gap`                                                                                       |
+| Dialog                | `dialog-padding`, `dialog-gap`                                                                                                                                                                           |
+| Composer layout       | `composer-padding`, `composer-gap`, `composer-input-height`, `composer-toolbar-gap`, `composer-control-size`, `composer-attachment-width`, `composer-attachment-hit-size`, `composer-run-config-padding` |
+
+Padding tokens accept CSS shorthand. Item-height tokens are minimums; button and
+field heights configure their default boxes. General mobile controls retain a
+44px floor. The composer's compact toolbar retains its existing 40px control
+minimum, with a 44px attachment hit area and separate attachment gutter width.
+Explicit caller utilities still override component defaults: special compact
+controls do not inherit the sizing of an unrelated generic button or field.
+
+Mobile-only roles already have their own geometry: the drawer uses
+`--pilo-mobile-sidebar-*`, its switch uses `--pilo-segment-*`, and run-config
+bottom sheets use `--pilo-sheet-*`. Do not add a second `mobile-` prefix to these
+roles. Sheet control/model minimum heights are `--pilo-sheet-control-height` /
+`--pilo-sheet-model-height` (44px / 48px defaults), with
+`--pilo-sheet-item-gap` between model rows. Heights are clamped to at least 44px.
+
+For example, change several controls independently:
+
+```css
+:root {
+	--pilo-button-height: 36px;
+	--pilo-mobile-button-height: 48px;
+	--pilo-field-height: 36px;
+	--pilo-mobile-field-height: 48px;
+	--pilo-menu-item-height: 32px;
+	--pilo-mobile-menu-item-height: 48px;
+	--pilo-menu-padding: 4px;
+	--pilo-mobile-menu-padding: 8px;
+	--pilo-composer-padding: 6px 8px;
+	--pilo-mobile-composer-padding: 8px 12px;
+	--pilo-composer-radius: 12px;
+	--pilo-mobile-composer-radius: 16px;
+}
+```
+
+The internal `--pilo-ui-*` aliases select these values for rendering. Set the
+public desktop/mobile tokens, not these aliases: overriding an alias bypasses
+device selection. Preset mobile item-radius formulas reference mobile padding
+and outer radii, so their inset curves remain consistent after customization.
+
 ## Customization points
 
 ### Palette, typography and motion
@@ -177,22 +245,62 @@ are still available when needed, but are not required for built-in effects.
 
 ### Layout and selected rows
 
-| Tokens                                                           | Effect                                                                 |
-| ---------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `--pilo-sidebar-margin/height/width`                             | Floating versus edge-attached sidebar geometry                         |
-| `--pilo-sidebar-border-width/border-color/radius/padding/shadow` | Sidebar shape and elevation; border width accepts four sides           |
-| `--pilo-mobile-sidebar-radius`                                   | Mobile drawer shape; accepts a full border-radius value                |
-| `--pilo-sidebar-selected-border/background/foreground`           | Desktop selected session/project appearance                            |
-| `--pilo-project-selected-foreground`                             | Project selection text, including its separate dark-mode dimming       |
-| `--pilo-mobile-selected-background`                              | Mobile selected row fill                                               |
-| `--pilo-mobile-confirm-selected-background`                      | Selected mobile row while confirming deletion                          |
-| `--pilo-mobile-selected-ring-width`                              | Mobile selection outline: `1px` or `0px`, not a boolean switch         |
-| `--pilo-conversation-max-width`                                  | Shared desktop/session/WebUI reading measure; omit for device defaults |
-| `--pilo-user-bubble-bg/border`                                   | Complete CSS colors for user messages                                  |
+| Tokens                                                                                        | Effect                                                                                     |
+| --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `--pilo-sidebar-margin/height/width`                                                          | Floating versus edge-attached sidebar geometry                                             |
+| `--pilo-sidebar-border-width/border-color/radius/padding/shadow`                              | Sidebar shape and elevation; border width accepts four sides                               |
+| `--pilo-mobile-sidebar-radius`                                                                | Mobile drawer shape; accepts a full border-radius value                                    |
+| `--pilo-mobile-sidebar-width/content-padding/header-height`                                   | Drawer width, content gutter and header minimum; width reserves 64px of dismissal backdrop |
+| `--pilo-sidebar-project-height/project-padding/env-height/env-padding/row-gap`                | Desktop project/environment row density                                                    |
+| `--pilo-mobile-project-height/project-padding/env-height/env-padding/row-gap/row-action-size` | Independent mobile row density and action size; 44px minimum                               |
+| `--pilo-sidebar-session-gap`                                                                  | Desktop session spacing, including virtual lists; default `0.25rem`                        |
+| `--pilo-mobile-session-gap`                                                                   | Independent mobile session spacing; default `0.25rem`                                      |
+| `--pilo-sidebar-selected-border/background/foreground`                                        | Desktop selected session/project appearance                                                |
+| `--pilo-project-selected-foreground`                                                          | Project selection text, including its separate dark-mode dimming                           |
+| `--pilo-mobile-selected-background`                                                           | Mobile selected row fill                                                                   |
+| `--pilo-mobile-confirm-selected-background`                                                   | Selected mobile row while confirming deletion                                              |
+| `--pilo-mobile-selected-ring-width`                                                           | Mobile selection outline: `1px` or `0px`, not a boolean switch                             |
+| `--pilo-conversation-max-width`                                                               | Shared desktop/session/WebUI reading measure; omit for device defaults                     |
+| `--pilo-user-bubble-bg/border`                                                                | Complete CSS colors for user messages                                                      |
 
 Mobile WebUI remains full-width below 640px. Keep drawer dismissal space,
 safe-area padding and existing mobile touch targets; these are interaction
 constraints, not family styling.
+
+### Session row density
+
+Desktop (including wide WebUI) and mobile navigation use separate tokens. Mobile
+values keep their built-in defaults when omitted; they do not inherit desktop
+density. These tokens affect session rows, not project/environment rows or other
+controls.
+
+| Desktop token                            | Mobile token                            | Effect and default                                                                             |
+| ---------------------------------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `--pilo-sidebar-session-height`          | `--pilo-mobile-session-height`          | Minimum row height: `1.875rem` / `2.75rem`                                                     |
+| `--pilo-sidebar-session-context-height`  | `--pilo-mobile-session-context-height`  | Minimum height with a project label: `3.125rem` / `3.5rem`; never below the regular row height |
+| `--pilo-sidebar-session-padding`         | `--pilo-mobile-session-padding`         | CSS padding shorthand: `0.125rem 0.5rem` / `0.5rem`                                            |
+| `--pilo-sidebar-session-context-padding` | —                                       | Desktop two-line row padding: `0.25rem 0.5rem`; mobile uses its regular padding                |
+| —                                        | `--pilo-mobile-session-confirm-padding` | Mobile delete-confirmation row padding: `0 0.25rem 0 0.5rem`                                   |
+
+Heights and gaps accept non-negative CSS lengths. Heights are minimums, not fixed
+boxes: text and padding can grow the row. Mobile rows retain a `44px` minimum even
+when the theme requests less; confirmation actions also keep their touch targets.
+Virtual lists measure the rendered desktop row and its spacing, so custom heights
+and padding do not depend on a hardcoded virtualizer gap.
+
+For example, set each device's density without media queries:
+
+```css
+:root {
+	--pilo-sidebar-session-height: 32px;
+	--pilo-sidebar-session-padding: 4px 8px;
+	--pilo-sidebar-session-gap: 4px;
+
+	--pilo-mobile-session-height: 52px;
+	--pilo-mobile-session-padding: 8px 12px;
+	--pilo-mobile-session-gap: 8px;
+}
+```
 
 ### Composer, fields and buttons
 

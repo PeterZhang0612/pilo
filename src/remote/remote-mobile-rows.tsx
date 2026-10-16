@@ -12,7 +12,7 @@ import { ActivityDot, Button, Spinner } from "@/ui";
 
 /** 触摸端行内按钮：始终可见，且命中区不小于 44×44。 */
 export const ROW_ACTION_CLASS =
-	"flex size-11 shrink-0 items-center justify-center rounded-md text-sidebar-foreground-muted transition-colors duration-[var(--dur-1)] ease-[var(--ease)] hover:bg-sidebar-hover hover:text-sidebar-foreground active:bg-sidebar-hover active:text-sidebar-foreground motion-reduce:transition-none";
+	"pilo-mobile-row-action flex shrink-0 items-center justify-center rounded-md text-sidebar-foreground-muted transition-colors duration-[var(--dur-1)] ease-[var(--ease)] hover:bg-sidebar-hover hover:text-sidebar-foreground active:bg-sidebar-hover active:text-sidebar-foreground motion-reduce:transition-none";
 
 export function MobileSessionRow({
 	session,
@@ -62,9 +62,9 @@ export function MobileSessionRow({
 	if (confirmingDelete) {
 		return (
 			<div
+				data-project-context={Boolean(projectName) || undefined}
 				className={cn(
-					"flex min-h-11 w-full min-w-0 items-center gap-2 rounded-md bg-sidebar pl-2 pr-1",
-					projectName && "min-h-14",
+					"pilo-mobile-session-row pilo-mobile-session-confirm flex w-full min-w-0 items-center gap-2 rounded-md bg-sidebar",
 					selected &&
 						"bg-(--pilo-mobile-confirm-selected-background) ring-[length:var(--pilo-mobile-selected-ring-width)] ring-inset ring-sidebar-foreground/10 pilo-mobile-selected",
 				)}
@@ -123,11 +123,12 @@ export function MobileSessionRow({
 			<button
 				type="button"
 				data-session-row=""
+				data-project-context={Boolean(projectName) || undefined}
 				ref={sessionButtonRef}
 				aria-current={selected ? "page" : undefined}
 				className={cn(
 					// 长按删除与 iOS 的文字选择/长按弹窗冲突，一并关掉。
-					"flex min-h-11 min-w-0 flex-1 touch-manipulation select-none gap-2 rounded-md px-2 py-2 text-left transition-colors duration-[var(--dur-1)] ease-[var(--ease)] hover:bg-sidebar-hover active:bg-sidebar-hover motion-reduce:transition-none [-webkit-touch-callout:none]",
+					"pilo-mobile-session-row flex min-w-0 flex-1 touch-manipulation select-none gap-2 rounded-md text-left transition-colors duration-[var(--dur-1)] ease-[var(--ease)] hover:bg-sidebar-hover active:bg-sidebar-hover motion-reduce:transition-none [-webkit-touch-callout:none]",
 					projectName ? "items-start" : "items-center",
 					selected
 						? "text-sidebar-selection-foreground"
@@ -240,7 +241,7 @@ export function MobileProjectRow({
 	return (
 		<div
 			className={cn(
-				"flex min-h-11 min-w-0 items-center rounded-md",
+				"pilo-mobile-project-group flex min-w-0 items-center rounded-md",
 				selected &&
 					"bg-(--pilo-mobile-selected-background) ring-[length:var(--pilo-mobile-selected-ring-width)] ring-inset ring-sidebar-foreground/10 pilo-mobile-selected",
 			)}
@@ -248,7 +249,7 @@ export function MobileProjectRow({
 			<button
 				type="button"
 				aria-expanded={expanded}
-				className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left transition-colors duration-[var(--dur-1)] ease-[var(--ease)] hover:bg-sidebar-hover active:bg-sidebar-hover motion-reduce:transition-none"
+				className="pilo-mobile-project-row flex min-w-0 flex-1 items-center gap-2 rounded-md text-left transition-colors duration-[var(--dur-1)] ease-[var(--ease)] hover:bg-sidebar-hover active:bg-sidebar-hover motion-reduce:transition-none"
 				onClick={onToggle}
 			>
 				<Folder
@@ -306,7 +307,7 @@ export function MobileEnvRow({
 		<button
 			type="button"
 			aria-expanded={expanded}
-			className="flex min-h-11 w-full min-w-0 items-center gap-2 rounded-md px-2 text-left text-sidebar-foreground-muted transition-colors duration-[var(--dur-1)] ease-[var(--ease)] hover:bg-sidebar-hover active:bg-sidebar-hover motion-reduce:transition-none"
+			className="pilo-mobile-env-row flex w-full min-w-0 items-center gap-2 rounded-md text-left text-sidebar-foreground-muted transition-colors duration-[var(--dur-1)] ease-[var(--ease)] hover:bg-sidebar-hover active:bg-sidebar-hover motion-reduce:transition-none"
 			onClick={onToggle}
 		>
 			<Monitor className="size-4 shrink-0" aria-hidden="true" />

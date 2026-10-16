@@ -104,8 +104,25 @@ spacing, type sizes, or control heights.
   sidebar are values of margin/width/height/border/radius/padding/shadow, not
   boolean layout modes. Preserve the compact single-surface composer, mobile
   safe areas, existing touch targets and reduced-motion behavior.
+- Shared control geometry uses `--pilo-*` desktop tokens and independent
+  `--pilo-mobile-*` defaults, selected through `--pilo-ui-*` aliases in
+  `theme-responsive.css`. Mobile means WebUI <=1023px or a no-hover coarse
+  pointer; define aliases on the root so portals follow the same selection.
+  Never remap public desktop tokens in a media query: unlayered custom CSS
+  would beat that remapping and couple the two devices again. Wire both direct
+  CSS and Tailwind consumers through the runtime aliases; include the boot
+  composer. General mobile controls keep a 44px floor; the compact composer
+  keeps its existing 40px controls and 44px attachment hit area. Caller utilities
+  still override component defaults. Mobile-only sheet/segment/drawer roles
+  retain their existing token prefixes rather than another mobile alias layer.
+- Session row density is device-specific: `--pilo-sidebar-session-*` configures
+  desktop/wide WebUI, while `--pilo-mobile-session-*` keeps independent mobile
+  defaults. Height tokens are minimums; preserve the mobile `44px` floor and
+  delete-confirmation targets. Keep two-line project-context rows and virtual
+  row padding on the same token contract; measure the real virtual row rather
+  than hardcoding a numeric gap. See `docs/THEMES.md` for the supported tokens.
 - Theme-dependent `@theme inline` utilities must reference runtime aliases:
-  `--radius-md: var(--pilo-radius-md)` rather than trying to override the inlined
+  `--radius-md: var(--pilo-ui-radius-md)` rather than trying to override the inlined
   `--radius-md` in a family scope. Claude's 8/12/16px md/lg/xl scale, 12px bubble
   and 16px composer remain preset values. Tooltip colors and elevation are
   independent roles; include project/session `TooltipContent` when adapting them.

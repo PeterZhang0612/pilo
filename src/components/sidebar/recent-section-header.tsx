@@ -39,14 +39,14 @@ export function RecentSectionHeader({
 		? t("sidebar.expandRecent")
 		: t("sidebar.collapseRecent");
 	return (
-		<div className="group flex h-7 items-center gap-0.5 rounded-md border border-transparent pr-2">
+		<div className="pilo-sidebar-env-group group flex items-center gap-0.5 rounded-md border border-transparent pr-2">
 			<button
 				type="button"
 				aria-label={toggleLabel}
 				aria-expanded={!collapsed}
 				onClick={onToggle}
 				className={cn(
-					"relative flex h-7 min-w-0 flex-1 select-none items-center gap-2 rounded-md border border-transparent bg-transparent px-2 text-left",
+					"pilo-sidebar-env-row relative flex min-w-0 flex-1 select-none items-center gap-2 rounded-md border border-transparent bg-transparent text-left",
 					"text-sm font-medium text-sidebar-foreground-muted transition-colors hover:text-sidebar-foreground",
 					"focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring",
 				)}

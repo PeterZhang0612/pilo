@@ -263,7 +263,7 @@ export function ComposerRunConfig(props: ComposerRunConfigProps) {
 							type="button"
 							variant="ghost"
 							size="icon"
-							className="size-11 rounded-full text-muted-foreground"
+							className="size-[max(44px,var(--pilo-sheet-control-height))] rounded-full text-muted-foreground"
 							aria-label={t("common.close")}
 							disabled={props.modelScope?.saving}
 							onClick={() => changeOpen(false)}
@@ -345,7 +345,7 @@ function RunConfigPanel(props: ComposerRunConfigProps) {
 							variant={
 								props.selectedThinkingLevel === level ? "secondary" : "ghost"
 							}
-							className="min-h-11 rounded-(--pilo-sheet-item-radius) px-2 font-normal shadow-none"
+							className="min-h-[max(44px,var(--pilo-sheet-control-height))] rounded-(--pilo-sheet-item-radius) px-2 font-normal shadow-none"
 							disabled={props.thinkingDisabled || !props.onThinkingChange}
 							aria-pressed={props.selectedThinkingLevel === level}
 							onClick={() => props.onThinkingChange?.(level)}

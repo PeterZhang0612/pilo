@@ -169,7 +169,11 @@ export function SidebarTree({
 
 		return (
 			<Suspense
-				fallback={<>{projectSessions.slice(0, 40).map(renderSession)}</>}
+				fallback={
+					<SessionRowGlide>
+						{projectSessions.slice(0, 40).map(renderSession)}
+					</SessionRowGlide>
+				}
 			>
 				<VirtualSessionRows
 					sessions={projectSessions}
@@ -190,7 +194,7 @@ export function SidebarTree({
 		>
 			<div className="relative w-full min-w-0 overflow-x-hidden pt-1">
 				{organizeMode === "recent" ? (
-					<section className="mb-3 w-full min-w-0 space-y-0.5 overflow-hidden last:mb-0">
+					<section className="mb-3 w-full min-w-0 space-y-(--pilo-sidebar-row-gap) overflow-hidden last:mb-0">
 						<RecentSectionHeader
 							collapsed={collapsedSections["recent"] ?? false}
 							onToggle={() => onToggleSection("recent")}
@@ -224,7 +228,7 @@ export function SidebarTree({
 						return (
 							<section
 								key={env.id}
-								className="mb-3 w-full min-w-0 space-y-0.5 overflow-hidden last:mb-0"
+								className="mb-3 w-full min-w-0 space-y-(--pilo-sidebar-row-gap) overflow-hidden last:mb-0"
 							>
 								<EnvRow
 									env={env}

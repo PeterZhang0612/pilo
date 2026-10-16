@@ -122,7 +122,7 @@
 			0px,
 			calc(var(--pilo-sheet-radius) - var(--pilo-sheet-padding))
 		);
-		--pilo-segment-radius: var(--pilo-radius-lg);
+		--pilo-segment-radius: var(--pilo-mobile-radius-lg);
 		--pilo-segment-padding: 0.25rem;
 		--pilo-segment-item-radius: max(
 			0px,
@@ -171,8 +171,118 @@
 		--pilo-sidebar-radius: var(--pilo-radius-xl);
 		--pilo-sidebar-padding: 2px;
 		--pilo-sidebar-shadow: var(--pilo-shadow-sm);
-		--pilo-mobile-sidebar-radius: 0 var(--pilo-radius-xl) var(--pilo-radius-xl)
-			0;
+		--pilo-mobile-sidebar-radius: 0 var(--pilo-mobile-radius-xl)
+			var(--pilo-mobile-radius-xl) 0;
+		--pilo-button-height: 2.25rem;
+		--pilo-button-sm-height: 2rem;
+		--pilo-button-lg-height: 2.5rem;
+		--pilo-button-icon-size: 2.25rem;
+		--pilo-button-padding: 0.5rem 1rem;
+		--pilo-button-sm-padding: 0 0.75rem;
+		--pilo-button-lg-padding: 0 2rem;
+		--pilo-button-gap: 0.5rem;
+		--pilo-field-height: 2.25rem;
+		--pilo-input-padding: 0.25rem 0.75rem;
+		--pilo-textarea-padding: 0.5rem 0.75rem;
+		--pilo-select-trigger-padding: 0.5rem 0.75rem;
+		--pilo-command-item-height: 0px;
+		--pilo-command-item-padding: 0.5rem 0.625rem;
+		--pilo-command-item-gap: 0.625rem;
+		--pilo-menu-item-padding: 0.375rem 0.75rem;
+		--pilo-menu-item-content-gap: 0.75rem;
+		--pilo-select-item-padding: 0.375rem 2rem 0.375rem 0.5rem;
+		--pilo-composer-padding: 0.375rem 0.5rem;
+		--pilo-composer-gap: 0.25rem;
+		--pilo-composer-input-height: 3rem;
+		--pilo-composer-toolbar-gap: 0.5rem;
+
+		/* Mobile density has its own defaults, not desktop aliases. */
+		--pilo-mobile-radius-xs: 0.125rem;
+		--pilo-mobile-radius-sm: 0.25rem;
+		--pilo-mobile-radius-md: 0.375rem;
+		--pilo-mobile-radius-lg: 0.5rem;
+		--pilo-mobile-radius-xl: 0.75rem;
+		--pilo-mobile-bubble-radius: 1rem;
+		--pilo-mobile-composer-radius: 0.75rem;
+		--pilo-mobile-floating-radius: var(--pilo-mobile-radius-md);
+		--pilo-mobile-context-details-radius: var(--pilo-mobile-radius-xl);
+		--pilo-mobile-menu-radius: var(--pilo-mobile-radius-xl);
+		--pilo-mobile-menu-padding: 0.25rem;
+		--pilo-mobile-menu-item-height: 2.75rem;
+		--pilo-mobile-menu-item-radius: max(
+			0px,
+			calc(var(--pilo-mobile-menu-radius) - var(--pilo-mobile-menu-padding))
+		);
+		--pilo-mobile-menu-item-gap: 0px;
+		--pilo-mobile-select-padding: 0.25rem;
+		--pilo-mobile-select-gap: 0px;
+		--pilo-mobile-select-item-height: 2.75rem;
+		--pilo-mobile-select-item-radius: var(--pilo-mobile-radius-xs);
+		--pilo-mobile-button-height: 2.75rem;
+		--pilo-mobile-button-sm-height: 2.75rem;
+		--pilo-mobile-button-lg-height: 2.75rem;
+		--pilo-mobile-button-icon-size: 2.75rem;
+		--pilo-mobile-button-padding: 0.5rem 1rem;
+		--pilo-mobile-button-sm-padding: 0 0.75rem;
+		--pilo-mobile-button-lg-padding: 0 2rem;
+		--pilo-mobile-button-gap: 0.5rem;
+		--pilo-mobile-field-height: 2.75rem;
+		--pilo-mobile-input-padding: 0.25rem 0.75rem;
+		--pilo-mobile-textarea-padding: 0.5rem 0.75rem;
+		--pilo-mobile-select-trigger-padding: 0.5rem 0.75rem;
+		--pilo-mobile-command-item-height: 2.75rem;
+		--pilo-mobile-command-item-padding: 0.5rem 0.625rem;
+		--pilo-mobile-command-item-gap: 0.625rem;
+		--pilo-mobile-menu-item-padding: 0.375rem 0.75rem;
+		--pilo-mobile-menu-item-content-gap: 0.75rem;
+		--pilo-mobile-select-item-padding: 0.375rem 2rem 0.375rem 0.5rem;
+		--pilo-mobile-composer-padding: 0.375rem 0.5rem;
+		--pilo-mobile-composer-gap: 0.25rem;
+		--pilo-mobile-composer-input-height: 3rem;
+		--pilo-mobile-composer-toolbar-gap: 0.25rem;
+		--pilo-composer-control-size: 1.75rem;
+		--pilo-composer-attachment-width: 1.75rem;
+		--pilo-composer-attachment-hit-size: 1.75rem;
+		--pilo-composer-run-config-padding: 0 0.5rem;
+		--pilo-mobile-composer-control-size: 2.5rem;
+		--pilo-mobile-composer-attachment-width: 1.75rem;
+		--pilo-mobile-composer-attachment-hit-size: 2.75rem;
+		--pilo-mobile-composer-run-config-padding: 0 0.5rem;
+		--pilo-command-input-height: 3.5rem;
+		--pilo-command-input-padding: 0 1rem;
+		--pilo-dialog-padding: 1.5rem;
+		--pilo-dialog-gap: 1rem;
+		--pilo-mobile-command-input-height: 3.5rem;
+		--pilo-mobile-command-input-padding: 0 1rem;
+		--pilo-mobile-dialog-padding: 1rem;
+		--pilo-mobile-dialog-gap: 1rem;
+		--pilo-sheet-control-height: 2.75rem;
+		--pilo-sheet-model-height: 3rem;
+		--pilo-sheet-item-gap: 0.125rem;
+		--pilo-sidebar-project-height: 1.875rem;
+		--pilo-sidebar-project-padding: 0.125rem 0.5rem;
+		--pilo-sidebar-env-height: 1.75rem;
+		--pilo-sidebar-env-padding: 0 0.5rem;
+		--pilo-sidebar-row-gap: 0.125rem;
+		--pilo-mobile-project-height: 2.75rem;
+		--pilo-mobile-project-padding: 0 0.5rem;
+		--pilo-mobile-env-height: 2.75rem;
+		--pilo-mobile-env-padding: 0 0.5rem;
+		--pilo-mobile-row-gap: 0.25rem;
+		--pilo-mobile-row-action-size: 2.75rem;
+		--pilo-mobile-sidebar-width: 20rem;
+		--pilo-mobile-sidebar-content-padding: 0.75rem;
+		--pilo-mobile-sidebar-header-height: 3.5rem;
+		--pilo-sidebar-session-gap: 0.25rem;
+		--pilo-sidebar-session-height: 1.875rem;
+		--pilo-sidebar-session-context-height: 3.125rem;
+		--pilo-sidebar-session-padding: 0.125rem 0.5rem;
+		--pilo-sidebar-session-context-padding: 0.25rem 0.5rem;
+		--pilo-mobile-session-gap: 0.25rem;
+		--pilo-mobile-session-height: 2.75rem;
+		--pilo-mobile-session-context-height: 3.5rem;
+		--pilo-mobile-session-padding: 0.5rem;
+		--pilo-mobile-session-confirm-padding: 0 0.25rem 0 0.5rem;
 		--pilo-sidebar-selected-border: hsl(var(--sidebar-foreground) / 0.1);
 		--pilo-sidebar-selected-background: hsl(var(--sidebar-foreground) / 0.1);
 		--pilo-sidebar-selected-foreground: hsl(var(--sidebar-foreground));

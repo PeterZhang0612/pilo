@@ -50,7 +50,7 @@ const CommandInput = React.forwardRef<
 >(({ className, wrapperClassName, ...props }, ref) => (
 	<div
 		className={cn(
-			"flex h-14 items-center border-b border-border px-4",
+			"pilo-command-input-wrapper flex items-center border-b border-border",
 			wrapperClassName,
 		)}
 		cmdk-input-wrapper=""
@@ -145,7 +145,7 @@ const CommandItem = React.forwardRef<
 	<CommandPrimitive.Item
 		ref={ref}
 		className={cn(
-			"relative flex cursor-default select-none items-center gap-2.5 rounded-md px-2.5 py-2 text-sm outline-hidden pilo-command-item data-[selected=true]:bg-hover data-[selected=true]:text-hover-foreground data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+			"relative flex cursor-default select-none items-center rounded-md text-sm outline-hidden pilo-command-item data-[selected=true]:bg-hover data-[selected=true]:text-hover-foreground data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
 			className,
 		)}
 		{...props}

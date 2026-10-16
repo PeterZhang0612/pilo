@@ -72,9 +72,9 @@ export function FontSelect({
 			</PopoverTrigger>
 			<PopoverContent
 				align="start"
-				className="w-72 min-w-(--radix-popover-trigger-width) overflow-hidden rounded-(--pilo-menu-radius) p-0"
+				className="w-72 min-w-(--radix-popover-trigger-width) overflow-hidden rounded-(--pilo-ui-menu-radius) p-0"
 			>
-				<Command className="rounded-[max(0px,calc(var(--pilo-menu-radius)-1px))]">
+				<Command className="rounded-[max(0px,calc(var(--pilo-ui-menu-radius)-1px))]">
 					<CommandInput
 						placeholder={t("settings.searchFonts")}
 						wrapperClassName="h-9"
@@ -88,14 +88,14 @@ export function FontSelect({
 								<CommandGroup
 									key={group.label}
 									heading={group.label}
-									className="p-(--pilo-menu-padding)"
+									className="p-(--pilo-ui-menu-padding)"
 								>
 									{group.options.map((option) => (
 										<CommandItem
 											key={option.value}
 											value={option.value}
 											keywords={[optionLabel(option)]}
-											className="rounded-[max(0px,calc(var(--pilo-menu-item-radius)-1px))]"
+											className="rounded-[max(0px,calc(var(--pilo-ui-menu-item-radius)-1px))]"
 											onSelect={() => {
 												onChange(option.value);
 												setOpen(false);

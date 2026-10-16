@@ -163,14 +163,14 @@ export function ChatModelPicker({
 		}
 	};
 	const listPaddingClassName = compact
-		? "px-(--pilo-menu-padding) pb-(--pilo-menu-padding)"
+		? "px-(--pilo-ui-menu-padding) pb-(--pilo-ui-menu-padding)"
 		: "px-(--pilo-sheet-padding) pb-(--pilo-sheet-padding)";
 	const itemRadiusClassName = compact
-		? "rounded-(--pilo-menu-item-radius)"
+		? "rounded-(--pilo-ui-menu-item-radius)"
 		: "rounded-(--pilo-sheet-item-radius)";
 	const actionClassName = compact
 		? undefined
-		: "min-h-11 rounded-(--pilo-sheet-item-radius)";
+		: "min-h-[max(44px,var(--pilo-sheet-control-height))] rounded-(--pilo-sheet-item-radius)";
 	const renderCheckbox = (
 		provider: string,
 		modelId: string,
@@ -187,8 +187,8 @@ export function ChatModelPicker({
 					"flex cursor-pointer items-center gap-2 px-2 text-sm hover:bg-hover hover:text-hover-foreground has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:disabled]:cursor-default has-[:disabled]:opacity-50",
 					itemRadiusClassName,
 					compact
-						? "min-h-(--pilo-menu-item-height) py-1.5 pointer-coarse:min-h-11"
-						: "min-h-11 py-2",
+						? "min-h-(--pilo-ui-menu-item-height) py-1.5 pointer-coarse:min-h-(--pilo-ui-menu-item-height)"
+						: "min-h-[max(44px,var(--pilo-sheet-control-height))] py-2",
 				)}
 			>
 				<Checkbox
@@ -268,8 +268,8 @@ export function ChatModelPicker({
 								className={cn(
 									"flex-1 px-3 text-sm font-normal text-muted-foreground",
 									compact
-										? "h-7 rounded-[max(0px,calc(var(--pilo-radius-md)-0.125rem))]"
-										: "min-h-11 w-20 min-w-0 rounded-(--pilo-sheet-item-radius) whitespace-normal",
+										? "h-7 rounded-[max(0px,calc(var(--pilo-ui-radius-md)-0.125rem))]"
+										: "min-h-[max(44px,var(--pilo-sheet-control-height))] w-20 min-w-0 rounded-(--pilo-sheet-item-radius) whitespace-normal",
 									view === option &&
 										"bg-popover text-popover-foreground shadow-xs hover:bg-popover hover:text-popover-foreground",
 								)}
@@ -292,7 +292,7 @@ export function ChatModelPicker({
 							"text-muted-foreground",
 							compact
 								? "size-8 rounded-lg"
-								: "size-11 rounded-(--pilo-sheet-item-radius)",
+								: "size-[max(44px,var(--pilo-sheet-control-height))] rounded-(--pilo-sheet-item-radius)",
 						)}
 						disabled={listLoading || saving || !onRefresh}
 						aria-label={t("chat.refreshModels")}
@@ -330,7 +330,7 @@ export function ChatModelPicker({
 								"ps-10 pe-3",
 								compact
 									? "h-8 rounded-md text-sm"
-									: "min-h-11 rounded-(--pilo-sheet-item-radius) text-base md:text-sm",
+									: "min-h-[max(44px,var(--pilo-sheet-control-height))] rounded-(--pilo-sheet-item-radius) text-base md:text-sm",
 							)}
 						/>
 					</div>
@@ -349,7 +349,7 @@ export function ChatModelPicker({
 							"border border-input-border bg-input-field px-3 hover:border-(--pilo-field-hover-border) has-[:focus-visible]:border-(--pilo-field-focus-border) has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring",
 							compact
 								? "h-8 rounded-md"
-								: "h-11 rounded-(--pilo-sheet-item-radius)",
+								: "h-[max(44px,var(--pilo-sheet-control-height))] rounded-(--pilo-sheet-item-radius)",
 						)}
 					/>
 				)}
@@ -462,7 +462,12 @@ export function ChatModelPicker({
 					containerClassName={listMaxHeight}
 					viewportClassName={listMaxHeight}
 				>
-					<div className={cn(listPaddingClassName, !compact && "space-y-0.5")}>
+					<div
+						className={cn(
+							listPaddingClassName,
+							!compact && "space-y-(--pilo-sheet-item-gap)",
+						)}
+					>
 						{showModels
 							? visibleModels.map((model) => (
 									<CommandItem
@@ -476,8 +481,8 @@ export function ChatModelPicker({
 											"gap-2",
 											itemRadiusClassName,
 											compact
-												? "min-h-(--pilo-menu-item-height) px-2 py-1.5 pointer-coarse:min-h-11"
-												: "min-h-12 px-3 py-2",
+												? "min-h-(--pilo-ui-menu-item-height) px-2 py-1.5 pointer-coarse:min-h-(--pilo-ui-menu-item-height)"
+												: "min-h-[max(44px,var(--pilo-sheet-model-height))] px-3 py-2",
 										)}
 									>
 										{compact ? (

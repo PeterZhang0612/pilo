@@ -285,7 +285,7 @@ function ThemeOption({
 					type="button"
 					variant="ghost"
 					size="icon"
-					className="mr-0.5 size-7 shrink-0 rounded-[max(0px,calc(var(--pilo-radius-md)-0.125rem-1px))] text-muted-foreground hover:text-destructive pointer-coarse:mr-0 pointer-coarse:size-11 pointer-coarse:rounded-[max(0px,calc(var(--pilo-radius-md)-1px))]"
+					className="mr-0.5 size-7 shrink-0 rounded-[max(0px,calc(var(--pilo-ui-radius-md)-0.125rem-1px))] text-muted-foreground hover:text-destructive pointer-coarse:mr-0 pointer-coarse:size-11 pointer-coarse:rounded-[max(0px,calc(var(--pilo-ui-radius-md)-1px))]"
 					aria-label={t("settings.deleteTheme", { name: label })}
 					onClick={onDelete}
 				>

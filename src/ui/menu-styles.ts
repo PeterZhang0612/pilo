@@ -6,7 +6,7 @@ const menuEdgeColor =
 	"var(--pilo-menu-edge, color-mix(in oklab, hsl(var(--background)) 90%, hsl(var(--foreground)) 10%))";
 
 export const menuSurfaceClassName =
-	"min-w-[220px] rounded-(--pilo-menu-radius) bg-background text-foreground pilo-menu-surface";
+	"min-w-[220px] rounded-(--pilo-ui-menu-radius) bg-background text-foreground pilo-menu-surface";
 
 export const menuSurfaceStyle: CSSProperties = {
 	backgroundColor: "var(--pilo-menu-background, hsl(var(--background)))",
@@ -21,7 +21,7 @@ export const menuItemIconClassName =
 // Items render as div or button depending on the consumer; button is center-aligned
 // by default, which would center every label that does not set its own alignment.
 const menuItemBaseClassName =
-	"relative flex w-full cursor-default select-none items-center overflow-hidden gap-3 px-3 py-1.5 pilo-menu-item text-start text-sm leading-5 outline-hidden data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:size-3.5";
+	"relative flex w-full cursor-default select-none items-center overflow-hidden pilo-menu-item text-start text-sm leading-5 outline-hidden data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:size-3.5";
 
 // An item that owns an open surface stays lit while that surface is open.
 const menuItemOpenStateClassName =

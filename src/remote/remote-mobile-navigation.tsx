@@ -159,7 +159,7 @@ export function RemoteMobileNavigation({
 				<DialogPrimitive.Content
 					className={cn(
 						// Reserve at least 64px of backdrop for an easy outside-tap dismissal.
-						"fixed inset-y-0 left-0 z-[var(--z-dialog)] flex w-[min(20rem,calc(100vw-4rem))] flex-col overflow-hidden pilo-mobile-sidebar",
+						"fixed inset-y-0 left-0 z-[var(--z-dialog)] flex flex-col overflow-hidden pilo-mobile-sidebar",
 						"border-r border-sidebar-border/60 bg-sidebar text-sidebar-foreground shadow-popover outline-none",
 						"pb-[max(0.5rem,env(safe-area-inset-bottom))] pl-[env(safe-area-inset-left)] pt-[env(safe-area-inset-top)]",
 						"[&_button]:touch-manipulation [&_button]:outline-none [&_button:focus-visible]:ring-2 [&_button:focus-visible]:ring-inset [&_button:focus-visible]:ring-sidebar-ring",
@@ -174,7 +174,7 @@ export function RemoteMobileNavigation({
 						{t("common.sessions")}
 					</DialogPrimitive.Description>
 
-					<header className="flex h-14 shrink-0 items-center pl-5 pr-3">
+					<header className="pilo-mobile-sidebar-header flex shrink-0 items-center pl-5 pr-3">
 						<span className="min-w-0 flex-1 truncate text-lg font-semibold tracking-tight">
 							Pilo
 						</span>
@@ -198,10 +198,10 @@ export function RemoteMobileNavigation({
 						</DialogPrimitive.Close>
 					</header>
 
-					<div className="flex shrink-0 items-center px-3 pb-2">
+					<div className="flex shrink-0 items-center px-(--pilo-mobile-sidebar-content-padding) pb-2">
 						<button
 							type="button"
-							className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left text-sm text-sidebar-foreground transition-colors duration-[var(--dur-1)] ease-[var(--ease)] hover:bg-sidebar-hover active:bg-sidebar-hover motion-reduce:transition-none"
+							className="pilo-mobile-project-row flex min-w-0 flex-1 items-center gap-2 rounded-md text-left text-sm text-sidebar-foreground transition-colors duration-[var(--dur-1)] ease-[var(--ease)] hover:bg-sidebar-hover active:bg-sidebar-hover motion-reduce:transition-none"
 							onClick={() => handleNewChat(activeProjectId ?? undefined)}
 						>
 							<SquarePen
@@ -213,7 +213,7 @@ export function RemoteMobileNavigation({
 						</button>
 					</div>
 
-					<div className="relative mx-3 mb-3 grid shrink-0 grid-cols-2 rounded-(--pilo-segment-radius) bg-sidebar-hover/60 p-(--pilo-segment-padding)">
+					<div className="relative mx-(--pilo-mobile-sidebar-content-padding) mb-3 grid shrink-0 grid-cols-2 rounded-(--pilo-segment-radius) bg-sidebar-hover/60 p-(--pilo-segment-padding)">
 						<span
 							aria-hidden="true"
 							className={cn(
@@ -246,14 +246,14 @@ export function RemoteMobileNavigation({
 						))}
 					</div>
 
-					<div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-3 pb-4">
+					<div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-(--pilo-mobile-sidebar-content-padding) pb-4">
 						{mode === "recent" ? (
 							recentSessions.length === 0 ? (
 								<p className="px-3 py-10 text-center text-sm text-sidebar-foreground-muted">
 									{t("sidebar.noSessions")}
 								</p>
 							) : (
-								<div className="space-y-1">
+								<div className="space-y-(--pilo-mobile-session-gap)">
 									{recentSessions.map((session) => (
 										<MobileSessionRow
 											key={`${session.projectId}:${session.id}`}
@@ -290,7 +290,7 @@ export function RemoteMobileNavigation({
 											onToggle={() => toggleSection(`env:${env.id}`, true)}
 										/>
 										{envExpanded ? (
-											<div className="space-y-1">
+											<div className="space-y-(--pilo-mobile-row-gap)">
 												{envProjects.map((project) => {
 													const projectExpanded =
 														sectionOverrides[`project:${project.id}`] ??
@@ -345,7 +345,7 @@ export function RemoteMobileNavigation({
 																		{t("sidebar.noSessions")}
 																	</p>
 																) : (
-																	<div className="mt-1 space-y-1 pb-2">
+																	<div className="mt-1 space-y-(--pilo-mobile-session-gap) pb-2">
 																		{projectSessions
 																			.slice(
 																				page * PROJECT_SESSION_PAGE_SIZE,
@@ -430,7 +430,7 @@ export function RemoteMobileNavigation({
 						)}
 					</div>
 
-					<footer className="mx-3 flex min-h-14 shrink-0 items-center gap-2 border-t border-sidebar-border/60 px-2 pt-1">
+					<footer className="mx-(--pilo-mobile-sidebar-content-padding) flex min-h-14 shrink-0 items-center gap-2 border-t border-sidebar-border/60 px-2 pt-1">
 						{connectionState === "connected" ? (
 							<Wifi
 								className="size-4 shrink-0 text-sidebar-foreground-muted"

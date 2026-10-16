@@ -345,7 +345,7 @@ export const ComposerContextUsage = memo(function ComposerContextUsage({
 					align="end"
 					sideOffset={8}
 					collisionPadding={8}
-					className="w-[248px] max-w-[calc(100vw-2rem)] divide-y divide-border/60 overflow-hidden rounded-(--pilo-context-details-radius) p-0"
+					className="w-[248px] max-w-[calc(100vw-2rem)] divide-y divide-border/60 overflow-hidden rounded-(--pilo-ui-context-details-radius) p-0"
 				>
 					{details}
 				</PopoverContent>
@@ -365,7 +365,7 @@ export const ComposerContextUsage = memo(function ComposerContextUsage({
 				side="top"
 				align="end"
 				sideOffset={8}
-				className="w-[248px] max-w-[calc(100vw-2rem)] divide-y divide-border/60 overflow-hidden rounded-(--pilo-context-details-radius) p-0"
+				className="w-[248px] max-w-[calc(100vw-2rem)] divide-y divide-border/60 overflow-hidden rounded-(--pilo-ui-context-details-radius) p-0"
 			>
 				{details}
 			</HoverCardContent>

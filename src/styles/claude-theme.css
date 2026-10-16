@@ -111,6 +111,34 @@
 		--pilo-sidebar-padding: 0.5rem;
 		--pilo-sidebar-shadow: 0 0 #0000;
 		--pilo-mobile-sidebar-radius: 0;
+		/* Mobile shape uses the same independent contract as custom themes. */
+		--pilo-mobile-radius-md: 0.5rem;
+		--pilo-mobile-radius-lg: 0.75rem;
+		--pilo-mobile-radius-xl: 1rem;
+		--pilo-mobile-bubble-radius: 0.75rem;
+		--pilo-mobile-composer-radius: 1rem;
+		--pilo-mobile-floating-radius: var(--pilo-mobile-radius-xl);
+		--pilo-mobile-menu-padding: 0.375rem;
+		--pilo-mobile-menu-item-gap: 0.125rem;
+		--pilo-mobile-select-padding: 0.5rem;
+		--pilo-mobile-select-gap: 0.25rem;
+		--pilo-mobile-select-item-radius: max(
+			0px,
+			calc(
+				var(--pilo-mobile-floating-radius) - var(--pilo-mobile-select-padding) -
+					1px
+			)
+		);
+		--pilo-sidebar-session-gap: 0.25rem;
+		--pilo-sidebar-session-height: 1.875rem;
+		--pilo-sidebar-session-context-height: 3.125rem;
+		--pilo-sidebar-session-padding: 0.125rem 0.5rem;
+		--pilo-sidebar-session-context-padding: 0.25rem 0.5rem;
+		--pilo-mobile-session-gap: 0.25rem;
+		--pilo-mobile-session-height: 2.75rem;
+		--pilo-mobile-session-context-height: 3.5rem;
+		--pilo-mobile-session-padding: 0.5rem;
+		--pilo-mobile-session-confirm-padding: 0 0.25rem 0 0.5rem;
 		--pilo-sidebar-selected-border: transparent;
 		--pilo-sidebar-selected-background: hsl(var(--sidebar-selection));
 		--pilo-sidebar-selected-foreground: hsl(

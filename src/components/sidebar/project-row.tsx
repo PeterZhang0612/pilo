@@ -80,7 +80,7 @@ export function ProjectRow({
 						onSelect();
 					}}
 					className={cn(
-						"group relative flex min-w-0 w-full cursor-pointer select-none items-center gap-1.5 rounded-md border border-transparent bg-transparent px-2 py-0.5 text-left text-xs font-semibold transition-colors",
+						"pilo-sidebar-project-row group relative flex min-w-0 w-full cursor-pointer select-none items-center gap-1.5 rounded-md border border-transparent bg-transparent text-left text-xs font-semibold transition-colors",
 						"text-sidebar-foreground dark:text-sidebar-foreground/75",
 						"hover:bg-sidebar-hover hover:text-sidebar-hover-foreground data-[menu-open]:bg-sidebar-hover data-[menu-open]:text-sidebar-hover-foreground",
 						"focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring",

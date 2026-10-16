@@ -186,7 +186,7 @@ export function SessionRowGlide({
 		<div
 			ref={containerRef}
 			className={cn(
-				"group/glide relative flex w-full min-w-0 flex-col gap-0.5",
+				"group/glide relative flex w-full min-w-0 flex-col gap-(--pilo-sidebar-session-gap)",
 				className,
 			)}
 			onPointerOver={onPointerOver}
@@ -262,6 +262,7 @@ export const SessionRow = memo(function SessionRow({
 					aria-current={selected ? "page" : undefined}
 					data-menu-open={menuOpen || undefined}
 					data-session-row=""
+					data-project-context={projectContext || undefined}
 					onClick={() => {
 						if (!renaming && !suppressSelectRef.current)
 							onSelect(session.id, session.projectId);
@@ -287,10 +288,9 @@ export const SessionRow = memo(function SessionRow({
 						onSelect(session.id, session.projectId);
 					}}
 					className={cn(
-						"group relative w-full min-w-0 cursor-pointer select-none rounded-md border border-transparent bg-transparent px-2 text-left transition-colors",
+						"pilo-sidebar-session-row group relative flex w-full min-w-0 cursor-pointer select-none items-center rounded-md border border-transparent bg-transparent text-left transition-colors",
 						// 在滑动的悬浮高亮列表里，让高亮块而不是行自身承载 hover 背景。
 						"group-hover/glide:hover:bg-transparent",
-						projectContext ? "py-1" : "py-0.5",
 						"hover:bg-sidebar-hover hover:text-sidebar-hover-foreground data-[menu-open]:bg-sidebar-hover",
 						"focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sidebar-ring",
 						selected &&
