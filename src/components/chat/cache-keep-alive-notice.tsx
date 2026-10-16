@@ -115,19 +115,18 @@ export function CacheKeepAliveNotice({
 		<NoticeCard
 			announce="status"
 			ariaLive="polite"
-			className="@container flex items-center gap-2.5 px-3 py-2 pointer-coarse:min-h-11"
+			className="@container flex items-start gap-2.5 px-3 py-2"
 		>
 			<NoticeIcon
 				icon={Timer}
 				tone={status.status === "unavailable" ? "warning" : "info"}
-				className="mt-0"
 			/>
 			<CacheKeepAliveStatusContent status={status} />
 			<Button
 				type="button"
 				variant="ghost"
 				size="icon"
-				className="-my-1 size-7 shrink-0 text-muted-foreground pointer-coarse:-my-3 pointer-coarse:size-11"
+				className="-my-1 size-7 shrink-0 text-muted-foreground pointer-coarse:size-11"
 				aria-label={t("common.close")}
 				onClick={() => setDismissed(true)}
 			>

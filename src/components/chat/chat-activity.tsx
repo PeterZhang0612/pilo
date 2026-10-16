@@ -365,7 +365,7 @@ function ToolCallActivityView({
 					)}
 				/>
 				<span className="flex min-w-0 flex-1 items-center gap-1.5">
-					<span className="min-w-0 truncate">
+					<span className="max-w-full shrink-0 truncate">
 						{skillName ? t("chat.skill") : toolLabel(t, activity.toolName)}
 					</span>
 					{previewLabel ? (
