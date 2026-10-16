@@ -63,6 +63,8 @@ export function openSessionInNewWindow(
 	void WebviewWindow.getByLabel(label)
 		.then(async (existing) => {
 			if (existing) {
+				await existing.show();
+				await existing.unminimize();
 				await existing.setFocus();
 				return;
 			}

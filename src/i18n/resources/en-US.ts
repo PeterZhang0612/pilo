@@ -72,6 +72,26 @@ const enUS = {
 		pinWindow: "Always on top",
 		unpinWindow: "Disable always on top",
 	},
+	desktop: {
+		globalShortcut: "Global shortcut",
+		shortcutHint: "Show Pilo from any app, including when hidden in the tray.",
+		shortcutLoadFailed: "Could not load the global shortcut. Try again.",
+		shortcutSaveFailed:
+			"Could not save the shortcut. It may be in use by another app or unavailable on this system.",
+		shortcutUnavailable:
+			"Shortcut is not active. Choose another combination or retry.",
+		startupAndTray: "Startup & system tray",
+		autostart: "Launch at login",
+		autostartDisabled: "Do not launch",
+		autostartWindow: "Show main window",
+		autostartTray: "Run in system tray",
+		saveFailed:
+			"Could not save launch-at-login settings. Check your system permissions and try again.",
+		loadFailed: "Could not load launch-at-login settings. Try again.",
+		show: "Show Pilo",
+		hide: "Hide to tray",
+		quit: "Quit Pilo",
+	},
 	settings: {
 		themeLoadFailed: "Failed to load theme",
 		themeSaveFailed: "Failed to save theme",

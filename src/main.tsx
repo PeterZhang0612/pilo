@@ -169,14 +169,17 @@ async function bootstrap() {
 			{ installChatPerformanceDebugApi },
 			{ installChatRuntimeTraceDebugApi },
 			{ primeRuntimeEventChannel },
+			{ installDesktopTrayLabels },
 		] = await Promise.all([
 			import("@/lib/chat/chat-performance-debug"),
 			import("@/lib/chat/chat-runtime-trace-debug"),
 			import("@/lib/api/pi-runtime"),
+			import("@/lib/desktop-integration"),
 		]);
 		installChatRuntimeTraceDebugApi();
 		installChatPerformanceDebugApi();
 		primeRuntimeEventChannel();
+		installDesktopTrayLabels();
 		RootApp = (await import("./App")).default;
 	} else {
 		RootApp = (await import("@/remote/remote-app")).RemoteApp;

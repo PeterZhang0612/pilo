@@ -1,4 +1,6 @@
 mod desktop_notifications;
+mod desktop_shortcut;
+mod desktop_tray;
 mod desktop_window;
 mod domain;
 mod runtime;
@@ -7,7 +9,9 @@ use desktop_notifications::{
     initialize_macos_notification_application, initialize_windows_notification_application,
     send_macos_desktop_notification, send_windows_desktop_notification,
 };
+use desktop_tray::desktop_tray_set_labels;
 use desktop_window::desktop_open_devtools;
+use runtime::desktop_startup::{AUTOSTART_ARG, desktop_autostart_get, desktop_autostart_set};
 use runtime::{
     PiloRuntime,
     commands::{
@@ -71,32 +75,41 @@ fn debug_runtime_trace_log(payload: &str) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Guards the exit teardown so a repeated exit request cannot run it twice.
-    let exiting = std::sync::atomic::AtomicBool::new(false);
-    let builder = tauri::Builder::default().plugin(
-        tauri_plugin_log::Builder::new()
-            .timezone_strategy(tauri_plugin_log::TimezoneStrategy::UseLocal)
-            .level(if cfg!(debug_assertions) {
-                log::LevelFilter::Debug
-            } else {
-                log::LevelFilter::Info
-            })
-            .max_file_size(5 * 1024 * 1024)
-            .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepSome(4))
-            .target(
-                tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Webview).filter(
-                    |metadata| {
-                        // Keep WebView runtime failures in file logs only: forwarding
-                        // them to a broken WebView creates a log/eval feedback loop.
-                        !metadata
-                            .target()
-                            .starts_with(tauri_plugin_log::WEBVIEW_TARGET)
-                            && !metadata.target().starts_with("tauri_runtime_wry")
-                    },
-                ),
-            )
-            .build(),
-    );
+    // 0 = running, 1 = cleaning up, 2 = ready to leave the event loop.
+    let exiting = std::sync::Arc::new(std::sync::atomic::AtomicU8::new(0));
+    let builder = tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            // A repeated login launch must not pull an already-running app to the foreground.
+            if !args.iter().any(|arg| arg == AUTOSTART_ARG)
+                && let Err(error) = desktop_window::show_main(app)
+            {
+                log::error!(target: "desktop", "failed to restore existing instance: {error}");
+            }
+        }))
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .timezone_strategy(tauri_plugin_log::TimezoneStrategy::UseLocal)
+                .level(if cfg!(debug_assertions) {
+                    log::LevelFilter::Debug
+                } else {
+                    log::LevelFilter::Info
+                })
+                .max_file_size(5 * 1024 * 1024)
+                .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepSome(4))
+                .target(
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Webview).filter(
+                        |metadata| {
+                            // Keep WebView runtime failures in file logs only: forwarding
+                            // them to a broken WebView creates a log/eval feedback loop.
+                            !metadata
+                                .target()
+                                .starts_with(tauri_plugin_log::WEBVIEW_TARGET)
+                                && !metadata.target().starts_with("tauri_runtime_wry")
+                        },
+                    ),
+                )
+                .build(),
+        );
 
     // Embedded WebDriver is opt-in for development: `tauri dev --features webdriver`.
     #[cfg(all(debug_assertions, feature = "webdriver"))]
@@ -114,6 +127,10 @@ pub fn run() {
                 .with_filter(|label| !label.starts_with("session-"))
                 .build(),
         )
+        .plugin(tauri_plugin_autostart::Builder::new()
+            .app_name(if cfg!(debug_assertions) { "Pilo Dev" } else { "Pilo" })
+            .arg(AUTOSTART_ARG)
+            .build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_process::init())
@@ -124,6 +141,11 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             desktop_open_devtools,
+            desktop_autostart_get,
+            desktop_autostart_set,
+            desktop_tray_set_labels,
+            desktop_shortcut::desktop_shortcut_get,
+            desktop_shortcut::desktop_shortcut_set,
             debug_chat_performance_log,
             debug_runtime_trace_log,
             send_macos_desktop_notification,
@@ -232,6 +254,7 @@ pub fn run() {
             theme_settings_set,
         ])
         .on_window_event(|window, event| {
+            desktop_tray::handle_window_event(window, event);
             if matches!(event, tauri::WindowEvent::Destroyed) {
                 use tauri::Manager;
                 window
@@ -247,7 +270,28 @@ pub fn run() {
             initialize_windows_notification_application(app);
             app.state::<runtime::RuntimeEventBus>()
                 .initialize_session_reads(app.handle())?;
-            desktop_window::create_main_window(app)?;
+            if let Err(error) = desktop_shortcut::install(app.handle()) {
+                log::error!(target: "desktop", "global show shortcut unavailable: {error}");
+            }
+            if let Err(error) = desktop_tray::create(app.handle()) {
+                // Never strand a silent launch when the OS has no usable tray.
+                log::error!(target: "desktop", "failed to create tray; keeping window visible: {error}");
+            }
+            let mode = runtime::desktop_startup::saved_mode(app.handle()).unwrap_or_else(|error| {
+                log::error!(target: "desktop", "failed to load startup mode: {error}");
+                domain::AutostartMode::default()
+            });
+            let start_hidden = mode.starts_hidden(
+                std::env::args_os().any(|arg| arg == AUTOSTART_ARG),
+                desktop_tray::available(app.handle()),
+            );
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(if start_hidden {
+                tauri::ActivationPolicy::Accessory
+            } else {
+                tauri::ActivationPolicy::Regular
+            });
+            desktop_window::create_main_window(app, start_hidden)?;
             app.state::<PiloRuntime>().chat_sessions.start_idle_reaper();
 
             let remote_app = app.handle().clone();
@@ -292,18 +336,25 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(move |app, event| {
-            // Teardown must run while the event loop is still alive. At
-            // `RunEvent::Exit` tokio's time driver is no longer pumped, so any
-            // timer or unresponsive child wait inside `block_on` parks forever
-            // and the app never quits. Intercept the user-initiated exit instead
-            // (`ExitRequested` with no exit code fires when the last window
-            // closes), keep the loop alive, tear down asynchronously, then exit.
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = &event
+                && let Err(error) = desktop_window::show_main(app) {
+                log::error!(target: "desktop", "failed to reopen main window: {error}");
+            }
+            // Keep the event loop alive for bounded async teardown. Tray Quit uses
+            // exit(0); the second exit(0), after cleanup, is allowed through.
             if let tauri::RunEvent::ExitRequested { api, code, .. } = event
-                && code.is_none()
-                && !exiting.swap(true, std::sync::atomic::Ordering::SeqCst)
+                && (code.is_none() || code == Some(0))
             {
                 use tauri::Manager;
+                if exiting.load(std::sync::atomic::Ordering::SeqCst) == 2 && code == Some(0) {
+                    return;
+                }
                 api.prevent_exit();
+                if exiting.compare_exchange(0, 1, std::sync::atomic::Ordering::SeqCst, std::sync::atomic::Ordering::SeqCst).is_err() {
+                    return;
+                }
+                let exiting = std::sync::Arc::clone(&exiting);
                 let handle = app.clone();
                 tauri::async_runtime::spawn(async move {
                     let runtime = handle.state::<PiloRuntime>();
@@ -339,6 +390,7 @@ pub fn run() {
                     // 的正规退出流程：`exit(0)` 产生的是 `code = Some(0)`，上面的
                     // `prevent_exit` 分支不会再拦截，事件循环随即退出并触发清理。
                     log::info!(target: "shutdown", "exiting process");
+                    exiting.store(2, std::sync::atomic::Ordering::SeqCst);
                     handle.exit(0);
                     // Windows release 下 `RequestExit` 消息偶发不被处理（见上方注释），
                     // 兜底强制退出，避免残留进程。

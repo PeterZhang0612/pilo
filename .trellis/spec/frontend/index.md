@@ -20,6 +20,7 @@ This directory contains guidelines for frontend development in this project (Rea
 | [Project Model Scope](../backend/project-model-scope.md) | Shared picker, draft editor, preference synchronization | Filled |
 | [Next Prompt & Built-in Extensions](../backend/next-prompt-and-extensions.md) | Shared prediction lifecycle, settings, Ghost Text and adoption | Filled |
 | [Prompt Cache Keep-alive](../backend/cache-keep-alive.md) | Model policy, bounded background requests, shared quiet notices | Filled |
+| [Desktop Startup & Tray](../backend/desktop-lifecycle.md) | Desktop-only startup preferences and localized native menu | Filled |
 | [State Management](./state-management.md)         | Local state, global state, server state | Filled |
 | [Quality Guidelines](./quality-guidelines.md)     | Linting, testing, forbidden patterns    | Filled |
 | [Type Safety](./type-safety.md)                   | Type patterns, validation               | Filled |

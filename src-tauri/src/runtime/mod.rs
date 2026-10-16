@@ -5,6 +5,7 @@ mod chat_sessions;
 pub mod commands;
 mod credentials;
 pub(crate) mod debug_trace;
+pub(crate) mod desktop_startup;
 mod events;
 mod git;
 mod host_paths;
@@ -28,7 +29,7 @@ mod session_snapshot;
 mod session_watcher;
 #[allow(dead_code)]
 pub(crate) mod ssh;
-mod storage;
+pub(crate) mod storage;
 mod terminal;
 #[allow(dead_code)]
 mod wsl;

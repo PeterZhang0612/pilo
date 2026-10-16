@@ -1,5 +1,6 @@
 use tauri::{
-    App, LogicalSize, Monitor, PhysicalPosition, PhysicalRect, PhysicalSize, WebviewWindow,
+    App, AppHandle, LogicalSize, Manager, Monitor, PhysicalPosition, PhysicalRect, PhysicalSize,
+    WebviewWindow,
 };
 use tauri_plugin_window_state::{StateFlags, WindowExt};
 
@@ -25,7 +26,47 @@ fn work_area(monitor: &Monitor) -> PhysicalRect<i32, u32> {
     }
 }
 
-pub(crate) fn create_main_window(app: &App) -> tauri::Result<()> {
+pub(crate) fn show_main(app: &AppHandle) -> tauri::Result<()> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or(tauri::Error::WindowNotFound)?;
+    #[cfg(target_os = "macos")]
+    app.set_activation_policy(tauri::ActivationPolicy::Regular)?;
+    #[cfg(target_os = "windows")]
+    window.set_skip_taskbar(false)?;
+    window.show()?;
+    window.unminimize()?;
+    window.set_focus()?;
+    Ok(())
+}
+
+pub(crate) fn sync_dock_visibility(app: &AppHandle, destroyed: Option<&str>) -> tauri::Result<()> {
+    #[cfg(target_os = "macos")]
+    {
+        let visible = app.webview_windows().iter().any(|(label, window)| {
+            Some(label.as_str()) != destroyed && window.is_visible().unwrap_or(true)
+        });
+        app.set_activation_policy(if visible {
+            tauri::ActivationPolicy::Regular
+        } else {
+            tauri::ActivationPolicy::Accessory
+        })?;
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = (app, destroyed);
+    Ok(())
+}
+
+pub(crate) fn hide_to_tray(app: &AppHandle) -> tauri::Result<()> {
+    for window in app.webview_windows().values() {
+        window.hide()?;
+        #[cfg(target_os = "windows")]
+        window.set_skip_taskbar(true)?;
+    }
+    sync_dock_visibility(app, None)
+}
+
+pub(crate) fn create_main_window(app: &App, start_hidden: bool) -> tauri::Result<()> {
     let mut config = app
         .config()
         .app
@@ -71,8 +112,13 @@ pub(crate) fn create_main_window(app: &App) -> tauri::Result<()> {
     if let Err(error) = window.restore_state(StateFlags::MAXIMIZED) {
         log::error!(target: "window-state", "failed to restore main window maximization: {error}");
     }
-    window.show()?;
-    window.set_focus()?;
+    if start_hidden {
+        #[cfg(target_os = "windows")]
+        window.set_skip_taskbar(true)?;
+        sync_dock_visibility(app.handle(), None)?;
+    } else {
+        show_main(app.handle())?;
+    }
     Ok(())
 }
 

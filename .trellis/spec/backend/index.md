@@ -23,6 +23,7 @@ This directory contains guidelines for backend development in this project (Taur
 | [Quality Guidelines](./quality-guidelines.md)   | Code standards, forbidden patterns                | Filled |
 | [Logging Guidelines](./logging-guidelines.md)   | `eprintln!` diagnostics, log levels               | Filled |
 | [Remote WebUI & Event Hub](./remote-webui.md)   | Remote HTTP/WS adapter, auth, event replay        | Filled |
+| [Desktop Startup & Tray](./desktop-lifecycle.md) | Login startup, native tray, Dock/taskbar visibility, exit | Filled |
 | [Runtime Resource Lifecycle](./runtime-lifecycle.md) | Idle Pi retention, byte-bounded queues, graceful server cleanup | Filled |
 | [Session History Cache](./history-cache.md) | Fingerprinted memory/disk windows, load deduplication, lazy images | Filled |
 

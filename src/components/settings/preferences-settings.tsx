@@ -20,6 +20,8 @@ import {
 	SettingsSection,
 } from "./compact-layout";
 
+import { DesktopSettings } from "./desktop-settings";
+
 export function PreferencesSettings() {
 	const { t, i18n } = useTranslation();
 	const {
@@ -85,6 +87,7 @@ export function PreferencesSettings() {
 					</Select>
 				</SettingsRow>
 			</SettingsSection>
+			<DesktopSettings />
 			<SettingsSection title={t("settings.developer")}>
 				<SettingsRow
 					label={t("settings.developerMode")}
