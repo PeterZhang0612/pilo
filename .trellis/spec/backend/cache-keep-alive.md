@@ -38,9 +38,15 @@ chat status notices. Owners: `runtime/cache_keep_alive.rs`,
 - Capture only enabled normal requests, in memory: restored model context,
   observed provider payload and model identity. Captured provider payload size
   is capped at 16 Mi UTF-16 code units. Payload replay only supports Anthropic Messages,
-  OpenAI Responses and OpenAI Completions with a safe one-token output cap;
-  active Anthropic thinking, previous-response references and resolved model
-  identity changes are rejected. No independent provider SDK or Pi config writes.
+  OpenAI Responses (including the custom `openai-responses-ws` API) and OpenAI
+  Completions with a safe one-token output cap; active Anthropic thinking,
+  previous-response references and resolved model identity changes are rejected.
+  The custom WS adapter captures the full normalized body before continuation
+  optimization. Its `onPayload` replacement runs after normalization, so replay
+  preserves `instructions`, `input` and tools and restores `max_output_tokens: 1`.
+  Continue using Pi's registered adapter for authentication and transport; do not
+  normalize the captured body again or rewrite the model's API to HTTP Responses.
+  No independent provider SDK or Pi config writes.
 - Only `agent_settled` starts the idle window. Schedule at 90% of configured TTL;
   skip dispatch after 95%. Each request has zero retries and a 15-second deadline,
   further bounded by idle-window expiry. Successful requests do not extend that
@@ -74,6 +80,7 @@ chat status notices. Owners: `runtime/cache_keep_alive.rs`,
 | Empty provider/model, provider >256 bytes, model >512 bytes | Save rejected |
 | TTL outside 10–86400 seconds or idle window outside 60–86400 seconds | Save rejected |
 | Missing/unsupported extension readiness | No private prompt sent |
+| Custom `openai-responses-ws` full captured request | Replay via registered adapter with `max_output_tokens: 1` |
 | Unsupported captured request | Unavailable status; no replay |
 | Expired cache/window | Stop without issuing another request |
 | Cache read tokens absent/zero, error or timeout | Stop; no retry/rebuild loop |
@@ -89,7 +96,9 @@ chat status notices. Owners: `runtime/cache_keep_alive.rs`,
 ## 6. Tests Required
 
 Only add/run tests when authorized. Cover independent Connection/model policies,
-revision races, private-command readiness, exact observed-prefix replay/output cap,
+revision races, private-command readiness, exact observed-prefix replay/output cap
+(including custom WS normalization followed by `onPayload`, preserved instructions,
+input/tools/reasoning, unchanged source payload and rejected response references),
 expiry and missed-deadline skips, late aborted responses, cache-miss stop, model
 and branch invalidation, metadata-only renames, idle eviction exemption/release,
 and identical quiet notice behavior across desktop/WebUI reconnects.

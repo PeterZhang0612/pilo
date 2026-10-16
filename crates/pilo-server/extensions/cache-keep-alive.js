@@ -19,8 +19,10 @@ function replayPayload(payload, api) {
 	)
 		return null;
 	if (api === "anthropic-messages") copy.max_tokens = 1;
-	else if (api === "openai-responses") copy.max_output_tokens = 1;
-	else if (api === "openai-completions") {
+	else if (api === "openai-responses" || api === "openai-responses-ws") {
+		// The custom WS adapter calls onPayload after normalization, preserving this cap.
+		copy.max_output_tokens = 1;
+	} else if (api === "openai-completions") {
 		if ("max_completion_tokens" in copy) copy.max_completion_tokens = 1;
 		else if ("max_tokens" in copy) copy.max_tokens = 1;
 		else return null;

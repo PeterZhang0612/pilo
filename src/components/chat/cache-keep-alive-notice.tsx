@@ -63,7 +63,7 @@ export function CacheKeepAliveStatusContent({
 	}
 	if (!status.ready) text = t("settings.cacheKeepAliveUnsupported");
 	return (
-		<div className="min-w-0 flex-1 space-y-1 text-xs leading-5 text-muted-foreground">
+		<div className="flex min-w-0 flex-1 flex-col gap-y-0.5 text-xs leading-5 wrap-anywhere text-muted-foreground @min-[32rem]:flex-row @min-[32rem]:flex-wrap @min-[32rem]:items-baseline @min-[32rem]:gap-x-3 @min-[32rem]:gap-y-0">
 			<p>{text}</p>
 			{status.requestCount > 0 ? (
 				<p>
@@ -103,7 +103,7 @@ export function CacheKeepAliveNotice({
 		<NoticeCard
 			announce="status"
 			ariaLive="polite"
-			className="flex items-start gap-2.5 px-3 py-2"
+			className="@container flex items-start gap-2.5 px-3 py-2"
 		>
 			<NoticeIcon
 				icon={Timer}
