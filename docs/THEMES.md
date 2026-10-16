@@ -324,11 +324,10 @@ send button) still take precedence over shared component defaults.
 
 ### Context usage indicator
 
-`--pilo-context-usage-color` sets the occupied arc and details progress fill.
-It takes a complete CSS color and defaults to `hsl(var(--primary))`, so both
-built-in themes and custom palettes follow their primary color in light and
-dark mode. Custom CSS can override this token independently. Percentage and
-usage text, empty tracks and the unknown-usage icon remain neutral.
+The context usage indicator stays neutral rather than following the primary
+accent. The occupied arc uses the control’s current text color at 70% opacity;
+the details progress fill uses `--foreground` at 70% opacity. Percentage and
+usage text, empty tracks and the unknown-usage icon also remain neutral.
 
 ### Floating surfaces and menus
 

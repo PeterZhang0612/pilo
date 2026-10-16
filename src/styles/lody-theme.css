@@ -293,7 +293,6 @@
 		--pilo-composer-background: hsl(var(--background));
 		--pilo-composer-border: hsl(var(--foreground) / 0.1);
 		--pilo-composer-focus-border: hsl(var(--ring) / 0.4);
-		--pilo-context-usage-color: hsl(var(--primary));
 
 		/* Overlay stacking */
 		--z-dialog-overlay: 70;
