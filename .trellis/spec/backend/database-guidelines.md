@@ -214,6 +214,98 @@ unparseable file from a full scan.
 Correct: `stop_session_file(projectId, sessionPath)` before deletion; keep observed
 unreadable paths and recover only index metadata under the contract above.
 
+## Missing Session Title Recovery
+
+### 1. Scope / Trigger
+
+Session metadata indexing shared by desktop/WebUI and Local/WSL/SSH. Large
+initial messages can place `session_info` outside the prefix and tail windows.
+
+### 2. Signatures
+
+- Server: `session.scan { project, known, summaryLimit?, paths? } -> SessionFile[]`.
+- Host: `session_index::reconcile` and `reconcile_paths`; no SQLite schema changes.
+- `known[]` adds optional `recoverName: boolean` (default `false`). Hosts set it
+  for cached missing/blank names; older callers retain fingerprint-only behavior.
+
+### 3. Contracts
+
+Keep the 16/64/256 KiB progressive prefix and 32 KiB tail fast path. If the
+resulting name is missing or blank, seek to byte zero and stream up to the
+observed file size, applying complete `session_info` lines in file order.
+Buffer at most 64 KiB plus a newline per line; skip oversized lines without
+allocating their contents. Ignore incomplete final lines. The fallback does not
+extract previews or parse full conversation history and never modifies JSONL.
+
+Host sends all `known` fingerprints. A matching untitled fingerprint marked
+`recoverName` is reusable only when Server has completed a title scan for that
+snapshot and confirmed a missing/blank name. A recovered nonblank name must be
+returned again until Host stores it, rather than acknowledged as unchanged.
+
+Server keeps at most 256 title-scan entries, evicting the least recently used.
+Entries contain only header, name, size/mtime and a 256-byte boundary sample,
+not conversation history. Cache locks never span file I/O. Restart/eviction
+permits one fresh full scan; no durable scan-version marker is required.
+
+For append-only Pi JSONL, matching header and previous boundary allow reuse on
+growth. Retain the bounded prefix/tail preview scan, then apply title metadata
+from `oldSize - 64 KiB - 1` through the observed new size, dropping the first
+partial line. This overlap recovers parseable lines split across writes, even
+when the append exceeds the tail window. Same-size rewrites, shrinkage, header
+changes or boundary changes discard progress. This is an append-only contract,
+not a hash validation of arbitrary in-place rewrites followed by growth.
+Cache a result only if final size/mtime still match the observed snapshot.
+
+### 4. Validation & Error Matrix
+
+- Fast scan finds a nonblank name without cached progress: retain the fast path.
+- Name missing/blank without reusable progress: stream all metadata once.
+- Matching completed untitled snapshot: return unchanged without opening the file.
+- Cached snapshot grows: scan only the append plus bounded overlap; last name wins.
+- Preserve byte-zero prefix scanning for synthetic/headerless sessions after seeks.
+- Fallback/boundary seek/read/skip fails: return an error, not a partial index.
+
+### 5. Good / Base / Bad Cases
+
+- Good: title at 276 KiB in a 386 KiB session is recovered on refresh.
+- Base: normal named sessions retain fingerprint-based cache reuse.
+- Bad: widening a fixed window still misses later titles; unchanged fingerprints
+  must not permanently preserve a missing-title result from the old scanner.
+
+### 6. Regression Coverage
+
+`crates/pilo-server/src/session/index/tests.rs` has 14 passing unit tests covering
+hidden/latest titles, all prefix-stage boundaries, oversized lines, missing/blank
+names, BOM/CRLF, exact 64 KiB JSON lines, incomplete final lines, snapshot limits,
+read/seek/skip failures, headerless prefixes and growth before the final metadata
+check. A tracked reader runs the production reader path and counts actual bytes:
+named fast paths and cached snapshots stay bounded; appends read only windows
+plus new bytes and overlap. Split-write coverage includes a maximum-size title
+missing only its newline. Rewrites, shrinkage, header changes and boundary changes
+must invalidate progress. Fixtures stay under `target/` and indexing preserves
+their original JSONL bytes.
+
+`crates/pilo-server/tests/session_index.rs` has 2 passing stdio integration tests
+covering legacy fingerprints, deferred recovery, retries until Host stores a
+recovered title, reuse of confirmed missing/blank names, restart recovery and
+256-entry LRU eviction. Each child uses isolated agent/runtime directories.
+
+Verified commands:
+
+```bash
+cargo test --locked -p pilo-server session::index::tests --lib
+cargo test --locked -p pilo-server --test session_index
+```
+
+Desktop/WebUI visual checks and end-to-end watcher/Host persistence checks remain
+manual and have not been performed for these regressions.
+
+### 7. Wrong vs Correct
+
+Wrong: consider fixed prefix/tail windows sufficient evidence that no title exists.
+Correct: fast-scan first, recover missing metadata once, then reuse confirmed
+snapshots and scan appends; old missing-title rows still get one recovery attempt.
+
 ## Shared Session Read Progress
 
 ### 1. Scope / Trigger

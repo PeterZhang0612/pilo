@@ -3,10 +3,10 @@ use std::{
     io::{BufRead, Read, Seek, SeekFrom},
     path::PathBuf,
     sync::{
-        Mutex as StdMutex,
+        Mutex as StdMutex, OnceLock,
         atomic::{AtomicUsize, Ordering},
     },
-    time::UNIX_EPOCH,
+    time::{Instant, UNIX_EPOCH},
 };
 
 use pilo_protocol::SessionFile;
@@ -15,6 +15,9 @@ use serde_json::Value;
 
 use super::{agent_dir, session_dir_key};
 use crate::to_value;
+
+#[cfg(test)]
+mod tests;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -34,17 +37,36 @@ struct SessionScanKnownFile {
     path: String,
     size: u64,
     mtime_ns: u64,
+    #[serde(default)]
+    recover_name: bool,
+}
+
+struct SessionNameScan {
+    size: u64,
+    mtime_ns: u64,
+    header: Value,
+    name: Option<String>,
+    boundary: Vec<u8>,
+    accessed_at: Instant,
+}
+
+fn session_name_scans() -> &'static StdMutex<HashMap<PathBuf, SessionNameScan>> {
+    static SCANS: OnceLock<StdMutex<HashMap<PathBuf, SessionNameScan>>> = OnceLock::new();
+    SCANS.get_or_init(|| StdMutex::new(HashMap::new()))
 }
 
 pub(crate) const SESSION_INDEX_HEADER_BYTES: usize = 16 * 1024;
 pub(crate) const SESSION_INDEX_TAIL_BYTES: usize = 32 * 1024;
 const SESSION_INDEX_PREVIEW_CHARS: usize = 160;
+const SESSION_INDEX_MAX_PARSE_BYTES: usize = 64 * 1024;
+const SESSION_NAME_SCAN_CACHE_LIMIT: usize = 256;
+const SESSION_NAME_SCAN_BOUNDARY_BYTES: u64 = 256;
 
 pub(crate) fn session_scan(params: SessionScanParams) -> Result<Value, String> {
     let known = params
         .known
         .into_iter()
-        .map(|file| (file.path, (file.size, file.mtime_ns)))
+        .map(|file| (file.path, (file.size, file.mtime_ns, file.recover_name)))
         .collect::<HashMap<_, _>>();
     let Some(root) =
         agent_dir().map(|root| root.join("sessions").join(session_dir_key(&params.project)))
@@ -115,9 +137,28 @@ pub(crate) fn session_scan(params: SessionScanParams) -> Result<Value, String> {
     let mut files = vec![None; candidates.len()];
     let mut summarize_indices = Vec::new();
     for (index, candidate) in candidates.iter().enumerate() {
-        let unchanged = known
-            .get(&candidate.path_text)
-            .is_some_and(|fingerprint| *fingerprint == (candidate.size, candidate.mtime_ns));
+        let unchanged =
+            known
+                .get(&candidate.path_text)
+                .is_some_and(|&(size, mtime_ns, recover_name)| {
+                    if (size, mtime_ns) != (candidate.size, candidate.mtime_ns) {
+                        return false;
+                    }
+                    if !recover_name {
+                        return true;
+                    }
+                    let mut scans = session_name_scans()
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    scans.get_mut(&candidate.path).is_some_and(|scan| {
+                        scan.accessed_at = Instant::now();
+                        (scan.size, scan.mtime_ns) == (candidate.size, candidate.mtime_ns)
+                            && scan
+                                .name
+                                .as_deref()
+                                .is_none_or(|name| name.trim().is_empty())
+                    })
+                });
         if unchanged {
             files[index] = Some(SessionFile {
                 path: candidate.path_text.clone(),
@@ -322,7 +363,16 @@ fn read_session_summary(
         Ok(value) => value,
         Err(_) => return Ok(None),
     };
-    let mut reader = std::io::BufReader::new(file);
+    read_session_summary_from(candidate, project, &file, || file.metadata().ok())
+}
+
+fn read_session_summary_from<R: Read + Seek>(
+    candidate: &SessionFileStat,
+    project: &str,
+    source: R,
+    metadata: impl FnOnce() -> Option<std::fs::Metadata>,
+) -> Result<Option<SessionFile>, String> {
+    let mut reader = std::io::BufReader::new(source);
     let mut line = String::new();
     let mut consumed = 0;
     let header = loop {
@@ -372,9 +422,90 @@ fn read_session_summary(
         }
     };
 
-    let Some(summary) = scan_index(&mut reader, candidate.size)? else {
-        return Ok(None);
+    let prefix_start = reader
+        .stream_position()
+        .map_err(|error| format!("failed to locate session index prefix: {error}"))?;
+    let cached = session_name_scans()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .remove(&candidate.path)
+        .filter(|scan| {
+            scan.header == header
+                && (candidate.size > scan.size
+                    || (candidate.size, candidate.mtime_ns) == (scan.size, scan.mtime_ns))
+        });
+    // Pi JSONL is append-only; a changed header/boundary or same-size rewrite invalidates progress.
+    let cached = match cached {
+        Some(scan) if read_name_scan_boundary(&mut reader, scan.size)? == scan.boundary => {
+            Some(scan)
+        }
+        _ => None,
     };
+    // Boundary validation seeks away from the header; prefix scanning must start at the same offset.
+    reader
+        .seek(SeekFrom::Start(prefix_start))
+        .map_err(|error| format!("failed to seek session index prefix: {error}"))?;
+    let summary = if let Some(scan) = cached {
+        let Some(mut summary) = scan_index_windows(&mut reader, candidate.size)? else {
+            return Ok(None);
+        };
+        summary.name = scan.name;
+        summary.name_scanned = true;
+        if candidate.size > scan.size {
+            // Overlap covers any parseable JSONL line split across writes, without rereading history.
+            let start = scan
+                .size
+                .saturating_sub((SESSION_INDEX_MAX_PARSE_BYTES + 1) as u64);
+            scan_session_name(&mut reader, candidate.size, start, &mut summary)?;
+        }
+        summary
+    } else {
+        let Some(summary) = scan_index(&mut reader, candidate.size)? else {
+            return Ok(None);
+        };
+        summary
+    };
+    if summary.name_scanned {
+        let boundary = read_name_scan_boundary(&mut reader, candidate.size)?;
+        let metadata = metadata();
+        let unchanged = metadata.as_ref().is_some_and(|metadata| {
+            metadata.len() == candidate.size
+                && metadata
+                    .modified()
+                    .ok()
+                    .and_then(|value| value.duration_since(UNIX_EPOCH).ok())
+                    .map(|value| value.as_nanos() as u64)
+                    == Some(candidate.mtime_ns)
+        });
+        if unchanged
+            && boundary.len() as u64 == candidate.size.min(SESSION_NAME_SCAN_BOUNDARY_BYTES)
+        {
+            let mut scans = session_name_scans()
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if scans.len() >= SESSION_NAME_SCAN_CACHE_LIMIT && !scans.contains_key(&candidate.path)
+            {
+                let oldest = scans
+                    .iter()
+                    .min_by_key(|(_, scan)| scan.accessed_at)
+                    .map(|(path, _)| path.clone());
+                if let Some(oldest) = oldest {
+                    scans.remove(&oldest);
+                }
+            }
+            scans.insert(
+                candidate.path.clone(),
+                SessionNameScan {
+                    size: candidate.size,
+                    mtime_ns: candidate.mtime_ns,
+                    header: header.clone(),
+                    name: summary.name.clone(),
+                    boundary,
+                    accessed_at: Instant::now(),
+                },
+            );
+        }
+    }
     Ok(Some(SessionFile {
         path: candidate.path_text.clone(),
         size: candidate.size,
@@ -385,6 +516,20 @@ fn read_session_summary(
         name: summary.name,
         first_user_message_preview: summary.first_user_message_preview,
     }))
+}
+
+fn read_name_scan_boundary<R: Read + Seek>(reader: &mut R, size: u64) -> Result<Vec<u8>, String> {
+    reader
+        .seek(SeekFrom::Start(
+            size.saturating_sub(SESSION_NAME_SCAN_BOUNDARY_BYTES),
+        ))
+        .map_err(|error| format!("failed to seek session index boundary: {error}"))?;
+    let mut boundary = Vec::new();
+    reader
+        .take(size.min(SESSION_NAME_SCAN_BOUNDARY_BYTES))
+        .read_to_end(&mut boundary)
+        .map_err(|error| format!("failed to read session index boundary: {error}"))?;
+    Ok(boundary)
 }
 
 fn recover_session_header(path: &std::path::Path, project: &str) -> Option<Value> {
@@ -426,7 +571,7 @@ fn recover_session_header(path: &std::path::Path, project: &str) -> Option<Value
     }))
 }
 
-/// 渐进式前缀扫描 + 尾窗合并。
+/// 渐进式前缀扫描 + 尾窗合并，缺失标题时流式补扫。
 ///
 /// 真实数据里 65% 的会话在首个 16KB 阶段就能凑齐标题和预览，因此每阶段
 /// 只解析新增字节、凑齐后立即停止，避免为常见情况付出 256KB 的解析成本。
@@ -435,8 +580,25 @@ fn recover_session_header(path: &std::path::Path, project: &str) -> Option<Value
 /// 凑齐 `name`/`first_user_message_preview`，也不能跳过尾窗，否则末尾的
 /// 改名会被更早的标题覆盖。
 ///
-/// 前缀读取失败返回 `Ok(None)`（跳过该文件）；seek/read 尾窗失败返回 `Err`。
+/// 前缀读取失败返回 `Ok(None)`（跳过该文件）；尾窗/补扫 I/O 失败返回 `Err`。
 pub(crate) fn scan_index<R: Read + Seek>(
+    reader: &mut R,
+    size: u64,
+) -> Result<Option<SessionIndexSummary>, String> {
+    let Some(mut summary) = scan_index_windows(reader, size)? else {
+        return Ok(None);
+    };
+    if summary
+        .name
+        .as_deref()
+        .is_none_or(|name| name.trim().is_empty())
+    {
+        scan_session_name(reader, size, 0, &mut summary)?;
+    }
+    Ok(Some(summary))
+}
+
+fn scan_index_windows<R: Read + Seek>(
     reader: &mut R,
     size: u64,
 ) -> Result<Option<SessionIndexSummary>, String> {
@@ -479,7 +641,51 @@ pub(crate) fn scan_index<R: Read + Seek>(
         // 尾窗代表最近的改名；预览兜底不会生效（预览只能来自前缀）。
         summarize_index_bytes(&tail, true, &mut summary);
     }
+
     Ok(Some(summary))
+}
+
+fn scan_session_name<R: Read + Seek>(
+    reader: &mut R,
+    size: u64,
+    start: u64,
+    summary: &mut SessionIndexSummary,
+) -> Result<(), String> {
+    reader
+        .seek(SeekFrom::Start(start))
+        .map_err(|error| format!("failed to seek session index name: {error}"))?;
+    let mut reader = std::io::BufReader::new(reader.take(size - start));
+    if start > 0 {
+        reader
+            .skip_until(b'\n')
+            .map_err(|error| format!("failed to skip session index boundary: {error}"))?;
+    }
+    let mut line = Vec::new();
+    loop {
+        line.clear();
+        let read = reader
+            .by_ref()
+            .take((SESSION_INDEX_MAX_PARSE_BYTES + 1) as u64)
+            .read_until(b'\n', &mut line)
+            .map_err(|error| format!("failed to read session index name: {error}"))?;
+        if read == 0 {
+            break;
+        }
+        if !line.ends_with(b"\n") {
+            reader
+                .skip_until(b'\n')
+                .map_err(|error| format!("failed to skip session index line: {error}"))?;
+            continue;
+        }
+        if memchr::memmem::find(&line, b"session_info").is_some()
+            && let Some(value) = parse_index_line(&line[..line.len() - 1])
+            && value.get("type").and_then(Value::as_str) == Some("session_info")
+        {
+            summary.update(&value);
+        }
+    }
+    summary.name_scanned = true;
+    Ok(())
 }
 
 /// 渐进式前缀窗口的字节边界。真实数据分布：52/130 停在 16KB，
@@ -521,8 +727,7 @@ fn contains_index_marker(line: &[u8]) -> bool {
 /// 代价是丢掉这条超大消息的预览/改名；超大行极少是首条 user 消息，实测影响
 /// 可忽略，若将来确有超大首条消息需要预览，再改为流式解析行头。
 fn parse_index_line(line: &[u8]) -> Option<Value> {
-    const MAX_PARSE_BYTES: usize = 64 * 1024;
-    if line.len() > MAX_PARSE_BYTES {
+    if line.len() > SESSION_INDEX_MAX_PARSE_BYTES {
         return None;
     }
     let line = line.strip_prefix(b"\xef\xbb\xbf").unwrap_or(line);
@@ -555,6 +760,7 @@ fn complete_json_lines(bytes: &[u8], drop_first_partial: bool) -> impl Iterator<
 pub(crate) struct SessionIndexSummary {
     pub(crate) name: Option<String>,
     pub(crate) first_user_message_preview: Option<String>,
+    name_scanned: bool,
 }
 
 impl SessionIndexSummary {

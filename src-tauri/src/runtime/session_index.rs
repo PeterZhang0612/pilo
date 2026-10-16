@@ -265,6 +265,8 @@ async fn scan_files(
                 "path": session.session_path,
                 "size": session.file_size,
                 "mtimeNs": session.file_mtime_ns,
+                // Server-local progress distinguishes old missing titles from confirmed untitled files.
+                "recoverName": session.name.as_deref().is_none_or(|name| name.trim().is_empty()),
             })
         })
         .collect::<Vec<_>>();
@@ -336,9 +338,8 @@ fn build_index_entry(
             .or_else(|| previous.and_then(|value| value.first_user_message_preview.clone())),
         file_size: file.size,
         file_mtime_ns: file.mtime_ns,
-        // Session list indexing is intentionally lightweight. The full file is parsed only when
-        // the user opens the session, so the index marks the current file size as observed rather
-        // than maintaining a full-parser cursor here.
+        // Indexing extracts metadata, not full history, even when a missing title needs a full
+        // streaming scan. Record the observed size rather than a full-history parser cursor.
         last_offset: file.size,
         indexed_at_ms: storage::now_ms(),
         pinned: previous.is_some_and(|value| value.pinned),
