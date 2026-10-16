@@ -138,6 +138,31 @@ Images reference existing files, not immutable snapshots: deleting or overwritin
 | `cargo clippy --workspace --all-targets --all-features -- -D warnings` | Run Rust lints                                                    |
 | `pnpm server:verify`                                                   | Verify the complete six-target `pilo-server` release resource set |
 
+### Desktop WebDriver debugging
+
+Start the desktop development build with `pnpm dev`, then use another terminal
+on the same machine:
+
+```bash
+pnpm debug:desktop                   # Check the embedded WebDriver server
+pnpm debug:desktop windows           # List window labels
+pnpm debug:desktop screenshot        # Save a PNG under logs/ (gitignored)
+pnpm debug:desktop source            # Print the current DOM
+pnpm debug:desktop eval 'return document.activeElement.outerHTML'
+pnpm debug:desktop click 'button'
+pnpm debug:desktop type '[contenteditable="true"]' 'Hello'
+pnpm debug:desktop --window session-123 source
+```
+
+The zero-dependency script connects directly to the existing embedded WebDriver
+at `127.0.0.1:4445`. Use `--port` or `TAURI_WEBDRIVER_PORT` to match a custom
+app port. The default window is `main`; `--help` lists all commands. Each command
+releases its automation session without closing Pilo. Click, typing, and scripts
+operate on real application state; typing appends rather than clearing the field.
+This is desktop WebView debugging, not WebUI browser testing. Release builds do
+not enable the WebDriver plugin. For `pnpm tauri dev`, explicitly add
+`--features webdriver` (`pnpm dev` already does this).
+
 ## Repository layout
 
 | Path                    | Contents                                                                                                        |

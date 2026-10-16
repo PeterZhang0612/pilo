@@ -138,6 +138,29 @@ bash scripts/build-pilo-server.sh <target>
 | `cargo clippy --workspace --all-targets --all-features -- -D warnings` | Rust lint                                     |
 | `pnpm server:verify`                                                   | 校验发布所需的完整六平台 `pilo-server` 资源集 |
 
+### 桌面 WebDriver 调试
+
+先用 `pnpm dev` 启动桌面开发版，再在同一台机器的另一个终端执行：
+
+```bash
+pnpm debug:desktop                   # 检查内嵌 WebDriver 状态
+pnpm debug:desktop windows           # 列出窗口标签
+pnpm debug:desktop screenshot        # 保存 PNG 到 logs/（已忽略提交）
+pnpm debug:desktop source            # 输出当前 DOM
+pnpm debug:desktop eval 'return document.activeElement.outerHTML'
+pnpm debug:desktop click 'button'
+pnpm debug:desktop type '[contenteditable="true"]' 'Hello'
+pnpm debug:desktop --window session-123 source
+```
+
+脚本零依赖，直接连接已有的内嵌 WebDriver，默认地址为 `127.0.0.1:4445`。
+应用使用自定义端口时，通过 `--port` 或 `TAURI_WEBDRIVER_PORT` 指定相同端口。
+默认操作 `main` 窗口，完整命令见 `--help`。每次执行后释放自动化会话，不关闭 Pilo。
+点击、输入和脚本会操作真实应用状态；输入命令追加文字，不清空原内容。
+此脚本调试桌面 WebView，不替代 WebUI 浏览器测试；正式 release 构建不启用 WebDriver。
+若通过 `pnpm tauri dev` 启动，需显式加上 `--features webdriver`，
+而 `pnpm dev` 已默认启用。
+
 ## 目录结构
 
 | 路径                    | 内容                                                                |
