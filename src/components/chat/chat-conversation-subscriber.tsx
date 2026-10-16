@@ -3,7 +3,7 @@ import { memo, useEffect, useState, type ReactNode } from "react";
 import type { ChatConversationStore } from "@/components/chat/chat-conversation-store";
 import type { ChatHistoryWindowStore } from "@/components/chat/chat-history-window-store";
 import { useChatConversationView } from "@/components/chat/use-chat-conversation-view";
-import type { ChatMessage } from "@/lib/conversation-types";
+import type { ChatMessage } from "@/lib/chat/conversation-types";
 
 type ChatConversationSubscriberProps = {
 	active: boolean;

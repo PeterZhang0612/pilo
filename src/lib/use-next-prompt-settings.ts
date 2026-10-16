@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { NextPromptModel, NextPromptSettings } from "@/lib/next-prompt";
-import type { PiloClient } from "@/lib/pilo-client";
-import { runtimeErrorMessage, type PiloRuntimeEvent } from "@/lib/pi-runtime";
+import type { PiloClient } from "@/lib/api/pilo-client";
+import {
+	runtimeErrorMessage,
+	type PiloRuntimeEvent,
+} from "@/lib/api/pi-runtime";
 
 export function useNextPromptSettings(
 	client: PiloClient | null,

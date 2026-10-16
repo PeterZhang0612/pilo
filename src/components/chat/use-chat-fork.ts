@@ -7,9 +7,9 @@ import { userErrorMessage } from "@/lib/app-error";
 import {
 	createChatSessionClient,
 	type ChatSessionClient,
-} from "@/lib/chat-session-client";
-import { resolveAssistantForkTarget } from "@/lib/pi-session-fork";
-import type { ChatMessage } from "@/lib/conversation-types";
+} from "@/lib/api/chat-session-client";
+import { resolveAssistantForkTarget } from "@/lib/chat/pi-session-fork";
+import type { ChatMessage } from "@/lib/chat/conversation-types";
 
 /**
  * Fork / clone a persisted session at an assistant message. Owns the in-flight

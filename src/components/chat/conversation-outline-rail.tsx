@@ -10,7 +10,7 @@ import { useTranslation } from "react-i18next";
 
 import { cn } from "@/lib/utils";
 
-import type { ConversationOutlineEntry } from "@/lib/conversation-outline";
+import type { ConversationOutlineEntry } from "@/lib/chat/conversation-outline";
 
 const TICK_PITCH = 8;
 const TICK_WIDTHS = [10, 13, 16, 20] as const;

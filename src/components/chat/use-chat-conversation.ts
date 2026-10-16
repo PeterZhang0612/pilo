@@ -1,21 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { toAppError } from "@/lib/app-error";
-import { createConversationState } from "@/lib/conversation-reducer";
+import { createConversationState } from "@/lib/chat/conversation-reducer";
 import {
 	reduceConversationActions,
 	replayConversationEventsBatched,
-} from "@/lib/conversation-replay";
-import type { ChatMessage, ConversationAction } from "@/lib/conversation-types";
+} from "@/lib/chat/conversation-replay";
+import type {
+	ChatMessage,
+	ConversationAction,
+} from "@/lib/chat/conversation-types";
 import {
 	loadSessionHistoryWindow,
 	type SessionHistory,
 	type SessionHistoryFingerprint,
-} from "@/lib/sessions";
+} from "@/lib/api/sessions";
 import {
 	summarizeChatImages,
 	type ChatImageAttachment,
-} from "@/lib/chat-submission";
+} from "@/lib/chat/chat-submission";
 import {
 	EMPTY_MESSAGES,
 	MOCK_CONVERSATIONS,
@@ -25,7 +28,7 @@ import {
 	getSessionHistoryFingerprint,
 	type ChatSession,
 } from "@/components/chat/chat-page-utils";
-import { recordHistoryWindowLoad } from "@/lib/chat-performance";
+import { recordHistoryWindowLoad } from "@/lib/chat/chat-performance";
 import {
 	alignHistoryMessages,
 	buildHistoryPrefix,

@@ -11,11 +11,15 @@ import type {
 	ProjectDraftCache,
 } from "@/components/app/chat-ui-state-cache";
 import type { ChatSessionRuntimeState } from "@/components/chat/chat-page-utils";
-import type { ChatImageAttachment } from "@/lib/chat-submission";
-import { createConversationState } from "@/lib/conversation-reducer";
-import type { ConversationState } from "@/lib/conversation-types";
-import type { PiAgentState, PiModel, PiThinkingLevel } from "@/lib/pi-runtime";
-import type { SessionIndexEntry } from "@/lib/sessions";
+import type { ChatImageAttachment } from "@/lib/chat/chat-submission";
+import { createConversationState } from "@/lib/chat/conversation-reducer";
+import type { ConversationState } from "@/lib/chat/conversation-types";
+import type {
+	PiAgentState,
+	PiModel,
+	PiThinkingLevel,
+} from "@/lib/api/pi-runtime";
+import type { SessionIndexEntry } from "@/lib/api/sessions";
 import { randomId } from "@/lib/utils";
 import { sessionKey } from "./remote-app-model";
 import type { QueuedSubmission } from "./use-remote-chat-transport";

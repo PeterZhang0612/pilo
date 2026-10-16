@@ -9,9 +9,9 @@ import {
 	detectProjectPreviewPorts,
 	openProjectPreview,
 	type PreviewInfo,
-} from "@/lib/preview";
+} from "@/lib/api/preview";
 import { userErrorMessage } from "@/lib/app-error";
-import type { Project } from "@/lib/projects";
+import type { Project } from "@/lib/api/projects";
 import { Button, EmptyState, Input, Spinner } from "@/ui";
 
 export function PreviewPanel({ project }: { project: Project }) {

@@ -1,10 +1,13 @@
 import type { ChatHistoryWindowStore } from "@/components/chat/chat-history-window-store";
 import { formatTime } from "@/components/chat/chat-page-utils";
-import type { ChatMessage, ConversationState } from "@/lib/conversation-types";
+import type {
+	ChatMessage,
+	ConversationState,
+} from "@/lib/chat/conversation-types";
 import type {
 	SessionHistoryFingerprint,
 	SessionHistoryMessageIndexEntry,
-} from "@/lib/sessions";
+} from "@/lib/api/sessions";
 
 let localMessageSequence = 0;
 let localActivitySequence = 0;

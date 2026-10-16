@@ -2,7 +2,7 @@ import { useId } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { useNextPromptSettings } from "@/lib/use-next-prompt-settings";
-import type { PiModel } from "@/lib/pi-runtime";
+import type { PiModel } from "@/lib/api/pi-runtime";
 import { cn } from "@/lib/utils";
 import {
 	Select,

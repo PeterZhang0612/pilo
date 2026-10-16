@@ -131,7 +131,7 @@ actions go there and appear only for persisted sessions (`session && !session.te
 
 ## Multi-Window (Tauri)
 
-- Create additional windows only through `src/lib/window.ts`; do not call the
+- Create additional windows only through `src/lib/api/window.ts`; do not call the
   Tauri window API directly from components.
 - Any new window label pattern must be declared in the `windows` list of
   `src-tauri/capabilities/default.json` (e.g. `"session-*"`), and creating a
@@ -141,7 +141,7 @@ actions go there and appear only for persisted sessions (`session && !session.te
 - New windows boot stateless: pass state through URL query params and re-resolve
   it once the project index is ready (see `readSessionWindowTarget` and the boot
   effect in `src/App.tsx`, which delegates to `workspace.openSearchSession`).
-- In-conversation find uses `findMessageMatches` in `src/lib/chat-message-search.ts`.
+- In-conversation find uses `findMessageMatches` in `src/lib/chat/chat-message-search.ts`.
   User body text stays literal, but references follow their rendered labels and
   order: optional Skill name, file/session chips, then body. Pass the same scoped
   `byValue` catalog to `findMessageMatches(messages, query, byValue)` as to the
@@ -239,7 +239,7 @@ actions go there and appear only for persisted sessions (`session && !session.te
   type; same-connection cross-project references are allowed. The lazy-loading
   `ChatPageLoadingFallback` also needs the session connection scope so its enabled
   composer and first-message preview resolve the same references as `ChatPage`.
-- `readChatMentionDraft` / `writeChatMentionDraft` in `src/lib/chat-mentions.ts`
+- `readChatMentionDraft` / `writeChatMentionDraft` in `src/lib/chat/chat-mentions.ts`
   keep mixed file/session references as trailing ordinary `@path` lines in the
   draft/submission string, preserving insertion order and deduplicating picks.
   Session values still use `sessionMentionValue` and resolve against the scoped
@@ -257,14 +257,14 @@ actions go there and appear only for persisted sessions (`session && !session.te
   Both sent/history user messages and Skill instructions use the default badge
   with a tappable path popover. Unknown/deleted absolute session paths remain
   visible as ordinary text.
-- `tests/chat-mentions.test.ts` covers mixed-reference round-trips, plain-text
+- `tests/unit/chat-mentions.test.ts` covers mixed-reference round-trips, plain-text
   query preservation, deletion and slash-command submissions. Run the browser
-  fixture `/tests/chat-mentions.html` through Vite for desktop + 320px WebUI
+  fixture `/tests/browser/chat-mentions.html` through Vite for desktop + 320px WebUI
   selection, path popovers, keyboard/mobile Backspace and sent-message rendering.
   Its search regression also checks file-chip/body same-name hits in visible
   order, next/previous navigation, session titles and compact/expanded Skill
   instructions; hidden paths and controls must not count as matches. Pure search
-  projections are covered by `tests/chat-message-search.test.ts`. Require
+  projections are covered by `tests/unit/chat-message-search.test.ts`. Require
   `document.body.dataset.testStatus === "passed"`.
 - Composer chips and the borderless textarea share `--pilo-composer-line-height`
   (`max(1.75rem, readingFontSize × 1.6px)`). Align them by **text baseline**, not
@@ -289,7 +289,7 @@ actions go there and appear only for persisted sessions (`session && !session.te
 - Composer suggestion/caret operations use visible body text; submission creation,
   input-history cursor validation, queues and recovery must use the full string.
   Append reference lines after the body so slash commands retain their prefix.
-  `createChatSubmission` in `src/lib/chat-submission.ts` ensures an ASCII space
+  `createChatSubmission` in `src/lib/chat/chat-submission.ts` ensures an ASCII space
   separates a slash-command name from following text: Pi splits Skill/extension
   names on a literal space, not arbitrary whitespace. Submit `/skill:foo` plus a
   reference as `/skill:foo \n@path`, not `/skill:foo\n@path`. Do this only at

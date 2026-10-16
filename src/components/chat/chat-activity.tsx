@@ -22,7 +22,7 @@ import {
 	shouldAutoCollapseAssistantActivity,
 	shouldInitiallyOpenAssistantActivity,
 	summarizeAssistantActivity,
-} from "@/lib/chat-activity-state";
+} from "@/lib/chat/chat-activity-state";
 import {
 	diffLineStyle,
 	fileBasename,
@@ -34,7 +34,7 @@ import {
 	toolEditDiff,
 	toolFilePath,
 	toolPreview,
-} from "@/lib/chat-tool-result";
+} from "@/lib/chat/chat-tool-result";
 import { formatWorkDuration } from "@/lib/format-duration";
 import { usePreferences } from "@/lib/preferences-provider";
 import { cn } from "@/lib/utils";

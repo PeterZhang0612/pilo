@@ -1,4 +1,4 @@
-import type { ChatMessage } from "@/lib/conversation-types";
+import type { ChatMessage } from "@/lib/chat/conversation-types";
 
 export const EMPTY_MESSAGES: ChatMessage[] = [];
 

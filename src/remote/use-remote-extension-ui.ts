@@ -14,7 +14,7 @@ import {
 	sameExtensionDialogRequest,
 	type PiExtensionDialogRequest,
 } from "@/components/chat/use-pi-session-features";
-import { runtimeErrorMessage } from "@/lib/pi-runtime";
+import { runtimeErrorMessage } from "@/lib/api/pi-runtime";
 import type { RemoteRpc } from "./use-remote-chat-transport";
 
 const MAX_EXTENSION_NOTIFICATIONS = 3;

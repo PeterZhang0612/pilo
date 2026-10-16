@@ -9,7 +9,7 @@ import {
 import type {
 	ChatImageAttachment,
 	ChatSubmission,
-} from "@/lib/chat-submission";
+} from "@/lib/chat/chat-submission";
 
 /**
  * Composer-side draft state that survives a failed submission: the image

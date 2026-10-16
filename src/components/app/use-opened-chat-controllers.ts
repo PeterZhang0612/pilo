@@ -16,8 +16,8 @@ import { useRestoreActiveChatRuntimes } from "@/components/app/use-restore-activ
 import {
 	detachChatSessionClient,
 	stopChatSession,
-} from "@/lib/chat-session-client";
-import type { Project } from "@/lib/projects";
+} from "@/lib/api/chat-session-client";
+import type { Project } from "@/lib/api/projects";
 
 type UseOpenedChatControllersOptions = {
 	projects: Project[];

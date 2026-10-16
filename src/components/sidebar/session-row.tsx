@@ -11,7 +11,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { Folder, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { prefetchSessionHistory } from "@/lib/sessions";
+import { prefetchSessionHistory } from "@/lib/api/sessions";
 import {
 	ActivityDot,
 	DropdownMenu,

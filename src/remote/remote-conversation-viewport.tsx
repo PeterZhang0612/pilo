@@ -7,8 +7,8 @@ import {
 
 import { ChatConversationViewport } from "@/components/chat/chat-conversation-viewport";
 import type { ChatConversationStore } from "@/components/chat/chat-conversation-store";
-import { createConversationState } from "@/lib/conversation-reducer";
-import type { ChatMessage } from "@/lib/conversation-types";
+import { createConversationState } from "@/lib/chat/conversation-reducer";
+import type { ChatMessage } from "@/lib/chat/conversation-types";
 
 const EMPTY_CONVERSATION = createConversationState();
 

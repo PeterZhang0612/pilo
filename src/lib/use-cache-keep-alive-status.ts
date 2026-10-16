@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { CacheKeepAliveStatus } from "@/lib/cache-keep-alive";
-import type { PiloClient, PiloClientEventMessage } from "@/lib/pilo-client";
-import { listenRuntimeEvents, type PiloRuntimeEvent } from "@/lib/pi-runtime";
+import type { PiloClient, PiloClientEventMessage } from "@/lib/api/pilo-client";
+import {
+	listenRuntimeEvents,
+	type PiloRuntimeEvent,
+} from "@/lib/api/pi-runtime";
 
 export function useCacheKeepAliveStatus({
 	client,

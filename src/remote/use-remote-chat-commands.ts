@@ -2,8 +2,8 @@ import { type RefObject, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
-import type { ChatSubmission } from "@/lib/chat-submission";
-import type { PiCompactionResult } from "@/lib/pi-runtime";
+import type { ChatSubmission } from "@/lib/chat/chat-submission";
+import type { PiCompactionResult } from "@/lib/api/pi-runtime";
 import type { RemoteSessionRpc } from "./use-remote-chat-transport";
 import type { WebPiloClient } from "./web-pilo-client";
 

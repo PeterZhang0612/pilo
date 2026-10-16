@@ -12,7 +12,7 @@ import {
 	CHAT_COMPOSER_RUN_CONFIG_TRIGGER_CLASS_NAME,
 	CHAT_COMPOSER_SEND_BUTTON_CLASS_NAME,
 } from "@/components/chat/chat-composer-frame";
-import type { ComposerSendMode } from "@/lib/composer-send-mode";
+import type { ComposerSendMode } from "@/lib/chat/composer-send-mode";
 import { cn } from "@/lib/utils";
 import { menuItemIconClassName } from "@/ui/menu-styles";
 import {

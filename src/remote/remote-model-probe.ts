@@ -1,5 +1,5 @@
-import type { PiModelProbeClient } from "@/lib/pi-models";
-import type { PiSessionSnapshot, PiloRuntimeEvent } from "@/lib/pi-runtime";
+import type { PiModelProbeClient } from "@/lib/api/pi-models";
+import type { PiSessionSnapshot, PiloRuntimeEvent } from "@/lib/api/pi-runtime";
 import { randomId } from "@/lib/utils";
 import { isRpcResponse } from "./remote-app-model";
 import type { WebPiloClient } from "./web-pilo-client";

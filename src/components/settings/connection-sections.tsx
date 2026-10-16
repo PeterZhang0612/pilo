@@ -14,11 +14,14 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { listWslDistributions, type WslDistribution } from "@/lib/connections";
+import {
+	listWslDistributions,
+	type WslDistribution,
+} from "@/lib/api/connections";
 import { userErrorMessage } from "@/lib/app-error";
 import { i18n } from "@/i18n";
-import type { Connection } from "@/lib/pi-runtime";
-import { connectionLabel } from "@/lib/projects";
+import type { Connection } from "@/lib/api/pi-runtime";
+import { connectionLabel } from "@/lib/api/projects";
 import { IS_WINDOWS } from "@/components/title-bar";
 import { cn } from "@/lib/utils";
 import {

@@ -16,21 +16,21 @@ import {
 	isChatInputHistoryCursorValid,
 	moveChatInputHistory,
 	readChatInputHistory,
-} from "@/lib/chat-input-history";
+} from "@/lib/chat/chat-input-history";
 import {
 	readComposerSendMode,
 	writeComposerSendMode,
 	type ComposerSendMode,
-} from "@/lib/composer-send-mode";
+} from "@/lib/chat/composer-send-mode";
 import {
 	chatSubmissionHasContent,
 	createChatSubmission,
 	type ChatImageAttachment,
 	type ChatSubmission,
-} from "@/lib/chat-submission";
-import { fileMentionPath } from "@/lib/chat-mentions";
+} from "@/lib/chat/chat-submission";
+import { fileMentionPath } from "@/lib/chat/chat-mentions";
 import { isImeComposingKeyboardEvent } from "@/lib/ime";
-import { type PiModel, runtimeErrorMessage } from "@/lib/pi-runtime";
+import { type PiModel, runtimeErrorMessage } from "@/lib/api/pi-runtime";
 import { usePreferences } from "@/lib/preferences-provider";
 import { useKeyboardShortcut } from "@/lib/use-keyboard-shortcut";
 import { useIsTouchDevice } from "@/components/chat/chat-composer-run-config";

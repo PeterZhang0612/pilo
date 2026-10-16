@@ -15,20 +15,20 @@ import {
 import { useChatRuntimeQueue } from "@/components/chat/use-chat-runtime-queue";
 import { createLocalMessageId } from "@/components/chat/chat-conversation-model";
 import { useRuntimeConversationDispatch } from "@/components/chat/use-runtime-conversation-dispatch";
-import { getReplyRunwayHeight } from "@/lib/chat-scroll-state";
-import { registerChatRuntimeReplayTarget } from "@/lib/chat-runtime-replay";
+import { getReplyRunwayHeight } from "@/lib/chat/chat-scroll-state";
+import { registerChatRuntimeReplayTarget } from "@/lib/chat/chat-runtime-replay";
 import {
 	chatSubmissionHasContent,
 	createChatSubmission,
 	summarizeChatImages,
 	type ChatImageAttachment,
 	type ChatSubmission,
-} from "@/lib/chat-submission";
-import { cacheLocalChatImages } from "@/lib/chat-image-media";
-import type { ConversationAction } from "@/lib/conversation-types";
-import { runtimeErrorMessage, type PiAgentState } from "@/lib/pi-runtime";
-import { requestSessionTitle } from "@/lib/sessions";
-import { chatRuntimeHasOpenTurn } from "@/lib/chat-session-runtime-model";
+} from "@/lib/chat/chat-submission";
+import { cacheLocalChatImages } from "@/lib/chat/chat-image-media";
+import type { ConversationAction } from "@/lib/chat/conversation-types";
+import { runtimeErrorMessage, type PiAgentState } from "@/lib/api/pi-runtime";
+import { requestSessionTitle } from "@/lib/api/sessions";
+import { chatRuntimeHasOpenTurn } from "@/lib/chat/chat-session-runtime-model";
 
 export type { ChatRuntimeRecoveryState } from "@/components/chat/chat-runtime-types";
 

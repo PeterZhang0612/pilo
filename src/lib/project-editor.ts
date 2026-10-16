@@ -1,7 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 
-import type { Project } from "@/lib/projects";
+import type { Project } from "@/lib/api/projects";
 
 export const PROJECT_EDITORS = [
 	{ id: "zed", name: "Zed" },

@@ -15,7 +15,7 @@ import {
 	type RemoteAccessAddress,
 	type RemoteDevice,
 	type RemoteHostState,
-} from "@/lib/remote";
+} from "@/lib/api/remote";
 import { randomId } from "@/lib/utils";
 import { remoteAddressConfig, sameAddressList } from "@/lib/remote-addresses";
 import { Button, Input, Spinner, Switch } from "@/ui";

@@ -14,7 +14,7 @@ import {
 	getChatScrollMaxOffset,
 	shouldShowChatScrollToLatest,
 } from "@/components/chat/chat-sticky-scroll-dom";
-import { recordStickyScrollMetric } from "@/lib/chat-performance";
+import { recordStickyScrollMetric } from "@/lib/chat/chat-performance";
 
 const BOTTOM_THRESHOLD_PX = 4;
 const SCROLL_WRITE_EPSILON_PX = 1;

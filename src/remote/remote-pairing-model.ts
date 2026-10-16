@@ -1,4 +1,4 @@
-import type { RemoteAccessAddress } from "@/lib/remote";
+import type { RemoteAccessAddress } from "@/lib/api/remote";
 
 const CONTEXT_KEY = "pilo.remote.pairing-context.v1";
 const PAIRING_TTL_MS = 10 * 60 * 1_000;

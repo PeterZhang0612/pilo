@@ -1,5 +1,5 @@
 import type { ChatSessionRuntimeState } from "@/components/chat/chat-page-utils";
-import type { PiSessionStats } from "@/lib/pi-runtime";
+import type { PiSessionStats } from "@/lib/api/pi-runtime";
 
 function isKnownContextValue(value: number | null | undefined) {
 	return typeof value === "number" && Number.isFinite(value);

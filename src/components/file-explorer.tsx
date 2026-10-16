@@ -11,9 +11,13 @@ import {
 } from "lucide-react";
 
 import { userErrorMessage } from "@/lib/app-error";
-import { readProjectDir, searchProjectFiles, type FsEntry } from "@/lib/files";
+import {
+	readProjectDir,
+	searchProjectFiles,
+	type FsEntry,
+} from "@/lib/api/files";
 import { cn } from "@/lib/utils";
-import type { Project } from "@/lib/projects";
+import type { Project } from "@/lib/api/projects";
 import { Button, EmptyState, ErrorState, Input } from "@/ui";
 
 type DirectoryState = {

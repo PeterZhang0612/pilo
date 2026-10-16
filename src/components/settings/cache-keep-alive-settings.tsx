@@ -7,8 +7,8 @@ import {
 	type CacheKeepAliveSettings,
 } from "@/lib/cache-keep-alive";
 import { isImeComposingKeyboardEvent } from "@/lib/ime";
-import type { PiloClient } from "@/lib/pilo-client";
-import type { PiModel } from "@/lib/pi-runtime";
+import type { PiloClient } from "@/lib/api/pilo-client";
+import type { PiModel } from "@/lib/api/pi-runtime";
 import { useCacheKeepAliveSettings } from "@/lib/use-cache-keep-alive-settings";
 import {
 	Button,

@@ -1,9 +1,9 @@
-import { listChatSessionRuntimeStates } from "@/lib/chat-session-client";
-import { chatRuntimeHasOpenTurn } from "@/lib/chat-session-runtime-model";
+import { listChatSessionRuntimeStates } from "@/lib/api/chat-session-client";
+import { chatRuntimeHasOpenTurn } from "@/lib/chat/chat-session-runtime-model";
 import type {
 	SessionExternalActivity,
 	SessionIndexEntry,
-} from "@/lib/sessions";
+} from "@/lib/api/sessions";
 
 export type ProjectExternalActivity = {
 	openTurnPaths: ReadonlySet<string>;

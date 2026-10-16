@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import {
 	createChatSubmission,
 	type ChatSubmission,
-} from "@/lib/chat-submission";
+} from "@/lib/chat/chat-submission";
 import type { ChatUiStatePatch } from "@/components/app/chat-ui-state-cache";
 
 type PersistUiState = (key: string, patch: ChatUiStatePatch) => void;

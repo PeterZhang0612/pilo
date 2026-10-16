@@ -170,9 +170,9 @@ async function bootstrap() {
 			{ installChatRuntimeTraceDebugApi },
 			{ primeRuntimeEventChannel },
 		] = await Promise.all([
-			import("@/lib/chat-performance-debug"),
-			import("@/lib/chat-runtime-trace-debug"),
-			import("@/lib/pi-runtime"),
+			import("@/lib/chat/chat-performance-debug"),
+			import("@/lib/chat/chat-runtime-trace-debug"),
+			import("@/lib/api/pi-runtime"),
 		]);
 		installChatRuntimeTraceDebugApi();
 		installChatPerformanceDebugApi();

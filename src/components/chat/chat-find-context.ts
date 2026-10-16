@@ -1,6 +1,6 @@
 import { createContext, useContext } from "react";
 
-import type { ChatMessageMatch } from "@/lib/chat-message-search";
+import type { ChatMessageMatch } from "@/lib/chat/chat-message-search";
 
 export const ChatFindMatchContext = createContext<ChatMessageMatch | null>(
 	null,

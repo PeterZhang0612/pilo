@@ -17,10 +17,10 @@ import {
 	createChatSubmission,
 	summarizeChatImages,
 	type ChatSubmission,
-} from "@/lib/chat-submission";
-import { cacheLocalChatImages } from "@/lib/chat-image-media";
-import type { ConversationAction } from "@/lib/conversation-types";
-import { runtimeErrorMessage } from "@/lib/pi-runtime";
+} from "@/lib/chat/chat-submission";
+import { cacheLocalChatImages } from "@/lib/chat/chat-image-media";
+import type { ConversationAction } from "@/lib/chat/conversation-types";
+import { runtimeErrorMessage } from "@/lib/api/pi-runtime";
 
 const STOP_SETTLE_TIMEOUT_MS = 5_000;
 

@@ -8,13 +8,13 @@ import {
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
-import type { createChatSessionClient } from "@/lib/chat-session-client";
+import type { createChatSessionClient } from "@/lib/api/chat-session-client";
 import { getPiModelThinkingLevels } from "@/lib/pi-model-selection";
 import {
 	runtimeErrorMessage,
 	type PiModel,
 	type PiThinkingLevel,
-} from "@/lib/pi-runtime";
+} from "@/lib/api/pi-runtime";
 
 type ChatSessionClient = ReturnType<typeof createChatSessionClient>;
 

@@ -2,7 +2,7 @@ import { MessageSquare } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { PathMentionBadge } from "@/components/chat/path-mention-badge";
-import type { SessionMention } from "@/lib/session-mentions";
+import type { SessionMention } from "@/lib/chat/session-mentions";
 
 export function SessionMentionBadge({
 	mention,

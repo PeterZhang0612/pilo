@@ -1,6 +1,6 @@
 import type { ComponentPropsWithoutRef } from "react";
 import { defaultRehypePlugins, type Components } from "streamdown";
-import { rehypeProjectImages } from "@/lib/chat-markdown-images";
+import { rehypeProjectImages } from "@/lib/chat/chat-markdown-images";
 import { MarkdownImage } from "@/components/chat/chat-markdown-image";
 import { cn } from "@/lib/utils";
 

@@ -19,11 +19,11 @@ import {
 } from "@/components/app/app-chat-state";
 import type { BusyChatControllersRef } from "@/components/app/use-opened-chat-controllers";
 import type { ChatSession } from "@/components/chat/chat-page";
-import type { ChatSessionRuntimeState } from "@/lib/chat-session-client";
+import type { ChatSessionRuntimeState } from "@/lib/api/chat-session-client";
 import {
 	findReusableChatRuntime,
 	runtimeSessionIdFromKey,
-} from "@/lib/chat-session-runtime-model";
+} from "@/lib/chat/chat-session-runtime-model";
 import {
 	listenForDesktopNotificationActions,
 	type DesktopNotificationSessionTarget,
@@ -32,8 +32,8 @@ import {
 	notifyProjectsChanged,
 	touchProject,
 	type Project,
-} from "@/lib/projects";
-import type { SessionIndexEntry } from "@/lib/sessions";
+} from "@/lib/api/projects";
+import type { SessionIndexEntry } from "@/lib/api/sessions";
 
 type SearchSessionTarget = {
 	sessionId: string;

@@ -15,7 +15,7 @@ import {
 	fileMentionPath,
 	readChatMentionDraft,
 	writeChatMentionDraft,
-} from "@/lib/chat-mentions";
+} from "@/lib/chat/chat-mentions";
 import {
 	useSessionMentions,
 	useSessionMentionDrag,
@@ -23,11 +23,11 @@ import {
 import {
 	sessionMentionValue,
 	type SessionMention,
-} from "@/lib/session-mentions";
+} from "@/lib/chat/session-mentions";
 import { ChatImageThumbnail } from "@/components/chat/chat-image-viewer";
 
 import { formatKeyboardShortcut } from "@/lib/keyboard-shortcuts";
-import type { PiModel, PiThinkingLevel } from "@/lib/pi-runtime";
+import type { PiModel, PiThinkingLevel } from "@/lib/api/pi-runtime";
 import type { ModelScopeControls } from "@/lib/project-model-scope";
 import { cn } from "@/lib/utils";
 import { getPageFontFamilyStack } from "@/lib/font-settings";
@@ -36,7 +36,7 @@ import {
 	CHAT_IMAGE_ACCEPT,
 	type ChatImageAttachment,
 	type ChatSubmission,
-} from "@/lib/chat-submission";
+} from "@/lib/chat/chat-submission";
 import {
 	Button,
 	NoticeCard,

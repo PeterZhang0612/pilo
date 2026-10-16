@@ -22,9 +22,9 @@ import {
 	listenTerminalEvents,
 	openProjectTerminal,
 	type TerminalEvent,
-} from "@/lib/terminal";
+} from "@/lib/api/terminal";
 import { cn } from "@/lib/utils";
-import type { Project } from "@/lib/projects";
+import type { Project } from "@/lib/api/projects";
 import { Button } from "@/ui";
 
 type TerminalLayout = {

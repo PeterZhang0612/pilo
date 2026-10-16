@@ -4,8 +4,8 @@ import { Folder, MessageSquareText, MessagesSquare } from "lucide-react";
 
 import { i18n } from "@/i18n";
 
-import type { PiloClient } from "@/lib/pilo-client";
-import type { SessionIndexEntry } from "@/lib/sessions";
+import type { PiloClient } from "@/lib/api/pilo-client";
+import type { SessionIndexEntry } from "@/lib/api/sessions";
 import {
 	CommandDialog,
 	CommandGroup,

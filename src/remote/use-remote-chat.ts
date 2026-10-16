@@ -18,22 +18,22 @@ import {
 import { createChatConversationStore } from "@/components/chat/chat-conversation-store";
 import type { ChatSession } from "@/components/chat/chat-page-utils";
 import type { PiExtensionDialogRequest } from "@/components/chat/use-pi-session-features";
-import type { ChatImageAttachment } from "@/lib/chat-submission";
+import type { ChatImageAttachment } from "@/lib/chat/chat-submission";
 import {
 	chatRuntimeHasOpenTurn,
 	findReusableChatRuntime,
-} from "@/lib/chat-session-runtime-model";
-import { createConversationState } from "@/lib/conversation-reducer";
-import type { ConversationState } from "@/lib/conversation-types";
-import type { PiAgentState, PiModel } from "@/lib/pi-runtime";
-import type { Project } from "@/lib/projects";
-import type { PiloClientBootstrap } from "@/lib/pilo-client";
+} from "@/lib/chat/chat-session-runtime-model";
+import { createConversationState } from "@/lib/chat/conversation-reducer";
+import type { ConversationState } from "@/lib/chat/conversation-types";
+import type { PiAgentState, PiModel } from "@/lib/api/pi-runtime";
+import type { Project } from "@/lib/api/projects";
+import type { PiloClientBootstrap } from "@/lib/api/pilo-client";
 import {
 	getProjectScopeModels,
 	isPiScopeCatalogResolved,
 } from "@/lib/pi-model-selection";
 import { useProjectModelScope } from "@/lib/use-project-model-scope";
-import type { SessionIndexEntry } from "@/lib/sessions";
+import type { SessionIndexEntry } from "@/lib/api/sessions";
 import { randomId } from "@/lib/utils";
 import {
 	readRemoteScrollState,

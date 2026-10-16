@@ -32,17 +32,17 @@ import { useAppChatNavigation } from "@/components/app/use-app-chat-navigation";
 import { useAppChatSessionActions } from "@/components/app/use-app-chat-session-actions";
 import { useAppSessionIndex } from "@/components/app/use-app-session-index";
 import { useSyncedSessionUnread } from "@/components/app/use-synced-session-unread";
-import { listenRuntimeEvents } from "@/lib/pi-runtime";
-import { tauriPiloClient } from "@/lib/tauri-pilo-client";
+import { listenRuntimeEvents } from "@/lib/api/pi-runtime";
+import { tauriPiloClient } from "@/lib/api/tauri-pilo-client";
 import type { BusyChatControllersRef } from "@/components/app/use-opened-chat-controllers";
 import type { ChatSession } from "@/components/chat/chat-page";
-import type { ChatSubmission } from "@/lib/chat-submission";
-import type { PiModel, PiThinkingLevel } from "@/lib/pi-runtime";
+import type { ChatSubmission } from "@/lib/chat/chat-submission";
+import type { PiModel, PiThinkingLevel } from "@/lib/api/pi-runtime";
 import {
 	chatRuntimeHasOpenTurn,
 	findReusableChatRuntime,
-} from "@/lib/chat-session-runtime-model";
-import type { Project } from "@/lib/projects";
+} from "@/lib/chat/chat-session-runtime-model";
+import type { Project } from "@/lib/api/projects";
 
 type UseAppChatWorkspaceOptions = {
 	projects: Project[];

@@ -3,19 +3,23 @@ import { useTranslation } from "react-i18next";
 import { RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
-import { listConnectionCatalog } from "@/lib/connections";
+import { listConnectionCatalog } from "@/lib/api/connections";
 import { userErrorMessage } from "@/lib/app-error";
 import {
 	getCachedProjectPiModels,
 	hydrateProjectPiModels,
 	refreshProjectPiModels,
-} from "@/lib/pi-models";
-import type { Connection, PiModel } from "@/lib/pi-runtime";
-import { connectionLabel, listProjects, type Project } from "@/lib/projects";
+} from "@/lib/api/pi-models";
+import type { Connection, PiModel } from "@/lib/api/pi-runtime";
+import {
+	connectionLabel,
+	listProjects,
+	type Project,
+} from "@/lib/api/projects";
 import {
 	listConnectionNamingModels,
 	setConnectionNamingModel,
-} from "@/lib/sessions";
+} from "@/lib/api/sessions";
 import { cn } from "@/lib/utils";
 import {
 	Button,

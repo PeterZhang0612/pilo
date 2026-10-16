@@ -177,7 +177,7 @@ jobs:
 
       - name: Test Linux AppImage finalization
         if: runner.os == 'Linux'
-        run: python3 tests/test-linux-appimage.py
+        run: python3 tests/packaging/test-linux-appimage.py
 
       - name: Finalize and sign Linux AppImage
         if: runner.os == 'Linux'

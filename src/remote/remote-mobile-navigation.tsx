@@ -17,7 +17,7 @@ import type {
 	SidebarProject,
 	SidebarSession,
 } from "@/components/sidebar/types";
-import type { PiloClient } from "@/lib/pilo-client";
+import type { PiloClient } from "@/lib/api/pilo-client";
 import { cn } from "@/lib/utils";
 import {
 	remoteConnectionLabelKey,

@@ -1,5 +1,5 @@
 import { useKeyboardShortcut } from "@/lib/use-keyboard-shortcut";
-import type { PiModel } from "@/lib/pi-runtime";
+import type { PiModel } from "@/lib/api/pi-runtime";
 
 /**
  * Model-switching keyboard shortcuts for the active chat: the plain "cycle

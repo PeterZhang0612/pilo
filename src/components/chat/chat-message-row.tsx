@@ -4,7 +4,7 @@ import { ConversationColumn } from "@/components/chat/chat-conversation-column";
 import { AssistantMessage } from "@/components/chat/chat-message";
 import { UserMessage } from "@/components/chat/chat-user-message";
 import { CompactionMessage } from "@/components/chat/compaction-message";
-import type { ChatMessage } from "@/lib/conversation-types";
+import type { ChatMessage } from "@/lib/chat/conversation-types";
 
 type MessageRowProps = {
 	message: ChatMessage;

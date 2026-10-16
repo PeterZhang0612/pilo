@@ -19,9 +19,9 @@ import {
 	getProjectGitStatus,
 	type GitFileStatus,
 	type GitStatus,
-} from "@/lib/git";
+} from "@/lib/api/git";
 import { cn } from "@/lib/utils";
-import type { Project } from "@/lib/projects";
+import type { Project } from "@/lib/api/projects";
 import { Button, EmptyState, ErrorState, Hint, Separator } from "@/ui";
 
 type DiffMode = "working" | "staged";

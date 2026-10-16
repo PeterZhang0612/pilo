@@ -14,11 +14,11 @@ import { MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 
 import type { SidebarSession } from "@/components/sidebar/types";
-import type { Project } from "@/lib/projects";
+import type { Project } from "@/lib/api/projects";
 import {
 	sessionMentionValue,
 	type SessionMention,
-} from "@/lib/session-mentions";
+} from "@/lib/chat/session-mentions";
 
 const EMPTY_MENTIONS: readonly SessionMention[] = [];
 const MentionContext = createContext(EMPTY_MENTIONS);

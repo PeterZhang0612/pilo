@@ -25,8 +25,8 @@ import { remarkSingleDollarTextMath } from "@/lib/markdown-single-dollar-math";
 import {
 	recordMarkdownParse,
 	recordMarkdownRender,
-} from "@/lib/chat-performance";
-import { createStreamingMarkdownBlockParser } from "@/lib/chat-streaming-markdown";
+} from "@/lib/chat/chat-performance";
+import { createStreamingMarkdownBlockParser } from "@/lib/chat/chat-streaming-markdown";
 import { useResolvedTheme } from "@/lib/theme-provider";
 import { cn } from "@/lib/utils";
 

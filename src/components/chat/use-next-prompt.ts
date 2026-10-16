@@ -11,8 +11,8 @@ import {
 	traceNextPrompt,
 	type NextPromptRequest,
 } from "@/lib/next-prompt";
-import type { PiloClient, PiloClientEventMessage } from "@/lib/pilo-client";
-import type { PiModel, PiloRuntimeEvent } from "@/lib/pi-runtime";
+import type { PiloClient, PiloClientEventMessage } from "@/lib/api/pilo-client";
+import type { PiModel, PiloRuntimeEvent } from "@/lib/api/pi-runtime";
 import { useNextPromptSettings } from "@/lib/use-next-prompt-settings";
 import { randomId } from "@/lib/utils";
 

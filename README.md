@@ -131,12 +131,19 @@ Images reference existing files, not immutable snapshots: deleting or overwritin
 | `pnpm check`                                                           | Run oxfmt format checks and oxlint                                |
 | `pnpm format`                                                          | Format the frontend with oxfmt                                    |
 | `pnpm build`                                                           | Type-check and build the frontend                                 |
-| `pnpm test:unit`                                                       | Run frontend unit tests                                           |
+| `pnpm test`                                                            | Run Node unit and integration tests                               |
+| `pnpm test:unit`                                                       | Run focused unit and static-rendering tests                       |
+| `pnpm test:integration`                                                | Run CLI/process and Pi extension integration tests (Linux/WSL)    |
+| `pnpm test:packaging`                                                  | Run AppImage orchestration tests (Linux/WSL)                      |
 | `cargo fmt --all --check`                                              | Check Rust formatting                                             |
 | `cargo check --workspace --all-targets --all-features`                 | Check the Rust workspace                                          |
 | `cargo test --workspace --all-features`                                | Run Rust workspace tests                                          |
 | `cargo clippy --workspace --all-targets --all-features -- -D warnings` | Run Rust lints                                                    |
 | `pnpm server:verify`                                                   | Verify the complete six-target `pilo-server` release resource set |
+
+Test layout, single-file commands and browser regression pages are documented
+in [tests/README.md](tests/README.md). `pnpm test` does not include browser,
+packaging or Rust tests.
 
 ### Desktop WebDriver debugging
 

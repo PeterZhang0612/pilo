@@ -34,14 +34,14 @@ import { NewChatLanding } from "@/components/new-chat-landing";
 import { SidebarFooter } from "@/components/sidebar-footer";
 import { CUSTOM_TITLEBAR, IS_MACOS, TitleBar } from "@/components/title-bar";
 import type { ViewerOpenRequest } from "@/components/project-viewer";
-import { recordChatSessionSwitchStart } from "@/lib/chat-performance";
+import { recordChatSessionSwitchStart } from "@/lib/chat/chat-performance";
 import { usePreferences } from "@/lib/preferences-provider";
 import { useKeyboardShortcut } from "@/lib/use-keyboard-shortcut";
 import {
 	isSessionWindow,
 	openSessionInNewWindow,
 	readSessionWindowTarget,
-} from "@/lib/window";
+} from "@/lib/api/window";
 import { TooltipProvider } from "@/ui";
 
 const importChatPage = () => import("@/components/chat/chat-page");

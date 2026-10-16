@@ -7,7 +7,7 @@ import { i18n } from "@/i18n";
 import { ConversationColumn } from "@/components/chat/chat-conversation-column";
 import { toggleChatExpansionWithAnchor } from "@/components/chat/chat-expansion-anchor";
 import { ChatMarkdown } from "@/components/chat/chat-markdown";
-import type { ChatMessage } from "@/lib/conversation-types";
+import type { ChatMessage } from "@/lib/chat/conversation-types";
 import { getPageFontFamilyStack } from "@/lib/font-settings";
 import { usePreferences } from "@/lib/preferences-provider";
 import { cn } from "@/lib/utils";

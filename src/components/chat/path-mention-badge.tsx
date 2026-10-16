@@ -1,7 +1,7 @@
 import { FileCode2, type LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import { fileMentionName } from "@/lib/chat-mentions";
+import { fileMentionName } from "@/lib/chat/chat-mentions";
 import { cn } from "@/lib/utils";
 import { Hint, Popover, PopoverContent, PopoverTrigger } from "@/ui";
 

@@ -16,8 +16,8 @@ import {
 import {
 	loadChatProjectImageUrl,
 	type ChatProjectImageScope,
-} from "@/lib/chat-image-media";
-import { resolveMarkdownImageSource } from "@/lib/chat-markdown-images";
+} from "@/lib/chat/chat-image-media";
+import { resolveMarkdownImageSource } from "@/lib/chat/chat-markdown-images";
 import { cn } from "@/lib/utils";
 import { Spinner } from "@/ui";
 

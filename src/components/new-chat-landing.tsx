@@ -16,9 +16,9 @@ import {
 	runtimeErrorMessage,
 	type PiModel,
 	type PiThinkingLevel,
-} from "@/lib/pi-runtime";
-import { createPiCommandSuggestions } from "@/lib/pi-command-suggestions";
-import { searchProjectFiles } from "@/lib/files";
+} from "@/lib/api/pi-runtime";
+import { createPiCommandSuggestions } from "@/lib/chat/pi-command-suggestions";
+import { searchProjectFiles } from "@/lib/api/files";
 import {
 	getNextPiScopeModel,
 	getProjectScopeModels,
@@ -32,12 +32,12 @@ import {
 	isProjectPiModelsIncomplete,
 	refreshProjectPiModels,
 	subscribeProjectPiModels,
-} from "@/lib/pi-models";
+} from "@/lib/api/pi-models";
 import { usePreferences } from "@/lib/preferences-provider";
-import type { Project } from "@/lib/projects";
-import type { ChatSubmission } from "@/lib/chat-submission";
+import type { Project } from "@/lib/api/projects";
+import type { ChatSubmission } from "@/lib/chat/chat-submission";
 import { useKeyboardShortcut } from "@/lib/use-keyboard-shortcut";
-import { tauriPiloClient } from "@/lib/tauri-pilo-client";
+import { tauriPiloClient } from "@/lib/api/tauri-pilo-client";
 import { useProjectModelScope } from "@/lib/use-project-model-scope";
 import { DraftProjectPicker } from "@/components/chat/draft-project-picker";
 

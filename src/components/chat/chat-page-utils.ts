@@ -1,6 +1,10 @@
-import { createChatSessionClient } from "@/lib/chat-session-client";
-import type { PiAgentState, PiModel, PiThinkingLevel } from "@/lib/pi-runtime";
-import type { Project } from "@/lib/projects";
+import { createChatSessionClient } from "@/lib/api/chat-session-client";
+import type {
+	PiAgentState,
+	PiModel,
+	PiThinkingLevel,
+} from "@/lib/api/pi-runtime";
+import type { Project } from "@/lib/api/projects";
 
 export type ChatSession = {
 	id: string;

@@ -134,7 +134,7 @@ Add/update/run tests only with explicit user authorization. Assertion points:
   metadata stays unresolved; custom Scope works with bare availability; empty
   loaded catalogs remain distinct from missing catalogs; old-project hydration
   cannot replace the current project's snapshot.
-- Existing `tests/chat-composer-run-config.test.ts` keeps asserting the genuine
+- Existing `tests/unit/chat-composer-run-config.test.ts` keeps asserting the genuine
   root DropdownMenu trigger's `aria-haspopup="menu"`, Slot prop forwarding,
   disabled state and accessible name. No assertion change is needed merely
   because the model submenu now contains search/Scope controls.
@@ -224,7 +224,7 @@ Cover NULL/empty command migration and round-trip, retained commands on query
 failure, internal-command exclusion, old complete cache reuse, missing-cache
 deduplication, manual refresh from both clients, RPC correlation and cleanup,
 project switching during refresh, and no new indexed session after a Web probe.
-Implemented assertions live in `tests/pi-models.test.ts` (no age expiry, shared
+Implemented assertions live in `tests/unit/pi-models.test.ts` (no age expiry, shared
 probe deduplication, internal-command filtering, retained commands on failure and
 probe cleanup/retry) and `runtime/storage.rs` (migration, NULL/empty commands,
 older-client writes, stale-write rejection and cascade deletion).

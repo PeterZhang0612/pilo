@@ -43,24 +43,48 @@ the feature folder.
 
 ## `src/lib/`
 
-Non-React logic and thin glue, kebab-case files:
+Shared logic and thin glue, with kebab-case file names:
 
-- **Tauri API clients**: one module per domain (`sessions.ts`, `connections.ts`,
-  `projects.ts`, `terminal.ts`, `git.ts`, `preview.ts`, `parallel.ts`). These
-  call `invoke`/`listen` and expose typed async functions. This is the only
-  place `@tauri-apps/api` is used.
-- **Transport-neutral client**: `pilo-client.ts` defines the `PiloClient`
-  interface; `tauri-pilo-client.ts` implements it over invoke/channel and
-  `remote/web-pilo-client.ts` over fetch/WebSocket. Feature code should depend on
-  `PiloClient`, not on either transport directly.
-- **Remote transport**: `remote.ts` + `remote/remote-client.ts` hold the Remote
-  HTTP/WS calls and token storage; `remote/remote-app.tsx` is the browser shell
-  (pairing, reconnecting, resync). Only Remote-MVP features are mirrored on this
-  path — Files/Terminal/Git stay Tauri-only.
-- **Pure logic**: `conversation-reducer.ts`, `chat-submission.ts`,
-  `chat-virtualization.ts`, `skill-invocation.ts`, etc. — unit-tested in `tests/`.
-- **Providers**: `preferences-provider.tsx`, `theme-provider.tsx`.
-- **Cross-cutting hooks**: `use-keyboard-shortcut.ts`.
+```text
+src/lib/
+  api/       # domain clients, runtime transport/types, desktop window API
+  chat/      # conversation state, submissions, search, media, rendering helpers
+  *.ts       # cross-feature utilities and settings models
+  *.tsx      # shared preferences/theme providers
+  use-*.ts   # cross-cutting hooks
+```
+
+- **Domain clients** live in `api/`: `sessions.ts`, `connections.ts`,
+  `projects.ts`, `terminal.ts`, `git.ts`, `preview.ts`, etc. They expose typed
+  async functions over Tauri or Pi RPC. Their associated transport types stay
+  beside them (`api/pi-runtime-types.ts`).
+- **Transport-neutral client**: `api/pilo-client.ts` defines `PiloClient`;
+  `api/tauri-pilo-client.ts` implements it over invoke/channel and
+  `src/remote/web-pilo-client.ts` over fetch/WebSocket. Shared feature code
+  depends on `PiloClient`, not on either implementation directly.
+- **Remote transport**: `api/remote.ts` + `src/remote/remote-client.ts` hold
+  Remote HTTP/WS calls and token storage; `src/remote/remote-app.tsx` is the
+  browser shell. Browser-only modules must not gain a runtime dependency on a
+  desktop adapter during a move.
+- **Chat logic** lives in `chat/`: reducers, replay, submission/mention parsing,
+  streaming presentation, image handling and opt-in diagnostics. This folder
+  also contains chat-specific adapters; it is not a pure-logic-only boundary.
+- **Cross-feature utilities, settings, providers and hooks** stay at the root.
+  Component-specific helpers stay beside their components instead of moving
+  into `lib/` just because they are testable.
+- Import modules directly; do not add compatibility re-export files or a new
+  barrel solely to hide a directory move.
+
+## `tests/`
+
+- `unit/`: focused logic, state/store and static-rendering tests.
+- `integration/`: CLI/process and Pi extension integration tests.
+- `browser/`: HTML regression pages served through Vite.
+- `packaging/`: platform packaging/orchestration tests.
+- `helpers/`: shared test tooling, including the Node TSX/alias loader.
+
+See `tests/README.md` for commands. New Node tests are discovered by directory
+and file name; do not maintain a per-file list in `package.json`.
 
 ## Rules
 
@@ -69,6 +93,6 @@ Non-React logic and thin glue, kebab-case files:
 - UI components don't contain raw Tauri calls; hooks/`lib` do.
 - Browser-only code must not import Tauri APIs at module top level; the Remote
   shell is loaded based on `__TAURI_INTERNALS__` detection in `main.tsx`.
-- New feature → new folder under `components/`, new API module under `lib/` if
-  it talks to the backend.
+- New feature → new folder under `components/`, new API module under `lib/api/`
+  if it talks to the backend. Chat-domain shared helpers go in `lib/chat/`.
 - Prefer `@/` path alias (maps to `src/`) over deep relative imports.

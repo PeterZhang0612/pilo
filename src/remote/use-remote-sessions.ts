@@ -5,9 +5,9 @@ import {
 	toProjectExternalActivity,
 	type ProjectExternalActivity,
 } from "@/components/app/app-session-index-model";
-import type { PiloClientBootstrap } from "@/lib/pilo-client";
-import type { Project } from "@/lib/projects";
-import type { SessionIndexEntry } from "@/lib/sessions";
+import type { PiloClientBootstrap } from "@/lib/api/pilo-client";
+import type { Project } from "@/lib/api/projects";
+import type { SessionIndexEntry } from "@/lib/api/sessions";
 import type { WebPiloClient } from "./web-pilo-client";
 
 // 外部 Pi 进程不会发出 Host 事件，只能像桌面端一样做低频兜底轮询。

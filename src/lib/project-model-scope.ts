@@ -1,4 +1,4 @@
-import type { PiModel, PiThinkingLevel } from "@/lib/pi-runtime-types";
+import type { PiModel, PiThinkingLevel } from "@/lib/api/pi-runtime-types";
 
 export type ProjectScopedModel = {
 	provider: string;

@@ -17,8 +17,8 @@ import { toggleChatExpansionWithAnchor } from "@/components/chat/chat-expansion-
 import { useChatExpansionState } from "@/components/chat/chat-expansion-state";
 import { ChatMarkdown } from "@/components/chat/chat-markdown";
 import { useChatFindMatch } from "@/components/chat/chat-find-context";
-import type { AssistantContentItem } from "@/lib/chat-activity-state";
-import type { ChatMessage } from "@/lib/conversation-types";
+import type { AssistantContentItem } from "@/lib/chat/chat-activity-state";
+import type { ChatMessage } from "@/lib/chat/conversation-types";
 import { formatWorkDuration } from "@/lib/format-duration";
 import { usePreferences } from "@/lib/preferences-provider";
 import { cn } from "@/lib/utils";

@@ -13,7 +13,7 @@
 | App shell state        | `src/App.tsx`                                                    | `useState` + orchestration hooks in `src/components/app/`               |
 | Feature state          | feature components                                               | `useState` / `useReducer`                                               |
 | Hot runtime state      | `src/components/chat/chat-conversation-store.ts`                 | external store + `useSyncExternalStore`                                 |
-| Server data            | `src/lib/*.ts`                                                   | `invoke`/`listen`, results held in component/feature state              |
+| Server data            | `src/lib/api/*.ts`                                                   | `invoke`/`listen`, results held in component/feature state              |
 
 ## Rules
 

@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 
-import { coalesceConversationActions } from "@/lib/conversation-replay";
-import type { ConversationAction } from "@/lib/conversation-types";
+import { coalesceConversationActions } from "@/lib/chat/conversation-replay";
+import type { ConversationAction } from "@/lib/chat/conversation-types";
 import {
 	recordChatPresentationFlush,
 	recordChatPresentationInterval,
-} from "@/lib/chat-performance";
+} from "@/lib/chat/chat-performance";
 
 const INACTIVE_RUNTIME_FLUSH_MS = 150;
 

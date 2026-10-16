@@ -21,7 +21,7 @@ import {
 	summarizeChatImages,
 	type ChatImageAttachment,
 	type ChatSubmission,
-} from "@/lib/chat-submission";
+} from "@/lib/chat/chat-submission";
 import { toast } from "sonner";
 
 const EMPTY_CHAT_IMAGES: readonly ChatImageAttachment[] = [];

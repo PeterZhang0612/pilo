@@ -32,8 +32,8 @@ import {
 } from "@/components/chat/chat-image-viewer";
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
 import { ChatMarkdownImageScopeProvider } from "@/components/chat/chat-markdown-image";
-import { connectionLabel } from "@/lib/projects";
-import type { PiloClientEventMessage } from "@/lib/pilo-client";
+import { connectionLabel } from "@/lib/api/projects";
+import type { PiloClientEventMessage } from "@/lib/api/pilo-client";
 import { TooltipProvider } from "@/ui";
 import { RemotePairingPage } from "./remote-pairing-page";
 import { isRemotePairingLocation } from "./remote-pairing-model";

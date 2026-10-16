@@ -1,4 +1,4 @@
-import type { RemoteAccessAddress } from "./remote";
+import type { RemoteAccessAddress } from "./api/remote";
 
 /** LAN and loopback hosts default to HTTP; public hostnames default to HTTPS. */
 function withDefaultScheme(input: string): string {

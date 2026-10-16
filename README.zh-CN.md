@@ -131,12 +131,18 @@ bash scripts/build-pilo-server.sh <target>
 | `pnpm check`                                                           | 运行 oxfmt 格式检查和 oxlint                  |
 | `pnpm format`                                                          | 使用 oxfmt 格式化前端代码                     |
 | `pnpm build`                                                           | TypeScript 类型检查并构建前端                 |
-| `pnpm test:unit`                                                       | 运行前端单元测试                              |
+| `pnpm test`                                                            | 运行 Node 单元测试和集成测试                  |
+| `pnpm test:unit`                                                       | 运行单元测试和静态渲染测试                    |
+| `pnpm test:integration`                                                | 运行 CLI/进程及 Pi 扩展集成测试（Linux/WSL）  |
+| `pnpm test:packaging`                                                  | 运行 AppImage 打包编排测试（Linux/WSL）       |
 | `cargo fmt --all --check`                                              | Rust 格式检查                                 |
 | `cargo check --workspace --all-targets --all-features`                 | Rust workspace 检查                           |
 | `cargo test --workspace --all-features`                                | Rust workspace 测试                           |
 | `cargo clippy --workspace --all-targets --all-features -- -D warnings` | Rust lint                                     |
 | `pnpm server:verify`                                                   | 校验发布所需的完整六平台 `pilo-server` 资源集 |
+
+测试目录、单文件运行命令及浏览器回归页面见 [tests/README.md](tests/README.md)。
+`pnpm test` 不包含浏览器、打包或 Rust 测试。
 
 ### 桌面 WebDriver 调试
 

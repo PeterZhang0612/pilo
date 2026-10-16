@@ -20,8 +20,8 @@ import type { ChatUiStateCache } from "@/components/app/chat-ui-state-cache";
 import type { BusyChatControllersRef } from "@/components/app/use-opened-chat-controllers";
 import type { ChatSession } from "@/components/chat/chat-page";
 import { userErrorMessage } from "@/lib/app-error";
-import { stopChatSession } from "@/lib/chat-session-client";
-import type { SessionIndexEntry } from "@/lib/sessions";
+import { stopChatSession } from "@/lib/api/chat-session-client";
+import type { SessionIndexEntry } from "@/lib/api/sessions";
 
 type ForkSessionTarget = {
 	sessionId: string;

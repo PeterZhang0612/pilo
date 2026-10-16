@@ -1,8 +1,12 @@
 import { type Dispatch, type SetStateAction, useCallback, useRef } from "react";
 
 import type { ChatSession } from "@/components/chat/chat-page-utils";
-import type { createChatSessionClient } from "@/lib/chat-session-client";
-import type { PiAgentState, PiModel, PiThinkingLevel } from "@/lib/pi-runtime";
+import type { createChatSessionClient } from "@/lib/api/chat-session-client";
+import type {
+	PiAgentState,
+	PiModel,
+	PiThinkingLevel,
+} from "@/lib/api/pi-runtime";
 
 type ChatSessionClient = ReturnType<typeof createChatSessionClient>;
 

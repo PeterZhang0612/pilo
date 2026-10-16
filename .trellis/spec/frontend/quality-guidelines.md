@@ -10,7 +10,10 @@
 pnpm format        # oxfmt --write  (apply formatting)
 pnpm check         # oxfmt --check + oxlint (CI gate)
 pnpm build         # tsc && vite build
-pnpm test:unit     # node --test on tests/*.test.ts
+pnpm test          # Node unit + integration suites (not browser/packaging/Rust)
+pnpm test:unit     # tests/unit/**/*.test.{ts,mjs}
+pnpm test:integration # tests/integration/**/*.test.{ts,mjs}
+pnpm test:packaging # Python AppImage orchestration tests (Linux/WSL)
 ```
 
 Run `pnpm format`, `pnpm check`, `pnpm build` for any frontend change. Full
@@ -36,27 +39,36 @@ automatic JSX).
 
 ## Testing
 
-- Runner: Node's built-in `node --test` with `node --experimental-strip-types`.
-  No Jest/Vitest, no framework, no fixtures.
-- Location: `tests/<name>.test.ts`, importing source directly from `../src/lib/<name>.ts`.
+- Runner: Node 22's built-in `node --test` with `--experimental-strip-types`.
+  No Jest/Vitest or new framework dependency. `tests/helpers/tsx-loader.mjs`
+  handles TSX and `@/` aliases.
+- Location: `tests/unit/<name>.test.ts` for focused tests;
+  `tests/integration/<name>.test.{ts,mjs}` for CLI/process/extension integration.
+  Import source directly using paths relative to the test file.
 - Assertions: `node:assert/strict`.
-- Scope: **pure logic** — reducers, parsers, state machines, formatting.
+- Unit scope: reducers, parsers, state machines, formatting, stores and focused
+  React static-rendering checks. Real DOM/interaction checks live in
+  `tests/browser/`; packaging checks live in `tests/packaging/`.
+- Scripts use quoted recursive globs expanded by Node, not a shell-specific
+  file list. New matching files are included automatically. `pnpm test` runs
+  both Node suites; browser, packaging and Rust tests are separate.
+- See `tests/README.md` for commands and platform requirements.
 
 ```ts
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseSkillInvocation } from "../src/lib/skill-invocation.ts";
+import { parseSkillInvocation } from "../../src/lib/chat/skill-invocation.ts";
 
 test("parses the expanded skill block emitted by Pi", () => {
 	assert.deepEqual(parseSkillInvocation(expandedText), { ... });
 });
 ```
 
-- A new pure module in `src/lib/` that encodes non-trivial logic should ship with
-  a matching `tests/*.test.ts`, and the file must be added to the explicit list
-  in the `test:unit` script in `package.json`.
-- React components/hooks are not unit-tested here; verify them via `pnpm build`
-  and manual desktop runs.
+- A new pure module in `src/lib/` that encodes non-trivial logic should ship
+  with a matching `tests/unit/*.test.ts`; no `package.json` file-list change
+  is needed.
+- Static rendering does not verify browser interactions or hooks. Use the
+  browser regression pages and manual desktop runs for those behaviors.
 
 ### Browser Selection Regression
 
@@ -73,8 +85,9 @@ buttons, terminals, ordinary drag selection and touch long-press stay native.
 
 DOM selection tests need a real browser, not mocked `Range`/`Selection` objects.
 Run `pnpm exec vite --host 127.0.0.1`, open
-`/tests/dom-text-selection.html`, and require `data-test-status="passed"` on the
-body. This suite is separate from `test:unit`. Verify both Chromium and WebKit:
+`/tests/browser/dom-text-selection.html`, and require
+`data-test-status="passed"` on the body. This suite is separate from `test:unit`.
+Verify both Chromium and WebKit:
 WebKit can clamp selections at editing boundaries, so native-control tests
 compare the actual range before/after rather than assuming requested endpoints.
 Selection assertions do not replace visual verification in the desktop WebView.

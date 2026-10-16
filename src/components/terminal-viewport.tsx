@@ -9,7 +9,7 @@ import {
 	resizeTerminal,
 	writeTerminal,
 	type TerminalInfo,
-} from "@/lib/terminal";
+} from "@/lib/api/terminal";
 import { cn } from "@/lib/utils";
 
 export type TerminalTab = TerminalInfo & {

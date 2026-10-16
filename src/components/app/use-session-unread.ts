@@ -3,11 +3,11 @@ import { useState } from "react";
 import { chatUiStateKey } from "@/components/app/app-chat-state";
 
 import type { SidebarSession } from "@/components/sidebar/types";
-import type { ChatSessionRuntimeState } from "@/lib/chat-session-client";
+import type { ChatSessionRuntimeState } from "@/lib/api/chat-session-client";
 import {
 	chatRuntimeHasOpenTurn,
 	runtimeSessionIdFromKey,
-} from "@/lib/chat-session-runtime-model";
+} from "@/lib/chat/chat-session-runtime-model";
 
 /**
  * Tracks unread dots for agent runs: a session flips to unread when it goes

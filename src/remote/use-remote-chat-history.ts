@@ -19,14 +19,14 @@ import {
 	markExternalTurnLive,
 	sameHistoryFingerprint,
 } from "@/components/chat/chat-conversation-model";
-import { replayConversationEvents } from "@/lib/conversation-replay";
-import type { ConversationState } from "@/lib/conversation-types";
+import { replayConversationEvents } from "@/lib/chat/conversation-replay";
+import type { ConversationState } from "@/lib/chat/conversation-types";
 import type {
 	SessionHistory,
 	SessionHistoryFingerprint,
 	SessionHistoryResult,
 	SessionIndexEntry,
-} from "@/lib/sessions";
+} from "@/lib/api/sessions";
 import { reducerContext, sessionKey } from "./remote-app-model";
 import type { WebPiloClient } from "./web-pilo-client";
 

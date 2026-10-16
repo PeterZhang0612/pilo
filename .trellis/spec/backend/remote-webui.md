@@ -12,7 +12,7 @@ Apply code-spec depth when a change touches:
 - The HTTP/WebSocket Remote adapter (`runtime/remote/*`).
 - The `RuntimeEventBus` broadcast/replay contract (`runtime/events.rs`).
 - `remote_host_config` / `remote_pairing` / `remote_devices` SQLite tables.
-- The transport-neutral `PiloClient` boundary (`src/lib/pilo-client.ts` + adapters).
+- The transport-neutral `PiloClient` boundary (`src/lib/api/pilo-client.ts` + adapters).
 
 The Remote adapter is a **transport adapter into the same Host** — it must not own
 session state, and it must not call Tauri-specific types from Application code.
@@ -515,13 +515,13 @@ security boundary. This uses plain Pi reply text; it does not extend Pi RPC.
 
 ### 6. Tests Required
 
-- `tests/chat-markdown-images.test.ts`: path decoding/rejection, real Markdown
+- `tests/unit/chat-markdown-images.test.ts`: path decoding/rejection, real Markdown
   plugin order, surrounding text, HTTPS images, in-flight deduplication, rereading
   overwritten files without revoking previous URLs, bounded URL retention, retry
   and history cache regression.
 - `remote_fs::tests`: extension/path, matching signatures and post-read size cap.
 - Existing server filesystem tests: canonical paths and symlink escape rejection.
-- `/tests/chat-markdown-images.html` under Vite: require body
+- `/tests/browser/chat-markdown-images.html` under Vite: require body
   `data-test-status="passed"`; checks desktop/mobile layout, inline images,
   lightbox/save actions, retry, overwritten screenshots in new replies, external
   action label/target/no-download and no unsafe reader calls. Reader is injected;

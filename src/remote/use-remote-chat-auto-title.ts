@@ -6,8 +6,8 @@ import {
 } from "react";
 
 import type { ChatSessionRuntimeState } from "@/components/chat/chat-page-utils";
-import type { PiAgentState } from "@/lib/pi-runtime";
-import type { SessionIndexEntry } from "@/lib/sessions";
+import type { PiAgentState } from "@/lib/api/pi-runtime";
+import type { SessionIndexEntry } from "@/lib/api/sessions";
 import type { RemoteSessionRpc } from "./use-remote-chat-transport";
 import type { WebPiloClient } from "./web-pilo-client";
 

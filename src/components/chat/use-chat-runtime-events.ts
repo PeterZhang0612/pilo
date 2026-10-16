@@ -9,10 +9,10 @@ import type {
 } from "@/components/chat/chat-runtime-types";
 import type { ChatSession } from "@/components/chat/chat-page-utils";
 import { isPresentationBatchedAction } from "@/components/chat/use-runtime-conversation-dispatch";
-import { recordChatRuntimeEvent } from "@/lib/chat-performance";
-import { recordChatRuntimeTraceEvent } from "@/lib/chat-runtime-trace";
-import { toConversationAction } from "@/lib/conversation-runtime-adapter";
-import type { ConversationAction } from "@/lib/conversation-types";
+import { recordChatRuntimeEvent } from "@/lib/chat/chat-performance";
+import { recordChatRuntimeTraceEvent } from "@/lib/chat/chat-runtime-trace";
+import { toConversationAction } from "@/lib/chat/conversation-runtime-adapter";
+import type { ConversationAction } from "@/lib/chat/conversation-types";
 import {
 	notifyAgentResult,
 	type AgentNotificationStatus,
@@ -21,7 +21,7 @@ import {
 	runtimeErrorMessage,
 	type PiAgentState,
 	type PiloRuntimeEvent,
-} from "@/lib/pi-runtime";
+} from "@/lib/api/pi-runtime";
 
 const CONTEXT_STATS_REFRESH_DELAY_MS = 1000;
 

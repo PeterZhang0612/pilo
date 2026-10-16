@@ -1,8 +1,8 @@
 import type { MutableRefObject } from "react";
 
 import type { AppError } from "@/lib/app-error";
-import type { createChatSessionClient } from "@/lib/chat-session-client";
-import type { ChatSubmission } from "@/lib/chat-submission";
+import type { createChatSessionClient } from "@/lib/api/chat-session-client";
+import type { ChatSubmission } from "@/lib/chat/chat-submission";
 
 export type ChatSessionClient = ReturnType<typeof createChatSessionClient>;
 

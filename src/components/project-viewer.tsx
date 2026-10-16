@@ -7,10 +7,10 @@ import { i18n } from "@/i18n";
 import { TRAFFIC_LIGHT_GUTTER } from "@/components/title-bar";
 import { userErrorMessage } from "@/lib/app-error";
 import { highlightProjectFile } from "@/lib/code-highlighter";
-import { readProjectFile } from "@/lib/files";
+import { readProjectFile } from "@/lib/api/files";
 import { getMonospaceFontFamilyStack } from "@/lib/font-settings";
 import { usePreferences } from "@/lib/preferences-provider";
-import type { Project } from "@/lib/projects";
+import type { Project } from "@/lib/api/projects";
 import { cn } from "@/lib/utils";
 import { Button, EmptyState } from "@/ui";
 

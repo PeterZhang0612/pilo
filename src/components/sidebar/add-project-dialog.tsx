@@ -4,17 +4,17 @@ import { ChevronLeft, Folder, FolderOpen, Search } from "lucide-react";
 import { toast } from "sonner";
 
 import { userErrorMessage } from "@/lib/app-error";
-import type { FsEntry } from "@/lib/files";
+import type { FsEntry } from "@/lib/api/files";
 import { isImeComposingKeyboardEvent } from "@/lib/ime";
-import { refreshProjectPiModels } from "@/lib/pi-models";
-import type { Connection } from "@/lib/pi-runtime";
+import { refreshProjectPiModels } from "@/lib/api/pi-models";
+import type { Connection } from "@/lib/api/pi-runtime";
 import {
 	addProject,
 	connectionLabel,
 	notifyProjectsChanged,
 	pickLocalProjectDirectory,
 	readConnectionDir,
-} from "@/lib/projects";
+} from "@/lib/api/projects";
 import {
 	Button,
 	Dialog,

@@ -15,9 +15,9 @@ import {
 	TRAFFIC_LIGHT_GUTTER,
 } from "@/components/title-bar";
 import { ProjectEditorMenu } from "@/components/project-editor-menu";
-import type { Project } from "@/lib/projects";
+import type { Project } from "@/lib/api/projects";
 import { cn } from "@/lib/utils";
-import { isSessionWindow } from "@/lib/window";
+import { isSessionWindow } from "@/lib/api/window";
 import { Button, Tooltip, TooltipContent, TooltipTrigger } from "@/ui";
 import type { ChatSession, ChatSessionRuntimeState } from "./chat-page-utils";
 import { SessionHeaderMenu } from "./chat-session-header-menu";

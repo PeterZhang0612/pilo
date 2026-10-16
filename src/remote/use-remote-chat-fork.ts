@@ -3,10 +3,10 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
 import { userErrorMessage } from "@/lib/app-error";
-import type { ChatMessage } from "@/lib/conversation-types";
-import { resolveAssistantForkTarget } from "@/lib/pi-session-fork";
-import type { PiAgentState, PiSessionEntries } from "@/lib/pi-runtime";
-import type { SessionIndexEntry } from "@/lib/sessions";
+import type { ChatMessage } from "@/lib/chat/conversation-types";
+import { resolveAssistantForkTarget } from "@/lib/chat/pi-session-fork";
+import type { PiAgentState, PiSessionEntries } from "@/lib/api/pi-runtime";
+import type { SessionIndexEntry } from "@/lib/api/sessions";
 import { randomId } from "@/lib/utils";
 import { sessionKey } from "./remote-app-model";
 import type { RemoteSessionRpc } from "./use-remote-chat-transport";

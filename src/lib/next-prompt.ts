@@ -1,6 +1,6 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 
-import type { PiloRuntimeEvent } from "@/lib/pi-runtime";
+import type { PiloRuntimeEvent } from "@/lib/api/pi-runtime";
 
 export type NextPromptModel = { provider: string; id: string };
 export type NextPromptSettings = {

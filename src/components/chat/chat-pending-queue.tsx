@@ -1,7 +1,7 @@
 import { Pencil, Send } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import type { ConversationState } from "@/lib/conversation-types";
+import type { ConversationState } from "@/lib/chat/conversation-types";
 import {
 	Button,
 	Hint,

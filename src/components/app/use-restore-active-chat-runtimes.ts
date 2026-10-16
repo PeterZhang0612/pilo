@@ -8,9 +8,9 @@ import {
 	type OpenChat,
 } from "@/components/app/app-chat-state";
 import type { ChatSession } from "@/components/chat/chat-page";
-import { listChatSessionRuntimeStates } from "@/lib/chat-session-client";
-import { listSessions } from "@/lib/sessions";
-import type { Project } from "@/lib/projects";
+import { listChatSessionRuntimeStates } from "@/lib/api/chat-session-client";
+import { listSessions } from "@/lib/api/sessions";
+import type { Project } from "@/lib/api/projects";
 
 type UseRestoreActiveChatRuntimesOptions = {
 	projects: readonly Project[];

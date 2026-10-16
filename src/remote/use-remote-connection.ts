@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { ChatRuntimeRecoveryState } from "@/components/chat/chat-runtime-types";
-import type { PiloClientEventMessage } from "@/lib/pilo-client";
+import type { PiloClientEventMessage } from "@/lib/api/pilo-client";
 import {
 	resolveRemoteConnectionState,
 	type RemoteConnectionState,

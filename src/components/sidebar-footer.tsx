@@ -10,7 +10,7 @@ import {
 	Sun,
 } from "lucide-react";
 
-import { getRemoteHostState, type RemoteHostState } from "@/lib/remote";
+import { getRemoteHostState, type RemoteHostState } from "@/lib/api/remote";
 import { usePreferences } from "@/lib/preferences-provider";
 import { nextCycledTheme, useTheme, type Theme } from "@/lib/theme-provider";
 import { useKeyboardShortcut } from "@/lib/use-keyboard-shortcut";

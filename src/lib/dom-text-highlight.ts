@@ -3,12 +3,12 @@
  * 不改 Markdown 渲染管线、不产生额外 DOM 节点，虚拟列表里的已挂载行才生效。
  */
 
-import type { ChatMessageMatch } from "./chat-message-search";
+import type { ChatMessageMatch } from "./chat/chat-message-search";
 import {
 	SEARCH_BLOCK_TAGS,
 	SEARCH_IGNORED_TAGS,
 	searchTextMatches,
-} from "./chat-search-text";
+} from "./chat/chat-search-text";
 
 const ALL_HIGHLIGHT = "pilo-find";
 const ACTIVE_HIGHLIGHT = "pilo-find-active";

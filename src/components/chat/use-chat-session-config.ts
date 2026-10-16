@@ -2,14 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
-import { createChatSessionClient } from "@/lib/chat-session-client";
+import { createChatSessionClient } from "@/lib/api/chat-session-client";
 import {
 	getCachedProjectPiModels,
 	hydrateProjectPiModels,
 	isProjectPiModelsIncomplete,
 	refreshProjectPiModels,
 	subscribeProjectPiModels,
-} from "@/lib/pi-models";
+} from "@/lib/api/pi-models";
 import {
 	findMatchingPiModel,
 	getNextPiScopeModel,
@@ -23,13 +23,13 @@ import {
 	runtimeErrorMessage,
 	type PiModel,
 	type PiThinkingLevel,
-} from "@/lib/pi-runtime";
+} from "@/lib/api/pi-runtime";
 import type { ChatSession } from "@/components/chat/chat-page-utils";
 import { useChatRuntimeConfiguration } from "@/components/chat/use-chat-runtime-configuration";
 import { useChatSessionState } from "@/components/chat/use-chat-session-state";
 import { useChatThinkingControls } from "@/components/chat/use-chat-thinking-controls";
 
-import { tauriPiloClient } from "@/lib/tauri-pilo-client";
+import { tauriPiloClient } from "@/lib/api/tauri-pilo-client";
 import { useProjectModelScope } from "@/lib/use-project-model-scope";
 
 type ChatSessionClient = ReturnType<typeof createChatSessionClient>;

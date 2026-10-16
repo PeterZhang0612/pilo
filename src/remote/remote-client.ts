@@ -6,16 +6,16 @@ import type {
 } from "@/lib/next-prompt";
 import { describeDevice } from "@/lib/device-name";
 import type { SessionReadState } from "@/lib/session-read-state";
-import type { RemoteAccessAddress } from "@/lib/remote";
-import type { ChatSessionRuntimeState } from "@/lib/chat-session-client";
+import type { RemoteAccessAddress } from "@/lib/api/remote";
+import type { ChatSessionRuntimeState } from "@/lib/api/chat-session-client";
 import type {
 	PiloClientBootstrap,
 	PiloClientEventMessage,
 	PiloClientHistoryOptions,
 	PiloClientStartChatInput,
-} from "@/lib/pilo-client";
-import type { ProjectPiModels } from "@/lib/pi-models";
-import type { PiSessionSnapshot } from "@/lib/pi-runtime";
+} from "@/lib/api/pilo-client";
+import type { ProjectPiModels } from "@/lib/api/pi-models";
+import type { PiSessionSnapshot } from "@/lib/api/pi-runtime";
 import type {
 	ProjectModelScope,
 	ProjectScopedModel,
@@ -27,7 +27,7 @@ import type {
 	SessionHistoryResult,
 	SessionIndexEntry,
 	SessionSearchMatch,
-} from "@/lib/sessions";
+} from "@/lib/api/sessions";
 
 export const REMOTE_TOKEN_KEY = "pilo.remote.device-token.v1";
 export const REMOTE_SEQUENCE_KEY = "pilo.remote.sequence.v1";

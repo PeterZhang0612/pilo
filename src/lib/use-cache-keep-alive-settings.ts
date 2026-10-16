@@ -4,8 +4,8 @@ import type {
 	CacheKeepAliveSettings,
 	CacheKeepAliveStatus,
 } from "@/lib/cache-keep-alive";
-import type { PiloClient } from "@/lib/pilo-client";
-import { runtimeErrorMessage } from "@/lib/pi-runtime";
+import type { PiloClient } from "@/lib/api/pilo-client";
+import { runtimeErrorMessage } from "@/lib/api/pi-runtime";
 
 export function useCacheKeepAliveSettings(
 	client: PiloClient,

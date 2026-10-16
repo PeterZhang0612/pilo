@@ -23,14 +23,14 @@ import { MessageRow } from "@/components/chat/chat-message-row";
 import { SwitchSkeletonOverlay } from "@/components/chat/chat-switch-skeleton";
 import { ConversationOutlineRail } from "@/components/chat/conversation-outline-rail";
 import { useChatScrollController } from "@/components/chat/use-chat-scroll-controller";
-import type { ChatMessage } from "@/lib/conversation-types";
-import { recordChatSessionSwitchReady } from "@/lib/chat-performance";
+import type { ChatMessage } from "@/lib/chat/conversation-types";
+import { recordChatSessionSwitchReady } from "@/lib/chat/chat-performance";
 import { cn } from "@/lib/utils";
 import {
 	shouldInitializeShortChatPromoted,
 	shouldPromoteShortChatVirtualization,
 	shouldRenderPlainShortChat,
-} from "@/lib/chat-virtualization";
+} from "@/lib/chat/chat-virtualization";
 import {
 	Button,
 	ErrorState,

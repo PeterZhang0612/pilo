@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { PiloClient } from "@/lib/pilo-client";
-import { runtimeErrorMessage, type PiloRuntimeEvent } from "@/lib/pi-runtime";
+import type { PiloClient } from "@/lib/api/pilo-client";
+import {
+	runtimeErrorMessage,
+	type PiloRuntimeEvent,
+} from "@/lib/api/pi-runtime";
 import type {
 	ProjectModelScope,
 	ProjectScopedModel,

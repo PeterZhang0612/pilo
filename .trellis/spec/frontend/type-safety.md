@@ -16,7 +16,7 @@ Path alias: `@/*` → `./src/*`. The project type-checks via `tsc` inside
 - **No `any`.** The codebase has zero `any` / `as any` / `@ts-ignore`. Use
   `unknown` at boundaries and narrow it.
 - Exhaustive unions for domain state. `ConversationState` / `ChatMessage` in
-  `src/lib/conversation-types.ts` are discriminated unions on `role`:
+  `src/lib/chat/conversation-types.ts` are discriminated unions on `role`:
 
 ```ts
 export type ChatMessage =

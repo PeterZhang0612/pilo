@@ -11,8 +11,8 @@ import { ChevronDown, ChevronUp, Search, X } from "lucide-react";
 
 import { ChatFindMatchContext } from "@/components/chat/chat-find-context";
 import { useSessionMentions } from "@/components/chat/session-mention-context";
-import { findMessageMatches } from "@/lib/chat-message-search";
-import type { ChatMessage } from "@/lib/conversation-types";
+import { findMessageMatches } from "@/lib/chat/chat-message-search";
+import type { ChatMessage } from "@/lib/chat/conversation-types";
 import { useKeyboardShortcut } from "@/lib/use-keyboard-shortcut";
 import {
 	applyTextHighlight,

@@ -16,9 +16,9 @@ import {
 	getAssistantStreamingState,
 	splitAssistantContentForDisplay,
 	type AssistantContentItem,
-} from "@/lib/chat-activity-state";
-import type { ChatMessage } from "@/lib/conversation-types";
-import { recordChatMessageRender } from "@/lib/chat-performance";
+} from "@/lib/chat/chat-activity-state";
+import type { ChatMessage } from "@/lib/chat/conversation-types";
+import { recordChatMessageRender } from "@/lib/chat/chat-performance";
 import { formatWorkDuration } from "@/lib/format-duration";
 import { getPageFontFamilyStack } from "@/lib/font-settings";
 import { usePreferences } from "@/lib/preferences-provider";

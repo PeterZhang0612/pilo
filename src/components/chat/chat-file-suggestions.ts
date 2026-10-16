@@ -1,5 +1,5 @@
 import type { ComposerSuggestion } from "@/components/chat/chat-composer-suggestions";
-import { fileMentionValue } from "@/lib/chat-mentions";
+import { fileMentionValue } from "@/lib/chat/chat-mentions";
 
 const FILE_SUGGESTION_LIMIT = 5;
 

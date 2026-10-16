@@ -5,20 +5,20 @@ import { toast } from "sonner";
 import { i18n } from "../../i18n/index.ts";
 
 import type { PiExtensionNotification } from "@/components/chat/pi-extension-notifications";
-import { createChatSessionClient } from "@/lib/chat-session-client";
+import { createChatSessionClient } from "@/lib/api/chat-session-client";
 import {
 	getCachedProjectPiModels,
 	refreshProjectPiModels,
-} from "@/lib/pi-models";
+} from "@/lib/api/pi-models";
 import {
 	createPiCommandSuggestions,
 	createPiExtensionCommandNames,
-} from "@/lib/pi-command-suggestions";
+} from "@/lib/chat/pi-command-suggestions";
 import {
 	runtimeErrorMessage,
 	type PiCommand,
 	type PiloRuntimeEvent,
-} from "@/lib/pi-runtime";
+} from "@/lib/api/pi-runtime";
 
 type ChatSessionClient = ReturnType<typeof createChatSessionClient>;
 

@@ -1,7 +1,7 @@
 import { ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import type { Project } from "@/lib/projects";
+import type { Project } from "@/lib/api/projects";
 import {
 	DropdownMenu,
 	DropdownMenuContent,

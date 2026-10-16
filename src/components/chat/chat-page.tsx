@@ -8,7 +8,7 @@ import type {
 import { CacheKeepAliveNotice } from "@/components/chat/cache-keep-alive-notice";
 import { useCacheKeepAliveStatus } from "@/lib/use-cache-keep-alive-status";
 import { useNextPrompt } from "@/components/chat/use-next-prompt";
-import { tauriPiloClient } from "@/lib/tauri-pilo-client";
+import { tauriPiloClient } from "@/lib/api/tauri-pilo-client";
 import { SessionMentionScope } from "@/components/chat/session-mention-context";
 import { ChatComposer } from "@/components/chat/chat-composer";
 import { ConversationColumn } from "@/components/chat/chat-conversation-column";
@@ -41,13 +41,13 @@ import { useChatSubmissionRecovery } from "@/components/chat/use-chat-submission
 import { useChatVisualRetention } from "@/components/chat/use-chat-visual-retention";
 import { usePiSessionFeatures } from "@/components/chat/use-pi-session-features";
 import { useScrollbarGutterWidth } from "@/components/chat/use-scrollbar-gutter";
-import { createChatSessionClient } from "@/lib/chat-session-client";
+import { createChatSessionClient } from "@/lib/api/chat-session-client";
 import {
 	getActiveStreamingPresentationChars,
 	getStreamingPresentationIntervalMs,
-} from "@/lib/chat-stream-presentation";
-import { type ChatImageAttachment } from "@/lib/chat-submission";
-import { createConversationState } from "@/lib/conversation-reducer";
+} from "@/lib/chat/chat-stream-presentation";
+import { type ChatImageAttachment } from "@/lib/chat/chat-submission";
+import { createConversationState } from "@/lib/chat/conversation-reducer";
 
 import { usePreferences } from "@/lib/preferences-provider";
 

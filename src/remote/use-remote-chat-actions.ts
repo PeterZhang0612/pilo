@@ -13,19 +13,23 @@ import {
 	type ChatSubmission,
 	summarizeChatImages,
 	toPiImageContents,
-} from "@/lib/chat-submission";
-import { reduceConversationActions } from "@/lib/conversation-replay";
+} from "@/lib/chat/chat-submission";
+import { reduceConversationActions } from "@/lib/chat/conversation-replay";
 import type {
 	ConversationAction,
 	ConversationState,
-} from "@/lib/conversation-types";
-import type { PiAgentState, PiModel, PiThinkingLevel } from "@/lib/pi-runtime";
+} from "@/lib/chat/conversation-types";
+import type {
+	PiAgentState,
+	PiModel,
+	PiThinkingLevel,
+} from "@/lib/api/pi-runtime";
 import {
 	PI_PROMPT_RPC_TIMEOUT_MS,
 	runtimeErrorMessage,
 	type PiPromptResult,
-} from "@/lib/pi-runtime";
-import { chatRuntimeHasOpenTurn } from "@/lib/chat-session-runtime-model";
+} from "@/lib/api/pi-runtime";
+import { chatRuntimeHasOpenTurn } from "@/lib/chat/chat-session-runtime-model";
 import { randomId } from "@/lib/utils";
 import { reducerContext } from "./remote-app-model";
 import type {

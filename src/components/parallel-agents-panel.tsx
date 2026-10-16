@@ -13,10 +13,10 @@ import {
 	stopParallelAgent,
 	type ParallelAgentInfo,
 	type ParallelAgentStatus,
-} from "@/lib/parallel";
+} from "@/lib/api/parallel";
 import { userErrorMessage } from "@/lib/app-error";
 import { cn } from "@/lib/utils";
-import type { Project } from "@/lib/projects";
+import type { Project } from "@/lib/api/projects";
 import {
 	Button,
 	Dialog,

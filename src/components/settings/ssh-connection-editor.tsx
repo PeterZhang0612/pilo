@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Eye, EyeOff, KeyRound } from "lucide-react";
 
-import type { SshAuthMethod } from "@/lib/pi-runtime";
+import type { SshAuthMethod } from "@/lib/api/pi-runtime";
 import { cn } from "@/lib/utils";
 import {
 	Button,

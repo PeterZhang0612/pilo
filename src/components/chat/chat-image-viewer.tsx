@@ -20,11 +20,11 @@ import {
 	getLocalChatImageUrl,
 	loadChatHistoryImageUrl,
 	type ChatHistoryImageScope,
-} from "@/lib/chat-image-media";
+} from "@/lib/chat/chat-image-media";
 import {
 	formatChatImageSize,
 	type ChatConversationImage,
-} from "@/lib/chat-submission";
+} from "@/lib/chat/chat-submission";
 import { isImeComposingNativeKeyboardEvent } from "@/lib/ime";
 import { cn } from "@/lib/utils";
 import { Hint, Spinner } from "@/ui";

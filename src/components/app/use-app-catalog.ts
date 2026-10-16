@@ -1,21 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { firstProjectInConnectionOrder } from "@/components/app/app-chat-state";
-import { CONNECTIONS_CHANGED_EVENT } from "@/lib/connection-events";
-import { listConnectionCatalog } from "@/lib/connections";
+import { CONNECTIONS_CHANGED_EVENT } from "@/lib/api/connection-events";
+import { listConnectionCatalog } from "@/lib/api/connections";
 import {
 	getCachedProjectPiModels,
 	hydrateProjectPiModels,
 	isProjectPiModelsIncomplete,
 	refreshAllProjectPiModels,
-} from "@/lib/pi-models";
+} from "@/lib/api/pi-models";
 import {
 	connectionLabel,
 	listProjects,
 	PROJECTS_CHANGED_EVENT,
 	type Project,
-} from "@/lib/projects";
-import type { Connection } from "@/lib/pi-runtime";
+} from "@/lib/api/projects";
+import type { Connection } from "@/lib/api/pi-runtime";
 
 export function useAppCatalog(
 	onProjectsLoaded?: (projects: Project[]) => void,

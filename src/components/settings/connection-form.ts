@@ -3,9 +3,9 @@ import type {
 	PiRuntime,
 	SshAuthMethod,
 	SshTarget,
-} from "@/lib/pi-runtime";
+} from "@/lib/api/pi-runtime";
 import { randomId } from "@/lib/utils";
-import type { SshConnectionInfo } from "@/lib/ssh-connections";
+import type { SshConnectionInfo } from "@/lib/api/ssh-connections";
 
 export const AUTH_LABEL_KEYS: Record<
 	SshAuthMethod,

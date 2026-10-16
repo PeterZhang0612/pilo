@@ -13,7 +13,7 @@ import {
 	writeProjectEditor,
 	type ProjectEditor,
 } from "@/lib/project-editor";
-import type { Project } from "@/lib/projects";
+import type { Project } from "@/lib/api/projects";
 import {
 	Button,
 	DropdownMenu,

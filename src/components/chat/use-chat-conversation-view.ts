@@ -11,8 +11,11 @@ import type { ChatConversationStore } from "@/components/chat/chat-conversation-
 import { buildHistoryPrefix } from "@/components/chat/chat-conversation-model";
 import type { ChatHistoryWindowStore } from "@/components/chat/chat-history-window-store";
 import { EMPTY_MESSAGES } from "@/components/chat/chat-mock-conversations";
-import { recordHistoryHydration } from "@/lib/chat-performance";
-import type { ChatMessage, ConversationState } from "@/lib/conversation-types";
+import { recordHistoryHydration } from "@/lib/chat/chat-performance";
+import type {
+	ChatMessage,
+	ConversationState,
+} from "@/lib/chat/conversation-types";
 
 const EMPTY_PENDING_USERS: ConversationState["pendingUsers"] = [];
 const NOOP_EXTERNAL_STORE_SUBSCRIBE = () => () => undefined;

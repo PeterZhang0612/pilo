@@ -10,14 +10,14 @@ import type {
 	PiloClientEventOptions,
 	PiloClientHistoryOptions,
 	PiloClientStartChatInput,
-} from "@/lib/pilo-client";
-import type { PiSessionSnapshot, PiloRuntimeEvent } from "@/lib/pi-runtime";
+} from "@/lib/api/pilo-client";
+import type { PiSessionSnapshot, PiloRuntimeEvent } from "@/lib/api/pi-runtime";
 import type { SessionReadState } from "@/lib/session-read-state";
 import {
 	isProjectPiModelsIncomplete,
 	refreshProjectPiModels,
 	type ProjectPiModels,
-} from "@/lib/pi-models";
+} from "@/lib/api/pi-models";
 import { createRemoteModelProbe } from "./remote-model-probe";
 import type {
 	ProjectModelScope,
@@ -30,8 +30,8 @@ import type {
 	SessionHistoryResult,
 	SessionIndexEntry,
 	SessionSearchMatch,
-} from "@/lib/sessions";
-import type { ChatSessionRuntimeState } from "@/lib/chat-session-client";
+} from "@/lib/api/sessions";
+import type { ChatSessionRuntimeState } from "@/lib/api/chat-session-client";
 import {
 	approveRemoteProjectMcpServer,
 	connectRemoteEvents,

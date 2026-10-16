@@ -9,8 +9,8 @@ import { createFileSuggestions } from "@/components/chat/chat-file-suggestions";
 import {
 	createPiCommandSuggestions,
 	createPiExtensionCommandNames,
-} from "@/lib/pi-command-suggestions";
-import type { PiCommand } from "@/lib/pi-runtime";
+} from "@/lib/chat/pi-command-suggestions";
+import type { PiCommand } from "@/lib/api/pi-runtime";
 import type { WebPiloClient } from "./web-pilo-client";
 
 type UseRemoteChatSuggestionsOptions = {

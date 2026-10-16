@@ -3,9 +3,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { chatUiStateKey } from "@/components/app/app-chat-state";
 import { useSessionUnread } from "@/components/app/use-session-unread";
 import type { SidebarSession } from "@/components/sidebar/types";
-import type { ChatSessionRuntimeState } from "@/lib/chat-session-client";
-import type { PiloClient } from "@/lib/pilo-client";
-import type { PiloRuntimeEvent } from "@/lib/pi-runtime";
+import type { ChatSessionRuntimeState } from "@/lib/api/chat-session-client";
+import type { PiloClient } from "@/lib/api/pilo-client";
+import type { PiloRuntimeEvent } from "@/lib/api/pi-runtime";
 import type { SessionReadState } from "@/lib/session-read-state";
 
 type Options = {

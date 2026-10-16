@@ -3,7 +3,7 @@ import { Check, RefreshCw, Search, SlidersHorizontal } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { getProjectScopeDraft, piModelsMatch } from "@/lib/pi-model-selection";
-import { runtimeErrorMessage, type PiModel } from "@/lib/pi-runtime";
+import { runtimeErrorMessage, type PiModel } from "@/lib/api/pi-runtime";
 import type {
 	ModelScopeControls,
 	ProjectScopedModel,

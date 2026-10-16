@@ -6,14 +6,14 @@ import type {
 	PiModel,
 	PiSessionStats,
 	PiThinkingLevel,
-} from "@/lib/pi-runtime";
-import type { ProjectPiModels } from "@/lib/pi-models";
+} from "@/lib/api/pi-runtime";
+import type { ProjectPiModels } from "@/lib/api/pi-models";
 import {
 	findMatchingPiModel,
 	getPiModelThinkingLevels,
 } from "@/lib/pi-model-selection";
-import { PI_THINKING_LEVELS, runtimeErrorMessage } from "@/lib/pi-runtime";
-import type { SessionHistory, SessionIndexEntry } from "@/lib/sessions";
+import { PI_THINKING_LEVELS, runtimeErrorMessage } from "@/lib/api/pi-runtime";
+import type { SessionHistory, SessionIndexEntry } from "@/lib/api/sessions";
 import type { RemoteRpc } from "./use-remote-chat-transport";
 import type { WebPiloClient } from "./web-pilo-client";
 

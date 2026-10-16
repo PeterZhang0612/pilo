@@ -4,7 +4,7 @@ import { toast } from "sonner";
 
 import { i18n } from "@/i18n";
 import { userErrorMessage } from "@/lib/app-error";
-import { cacheLocalChatImages } from "@/lib/chat-image-media";
+import { cacheLocalChatImages } from "@/lib/chat/chat-image-media";
 import { randomId } from "@/lib/utils";
 import {
 	MAX_CHAT_IMAGE_BYTES,
@@ -13,7 +13,7 @@ import {
 	formatChatImageSize,
 	resolveChatImageMimeType,
 	type ChatImageAttachment,
-} from "@/lib/chat-submission";
+} from "@/lib/chat/chat-submission";
 
 function readImage(file: File, mimeType: string) {
 	return new Promise<ChatImageAttachment>((resolve, reject) => {

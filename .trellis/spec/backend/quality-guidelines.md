@@ -92,7 +92,7 @@ them (`#[allow(...)]` only with a comment explaining why).
   fingerprint. Missing inputs, changed bytes, or server failure must stop CI.
 - Re-sign the final AppImage with `pnpm tauri signer sign` after replacement;
   Tauri's initial `.sig` covers the pre-finalization bytes and is stale.
-- Run `python3 tests/test-linux-appimage.py` for portable orchestration tests.
+- Run `python3 tests/packaging/test-linux-appimage.py` for portable orchestration tests.
   These use a fixture packer; Linux CI must also run final-artifact verification,
   and desktop testing must validate UI and Pi connections on the target host.
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
-import type { ConversationReducerContext } from "@/lib/conversation-types";
-import type { SessionIndexEntry } from "@/lib/sessions";
+import type { ConversationReducerContext } from "@/lib/chat/conversation-types";
+import type { SessionIndexEntry } from "@/lib/api/sessions";
 import { randomId } from "@/lib/utils";
 
 export type RpcResponse<T = unknown> = {

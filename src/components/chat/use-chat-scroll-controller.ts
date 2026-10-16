@@ -17,10 +17,10 @@ import {
 	recordChatPageRender,
 	recordScrollEvent,
 	recordVirtualChange,
-} from "@/lib/chat-performance";
-import { getOutlineIndexForScrollOffset } from "@/lib/chat-virtualization";
-import { buildConversationOutline } from "@/lib/conversation-outline";
-import type { ChatMessage } from "@/lib/conversation-types";
+} from "@/lib/chat/chat-performance";
+import { getOutlineIndexForScrollOffset } from "@/lib/chat/chat-virtualization";
+import { buildConversationOutline } from "@/lib/chat/conversation-outline";
+import type { ChatMessage } from "@/lib/chat/conversation-types";
 
 const CHAT_OUTLINE_READING_OFFSET_PX = 72;
 const OUTLINE_JUMP_TOLERANCE_PX = 2;

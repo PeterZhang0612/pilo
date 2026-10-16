@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { ComposerSuggestion } from "@/components/chat/chat-composer";
 import { createFileSuggestions } from "@/components/chat/chat-file-suggestions";
-import { searchProjectFiles } from "@/lib/files";
+import { searchProjectFiles } from "@/lib/api/files";
 
 const FILE_SUGGESTION_DEBOUNCE_MS = 180;
 const FILE_SUGGESTION_CACHE_TTL_MS = 10_000;

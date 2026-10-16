@@ -8,8 +8,8 @@ import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
 import { userErrorMessage } from "@/lib/app-error";
-import { removeWslConnection } from "@/lib/connections";
-import type { Connection } from "@/lib/pi-runtime";
+import { removeWslConnection } from "@/lib/api/connections";
+import type { Connection } from "@/lib/api/pi-runtime";
 import {
 	connectionLabel,
 	listProjects,
@@ -17,8 +17,8 @@ import {
 	removeProject,
 	reorderProjects,
 	type Project,
-} from "@/lib/projects";
-import { removeSshConnection } from "@/lib/ssh-connections";
+} from "@/lib/api/projects";
+import { removeSshConnection } from "@/lib/api/ssh-connections";
 
 type UseAppProjectActionsOptions = {
 	projects: Project[];

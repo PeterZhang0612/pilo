@@ -8,20 +8,20 @@ import {
 
 import { markExternalTurnLive } from "@/components/chat/chat-conversation-model";
 import { i18n } from "@/i18n";
-import type { ChatSubmission } from "@/lib/chat-submission";
-import { chatRpcChangesActivity } from "@/lib/chat-session-runtime-model";
+import type { ChatSubmission } from "@/lib/chat/chat-submission";
+import { chatRpcChangesActivity } from "@/lib/chat/chat-session-runtime-model";
 import {
 	coalesceConversationActions,
 	reduceConversationActions,
-} from "@/lib/conversation-replay";
+} from "@/lib/chat/conversation-replay";
 import type {
 	ConversationAction,
 	ConversationState,
-} from "@/lib/conversation-types";
-import { toConversationAction } from "@/lib/conversation-runtime-adapter";
-import type { PiloClientEventMessage } from "@/lib/pilo-client";
-import { runtimeErrorMessage } from "@/lib/pi-runtime";
-import type { PiloRuntimeEvent } from "@/lib/pi-runtime";
+} from "@/lib/chat/conversation-types";
+import { toConversationAction } from "@/lib/chat/conversation-runtime-adapter";
+import type { PiloClientEventMessage } from "@/lib/api/pilo-client";
+import { runtimeErrorMessage } from "@/lib/api/pi-runtime";
+import type { PiloRuntimeEvent } from "@/lib/api/pi-runtime";
 import type { PiExtensionDialogRequest } from "@/components/chat/use-pi-session-features";
 import { REMOTE_SEQUENCE_KEY } from "./remote-client";
 import {

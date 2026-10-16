@@ -16,8 +16,8 @@ import {
 	type ChatSession,
 	type ChatSessionRuntimeState,
 } from "@/components/chat/chat-page-utils";
-import type { createChatSessionClient } from "@/lib/chat-session-client";
-import { getCachedProjectPiModels } from "@/lib/pi-models";
+import type { createChatSessionClient } from "@/lib/api/chat-session-client";
+import { getCachedProjectPiModels } from "@/lib/api/pi-models";
 import {
 	findMatchingPiModel,
 	getPiModelThinkingLevels,
@@ -27,8 +27,8 @@ import {
 	type PiAgentState,
 	type PiModel,
 	type PiThinkingLevel,
-} from "@/lib/pi-runtime";
-import type { SessionHistory } from "@/lib/sessions";
+} from "@/lib/api/pi-runtime";
+import type { SessionHistory } from "@/lib/api/sessions";
 
 type ChatSessionClient = ReturnType<typeof createChatSessionClient>;
 

@@ -16,14 +16,14 @@ import {
 	updateConnectionSettings,
 	type ConnectionTestResult,
 	type WslConnectionInfo,
-} from "@/lib/connections";
-import type { Connection } from "@/lib/pi-runtime";
+} from "@/lib/api/connections";
+import type { Connection } from "@/lib/api/pi-runtime";
 import {
 	connectionLabel,
 	listProjects,
 	localConnection,
 	wslConnection,
-} from "@/lib/projects";
+} from "@/lib/api/projects";
 import {
 	getSshConnectionPassword,
 	listSshConnections,
@@ -32,7 +32,7 @@ import {
 	testSshConnection,
 	testSshConnectionDraft,
 	type SshConnectionInfo,
-} from "@/lib/ssh-connections";
+} from "@/lib/api/ssh-connections";
 
 import {
 	connectionFromSshForm,

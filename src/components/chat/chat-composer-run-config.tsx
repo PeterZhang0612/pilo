@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import { CHAT_COMPOSER_RUN_CONFIG_TRIGGER_CLASS_NAME } from "@/components/chat/chat-composer-frame";
 import { ChatModelPicker } from "@/components/chat/chat-model-picker";
 import { PiLogo } from "@/components/pi-logo";
-import type { PiModel, PiThinkingLevel } from "@/lib/pi-runtime";
+import type { PiModel, PiThinkingLevel } from "@/lib/api/pi-runtime";
 import type { ModelScopeControls } from "@/lib/project-model-scope";
 import { cn } from "@/lib/utils";
 import {

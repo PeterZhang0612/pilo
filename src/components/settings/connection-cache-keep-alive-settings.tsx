@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { listConnectionCatalog } from "@/lib/connections";
-import { connectionLabel } from "@/lib/projects";
-import type { Connection, PiModel } from "@/lib/pi-runtime";
-import { tauriPiloClient } from "@/lib/tauri-pilo-client";
+import { listConnectionCatalog } from "@/lib/api/connections";
+import { connectionLabel } from "@/lib/api/projects";
+import type { Connection, PiModel } from "@/lib/api/pi-runtime";
+import { tauriPiloClient } from "@/lib/api/tauri-pilo-client";
 import { CacheKeepAliveSettingsFields } from "./cache-keep-alive-settings";
 import { SETTINGS_CONTAINER_CLASS } from "./compact-layout";
 

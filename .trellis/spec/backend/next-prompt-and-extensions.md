@@ -251,8 +251,9 @@ log SSH config, model credentials, prediction context or suggestion body.
 
 ## 6. Tests Required (When Explicitly Authorized)
 
-`tests/pi-next-prompt.test.ts` is included in `pnpm test:unit`. Its isolated Pi
-mock verifies timeout completion when abort is ignored, shared subscribers,
+`tests/integration/pi-next-prompt.test.ts` is included in `pnpm test:integration`
+(and `pnpm test`). Its isolated Pi mock verifies timeout completion when abort
+is ignored, shared subscribers,
 completed timeout reuse, late success/failure suppression, per-request and final
 subscriber cancellation, compaction invalidation and normal timer cleanup.
 Its mock asserts the 15,000 ms deadline. The targeted suite passed all seven

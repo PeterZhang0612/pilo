@@ -1,4 +1,4 @@
-import type { ConversationState } from "@/lib/conversation-types";
+import type { ConversationState } from "@/lib/chat/conversation-types";
 
 export type ChatConversationStore = ReturnType<
 	typeof createChatConversationStore

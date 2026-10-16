@@ -13,9 +13,9 @@ import {
 import {
 	listChatSessionRuntimeStates,
 	type ChatSessionRuntimeState,
-} from "@/lib/chat-session-client";
-import { listenRuntimeEvents } from "@/lib/pi-runtime";
-import { chatRpcChangesActivity } from "@/lib/chat-session-runtime-model";
+} from "@/lib/api/chat-session-client";
+import { listenRuntimeEvents } from "@/lib/api/pi-runtime";
+import { chatRpcChangesActivity } from "@/lib/chat/chat-session-runtime-model";
 import {
 	deleteSession,
 	getExternalSessionActivity,
@@ -26,7 +26,7 @@ import {
 	stopSessionWatch,
 	updateSessionUiState,
 	type SessionIndexEntry,
-} from "@/lib/sessions";
+} from "@/lib/api/sessions";
 
 type SessionUiUpdate = {
 	title?: string;
