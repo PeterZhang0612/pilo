@@ -182,6 +182,13 @@ export function reduceConversation(
 	action: ConversationAction,
 	context: ConversationReducerContext,
 ): ConversationState {
+	// A late end from the aborted turn must not finish the new placeholder.
+	if (
+		action.type === "assistant_turn_end" &&
+		state.active?.runtimeStarted === false
+	) {
+		return state;
+	}
 	const pending = state.pendingUsers[0];
 	if (pending?.previousTurn && isAssistantBatchAction(action)) {
 		const index = state.messages.findIndex(
@@ -247,6 +254,7 @@ function reduceConversationAction(
 					turnStartedAtMs: action.timestampMs,
 					assistantUpdatedAtMs: action.timestampMs,
 					firstRuntimeUserSeen: false,
+					runtimeStarted: false,
 				},
 				pendingUsers: [
 					...state.pendingUsers,
@@ -429,6 +437,7 @@ function reduceConversationAction(
 							...next.active,
 							turnStartedAtMs: startedAtMs,
 							firstRuntimeUserSeen: true,
+							runtimeStarted: true,
 						},
 					};
 				}
@@ -459,13 +468,18 @@ function reduceConversationAction(
 				},
 			};
 		}
-		case "assistant_message_start":
-			return withAssistant(
+		case "assistant_message_start": {
+			const next = withAssistant(
 				state,
 				context,
 				action.timestampMs,
 				(message) => message,
 			);
+			return {
+				...next,
+				active: next.active && { ...next.active, runtimeStarted: true },
+			};
+		}
 		case "assistant_text_delta":
 			return withAssistant(state, context, action.timestampMs, (message) => {
 				const content = appendAssistantTextContent(

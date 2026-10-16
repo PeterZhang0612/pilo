@@ -14,6 +14,7 @@ export type ActiveTurn = {
 	notificationSessionId: string;
 	generation: number | null;
 	promptSent: boolean;
+	runtimeStarted?: boolean;
 	queueReady: boolean;
 	preserveQueuedOnRelease: boolean;
 	suppressResultNotification?: boolean;
@@ -65,7 +66,11 @@ export type BufferedQueuedMessage = {
 
 export type BeginTurn = (
 	submission: ChatSubmission,
-	options?: { appendUserMessage?: boolean; preserveDraft?: boolean },
+	options?: {
+		appendUserMessage?: boolean;
+		preserveDraft?: boolean;
+		preserveScroll?: boolean;
+	},
 ) => Promise<void>;
 
 export type BeginTurnRef = MutableRefObject<BeginTurn | null>;

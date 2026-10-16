@@ -78,14 +78,13 @@ export const AssistantMessage = memo(function AssistantMessage({
 	const activity = getAssistantActivities(content);
 	const isTurnFinished =
 		message.streaming !== true && message.completion !== "continued";
-	const foldWorkOnError =
-		Boolean(message.errorMessage) ||
-		message.completion === "interrupted" ||
-		message.stopReason === "aborted";
+	const interrupted =
+		message.completion === "interrupted" || message.stopReason === "aborted";
+	const keepWorkExpanded = !isTurnFinished || interrupted;
 	const displaySections = splitAssistantContentForDisplay(
 		content,
-		isTurnFinished,
-		foldWorkOnError,
+		!keepWorkExpanded,
+		Boolean(message.errorMessage),
 	);
 	const streamingState = getAssistantStreamingState({
 		text: message.text,
@@ -129,7 +128,7 @@ export const AssistantMessage = memo(function AssistantMessage({
 		!message.errorMessage &&
 		message.stopReason !== "aborted";
 	const contentNodes =
-		!isTurnFinished && hasWorkActivity
+		keepWorkExpanded && hasWorkActivity
 			? [
 					<AssistantWorkedRegion
 						key={`${message.id}-worked-active`}
@@ -138,6 +137,7 @@ export const AssistantMessage = memo(function AssistantMessage({
 						active
 						streaming={message.streaming === true}
 						keepTextExpanded
+						durationMs={message.workDurationMs}
 					/>,
 				]
 			: displaySections.hasCollapsedWork
@@ -159,7 +159,7 @@ export const AssistantMessage = memo(function AssistantMessage({
 						messageId: message.id,
 						content,
 						streaming: message.streaming === true,
-						keepTextExpanded: !isTurnFinished,
+						keepTextExpanded: keepWorkExpanded,
 						durationMs: message.workDurationMs,
 					});
 

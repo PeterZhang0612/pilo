@@ -132,6 +132,7 @@ export type ConversationState = {
 		turnStartedAtMs?: number;
 		assistantUpdatedAtMs?: number;
 		firstRuntimeUserSeen: boolean;
+		runtimeStarted?: boolean;
 	} | null;
 	pendingUsers: Array<{
 		clientMessageId: string;

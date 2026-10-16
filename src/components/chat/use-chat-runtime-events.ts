@@ -315,6 +315,22 @@ export function useChatRuntimeEvents({
 				discardedRuntimeBarrierRef.current = null;
 			}
 
+			if (
+				currentTurn?.generation === event.generation &&
+				currentTurn.runtimeStarted === false
+			) {
+				// A generation identifies the process, not the turn: an old settle can
+				// arrive while the replacement prompt is still waiting for its start.
+				if (event.type === "assistant_message_end") return;
+				if (
+					currentTurn.promptSent &&
+					(event.type === "user_message_start" ||
+						event.type === "assistant_message_start")
+				) {
+					currentTurn.runtimeStarted = true;
+				}
+			}
+
 			if (event.type === "assistant_message_start") {
 				// 连续工具循环很快进入下一次模型请求时，取消上一轮尚未执行的
 				// stats 刷新，等最新一次请求结束后再取一次即可。

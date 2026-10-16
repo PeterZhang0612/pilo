@@ -389,7 +389,10 @@ export function useChatRuntimeQueue({
 				releaseActiveTurn(turn, { preserveQueued: true });
 
 				// Draft sends were cleared before abort; queued sends must keep the draft.
-				const nextTurnPromise = beginTurn(submission, { preserveDraft: true });
+				const nextTurnPromise = beginTurn(submission, {
+					preserveDraft: true,
+					preserveScroll: true,
+				});
 				const nextTurn = activeTurnRef.current;
 				if (!nextTurn) {
 					restoreQueuedMessages(remaining);

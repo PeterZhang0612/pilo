@@ -331,7 +331,11 @@ export function useChatRuntime({
 	const beginTurn = useCallback<BeginTurn>(
 		async (
 			submission,
-			{ appendUserMessage = true, preserveDraft = false } = {},
+			{
+				appendUserMessage = true,
+				preserveDraft = false,
+				preserveScroll = false,
+			} = {},
 		) => {
 			const normalized = createChatSubmission(
 				submission.text,
@@ -345,7 +349,7 @@ export function useChatRuntime({
 				? getReplyRunwayHeight({
 						viewportHeight: viewport.clientHeight,
 						scrollHeight: viewport.scrollHeight,
-						enabled: appendUserMessage,
+						enabled: appendUserMessage && !preserveScroll,
 					})
 				: undefined;
 
@@ -356,6 +360,7 @@ export function useChatRuntime({
 				notificationSessionId: session.id,
 				generation: null,
 				promptSent: false,
+				runtimeStarted: false,
 				queueReady: false,
 				preserveQueuedOnRelease: false,
 			};
@@ -386,7 +391,9 @@ export function useChatRuntime({
 				},
 			]);
 			if (!preserveDraft) clearDraft();
-			requestAnimationFrame(() => scrollToBottom(false));
+			if (!preserveScroll) {
+				requestAnimationFrame(() => scrollToBottom(false));
+			}
 
 			try {
 				await runTurn(turn, normalized, clientMessageId);

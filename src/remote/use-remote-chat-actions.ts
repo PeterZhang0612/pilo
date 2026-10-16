@@ -463,6 +463,10 @@ export function useRemoteChatActions({
 						images: summarizeChatImages(submission.images),
 						timestampMs: now,
 					});
+					runTargetAction({
+						type: "local_assistant_pending",
+						timestampMs: now,
+					});
 					optimisticSubmitted = true;
 				}
 				const started = await sendPrompt(
