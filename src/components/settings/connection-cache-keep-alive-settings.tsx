@@ -61,9 +61,6 @@ export function ConnectionCacheKeepAliveSettings() {
 					models={models}
 				/>
 			))}
-			<p className="text-xs leading-5 text-muted-foreground">
-				{t("settings.cacheKeepAliveCostHint")}
-			</p>
 		</div>
 	);
 }

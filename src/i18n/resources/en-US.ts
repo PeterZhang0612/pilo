@@ -108,7 +108,7 @@ const enUS = {
 		cacheKeepAliveEnabled: "Enable keep-alive",
 		cacheKeepAliveEnabledHint: "Starts with your next conversation turn.",
 		cacheKeepAliveDescription:
-			"Refreshes before the cache expires, even when you switch sessions.",
+			"Refreshes before the cache expires, even when you switch sessions; refreshes incur API charges and stop on failure, timeout or a cache miss.",
 		cacheKeepAliveModel: "Model",
 		cacheKeepAliveModels: "Configured models",
 		cacheKeepAliveAddModel: "Add model",
@@ -131,8 +131,6 @@ const enUS = {
 		cacheKeepAliveDurationHint:
 			"Starts when a turn ends. Refreshes do not extend it.",
 		cacheKeepAliveNoModels: "Refresh the model list in a project first.",
-		cacheKeepAliveCostHint:
-			"Refreshes incur API charges. Failure, timeout or a cache miss stops keep-alive.",
 		cacheKeepAliveScheduled: "Next cache keep-alive: {{time}}",
 		cacheKeepAliveWindowEnding:
 			"The current cache covers the remaining idle window. No further refresh is needed.",

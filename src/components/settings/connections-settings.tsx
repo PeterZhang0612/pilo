@@ -466,7 +466,11 @@ export function ConnectionsSettings() {
 			/>
 			<SettingsConfirmDialog
 				open={removingConnection !== null}
-				title={t("connection.removeQuestion")}
+				title={
+					removingConnection
+						? `${t("connection.removeQuestion")} · ${connectionLabel(removingConnection)}`
+						: t("connection.removeQuestion")
+				}
 				description={
 					removingConnection
 						? `${t("connection.removeDescription", {
