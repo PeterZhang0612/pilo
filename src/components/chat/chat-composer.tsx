@@ -5,7 +5,10 @@ import {
 	useRef,
 	type CSSProperties,
 } from "react";
-import { isImeComposingKeyboardEvent } from "@/lib/ime";
+import {
+	isImeComposingKeyboardEvent,
+	isImeComposingNativeKeyboardEvent,
+} from "@/lib/ime";
 import { useTranslation } from "react-i18next";
 import { Plus, X } from "lucide-react";
 
@@ -342,12 +345,42 @@ export function ChatComposer({
 		!sendingNow
 			? nextPrompt
 			: null;
-	const adoptNextPrompt = () => {
+	const adoptNextPrompt = useCallback(() => {
 		if (!ghostText) return;
 		onNextPromptDismiss?.();
 		onChange(ghostText);
 		textareaRef.current?.focus();
-	};
+	}, [ghostText, onNextPromptDismiss, onChange, textareaRef]);
+
+	useEffect(() => {
+		if (!ghostText || suggestionMenuOpen) return;
+		const handleTab = (event: KeyboardEvent) => {
+			if (
+				event.key !== "Tab" ||
+				event.defaultPrevented ||
+				event.repeat ||
+				event.shiftKey ||
+				event.ctrlKey ||
+				event.metaKey ||
+				event.altKey ||
+				isImeComposingNativeKeyboardEvent(event)
+			)
+				return;
+			// Leave focus navigation to any control or overlay the user is using.
+			if (
+				(document.activeElement && document.activeElement !== document.body) ||
+				window.getSelection()?.isCollapsed === false ||
+				document.querySelector(
+					'dialog[open], [role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]',
+				)
+			)
+				return;
+			event.preventDefault();
+			adoptNextPrompt();
+		};
+		window.addEventListener("keydown", handleTab);
+		return () => window.removeEventListener("keydown", handleTab);
+	}, [ghostText, suggestionMenuOpen, adoptNextPrompt]);
 
 	return (
 		<ChatComposerRoot className={className} elementRef={rootRef}>

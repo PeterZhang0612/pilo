@@ -186,7 +186,12 @@ share `useNextPrompt`, `useNextPromptSettings`, settings fields and `ChatCompose
   the composer. The adoption control overlays the top-right with reserved text
   padding: `→ Tab` on fine pointers, a tap label on coarse pointers. Pure Tab only
   adopts with no modifiers, no IME composition and no existing completion menu.
-  Other keyboard behavior is preserved; point/touch adoption only fills the draft.
+  In the active Session, Tab also focuses the composer and adopts when focus is
+  on the document body (or absent), no text is selected and no dialog/menu/listbox
+  is open. Do not intercept Tab from another focused control or a handled/repeated
+  key event. This shared behavior applies to desktop and WebUI, including hardware
+  keyboards on mobile. Other keyboard behavior is preserved; adoption only fills
+  the draft and never sends it.
 - Shared settings fields use cached Host catalogs, preserve unknown configured
   identities, and do not spawn a model probe. Desktop has a Connection settings
   tab; desktop and wide WebUI expose the shared session-header settings popover
