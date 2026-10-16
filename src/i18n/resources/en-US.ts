@@ -667,6 +667,7 @@ const enUS = {
 		sessionLoadFailed: "Failed to load session",
 		sessionLoadDescription: "This session could not be read.",
 		read: "Read",
+		skill: "Skill",
 		write: "Write",
 		edit: "Edit",
 		search: "Search",

@@ -9,6 +9,7 @@ import {
 	FileText,
 	PencilLine,
 	Plug,
+	Puzzle,
 	Search,
 	Sparkles,
 	Terminal,
@@ -93,11 +94,14 @@ function ToolDiff({ diff }: { diff: string }) {
 
 function ToolIcon({
 	toolName,
+	isSkill,
 	className,
 }: {
 	toolName: string;
+	isSkill?: boolean;
 	className?: string;
 }) {
+	if (isSkill) return <Puzzle className={className} />;
 	if (toolName.startsWith("mcp__")) return <Plug className={className} />;
 
 	switch (toolName.toLowerCase()) {
@@ -312,7 +316,12 @@ function ToolCallActivityView({
 	const [open, setOpen] = useChatExpansionState(expansionKey, false);
 	const preview = toolPreview(activity);
 	const filePath = toolFilePath(activity);
-	const previewLabel = filePath ? fileBasename(filePath) : preview;
+	const skillName =
+		activity.toolName.toLowerCase() === "read"
+			? filePath?.replace(/\\/g, "/").match(/(?:^|\/)([^/]+)\/SKILL\.md$/)?.[1]
+			: null;
+	const previewLabel =
+		skillName ?? (filePath ? fileBasename(filePath) : preview);
 	const writeContent =
 		activity.toolName.toLowerCase() === "write" &&
 		isRecord(activity.args) &&
@@ -331,7 +340,7 @@ function ToolCallActivityView({
 			<button
 				type="button"
 				className={cn(
-					"group/tool -mx-1 flex min-h-7 w-[calc(100%+0.5rem)] items-center gap-1.5 rounded-md px-1 py-0.5 text-left transition-colors pointer-coarse:min-h-11 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none",
+					"group/tool -mx-1 flex min-h-6 w-[calc(100%+0.5rem)] items-center gap-1.5 rounded-md px-1 py-0.5 text-left transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none",
 					PROCESS_TEXT_CLASS,
 					hasDetails
 						? "hover:bg-hover hover:text-foreground"
@@ -349,16 +358,19 @@ function ToolCallActivityView({
 			>
 				<ToolIcon
 					toolName={activity.toolName}
+					isSkill={Boolean(skillName)}
 					className={cn(
 						PROCESS_ICON_CLASS,
 						activity.isError && "text-destructive",
 					)}
 				/>
-				<span className="min-w-0 flex-1 truncate">
-					<span>{toolLabel(t, activity.toolName)}</span>
+				<span className="flex min-w-0 flex-1 items-center gap-1.5">
+					<span className="min-w-0 truncate">
+						{skillName ? t("chat.skill") : toolLabel(t, activity.toolName)}
+					</span>
 					{previewLabel ? (
 						<Hint label={preview ?? undefined}>
-							<span className="ml-1.5 font-mono text-[length:var(--pilo-code-font-size)] font-normal text-muted-foreground">
+							<span className="min-w-0 truncate font-mono text-[length:var(--pilo-code-font-size)] font-normal text-muted-foreground">
 								{previewLabel}
 							</span>
 						</Hint>
@@ -465,7 +477,7 @@ export function AssistantActivityView({
 			<button
 				type="button"
 				className={cn(
-					"group/activity -mx-1 flex min-h-7 w-[calc(100%+0.5rem)] items-center gap-1.5 rounded-md px-1 py-0.5 text-left transition-colors hover:bg-hover hover:text-foreground pointer-coarse:min-h-11 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none",
+					"group/activity -mx-1 flex min-h-7 w-[calc(100%+0.5rem)] items-center gap-1.5 rounded-md px-1 py-0.5 text-left transition-colors hover:bg-hover hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none",
 					PROCESS_TEXT_CLASS,
 				)}
 				onClick={(event) =>

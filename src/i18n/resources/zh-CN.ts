@@ -649,6 +649,7 @@ const zhCN = {
 		sessionLoadFailed: "会话加载失败",
 		sessionLoadDescription: "暂时无法读取这段会话。",
 		read: "读取",
+		skill: "Skill",
 		write: "写入",
 		edit: "编辑",
 		search: "搜索",

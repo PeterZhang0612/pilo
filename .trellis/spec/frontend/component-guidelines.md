@@ -111,8 +111,9 @@ spacing, type sizes, or control heights.
   Never remap public desktop tokens in a media query: unlayered custom CSS
   would beat that remapping and couple the two devices again. Wire both direct
   CSS and Tailwind consumers through the runtime aliases; include the boot
-  composer. General mobile controls keep a 44px floor; the compact composer
-  keeps its existing 40px controls and 44px attachment hit area. Caller utilities
+  composer. General mobile controls keep a 44px floor, except the compact chat
+  activity disclosures described below. The compact composer keeps its existing
+  40px controls and 44px attachment hit area. Caller utilities
   still override component defaults. Mobile-only sheet/segment/drawer roles
   retain their existing token prefixes rather than another mobile alias layer.
 - Session row density is device-specific: `--pilo-sidebar-session-*` configures
@@ -174,6 +175,12 @@ spacing, type sizes, or control heights.
   work retains the first error summary. Failed groups do not auto-collapse when
   following text arrives, and failed tool output defaults open. Preserve manual
   disclosure state and search expansion behavior.
+- Chat activity disclosures intentionally stay compact on desktop and WebUI,
+  including coarse-pointer devices: `ToolCallActivityView` uses `min-h-6` (24px)
+  and `AssistantActivityView` uses `min-h-7` (28px). This is a deliberate
+  exception to the general 44px mobile floor to keep tool-heavy transcripts
+  dense; do not restore `pointer-coarse:min-h-11` as an accessibility fix.
+  Preserve keyboard activation, focus-visible rings and `aria-expanded`.
 - `ChatImageViewport` anchors Ctrl-wheel zoom to the cursor and touch pinch to
   the gesture midpoint. Ordinary wheel pans only a zoomed image; double-click
   toggles zoom/reset. Pointer capture retargets click/double-click events to the
