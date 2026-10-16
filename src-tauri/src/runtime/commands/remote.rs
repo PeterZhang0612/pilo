@@ -13,6 +13,11 @@ pub async fn remote_host_state(
 }
 
 #[tauri::command]
+pub async fn remote_lan_addresses() -> Result<Vec<String>, String> {
+    super::super::remote::list_lan_ips().await
+}
+
+#[tauri::command]
 pub async fn remote_set_enabled(
     app: AppHandle,
     remote: State<'_, RemoteServerManager>,

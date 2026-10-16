@@ -118,25 +118,41 @@ impl RemoteServerManager {
             )
         };
         let paths_for_config = paths.clone();
+        let previous_port = config.port;
         let access_config = tokio::task::spawn_blocking(move || {
             let db = storage::open_with_paths(&paths_for_config)?;
             let Some(mut config) = storage::get_remote_access_config(&db)? else {
                 return Ok(None);
             };
-            // Only follow the default direct LAN address, never custom or proxy URLs.
-            let Some(address) = config
-                .addresses
-                .iter_mut()
-                .find(|address| address.id == "lan" && address.base_url == lan_base_url)
-            else {
-                return Ok(None);
-            };
-            let mut url = tauri::Url::parse(&address.base_url)
-                .map_err(|error| format!("failed to parse Remote WebUI LAN address: {error}"))?;
-            url.set_port(Some(port))
-                .map_err(|_| "failed to update Remote WebUI LAN port".to_owned())?;
-            address.base_url = url.origin().ascii_serialization();
-            access::normalize_config(config).map(Some)
+            let mut changed = false;
+            for address in &mut config.addresses {
+                // Follow only untouched direct LAN URLs, never manually edited or proxy URLs.
+                let previous_url = if address.id == "lan" {
+                    Some(lan_base_url.clone())
+                } else {
+                    address
+                        .id
+                        .strip_prefix("lan-")
+                        .and_then(|id| id.rsplit_once('-'))
+                        .and_then(|(ip, _)| ip.replace('-', ".").parse::<Ipv4Addr>().ok())
+                        .map(|ip| format!("http://{ip}:{previous_port}"))
+                };
+                if previous_url.as_deref() != Some(address.base_url.as_str()) {
+                    continue;
+                }
+                let mut url = tauri::Url::parse(&address.base_url).map_err(|error| {
+                    format!("failed to parse Remote WebUI LAN address: {error}")
+                })?;
+                url.set_port(Some(port))
+                    .map_err(|_| "failed to update Remote WebUI LAN port".to_owned())?;
+                address.base_url = url.origin().ascii_serialization();
+                changed = true;
+            }
+            if changed {
+                access::normalize_config(config).map(Some)
+            } else {
+                Ok(None)
+            }
         })
         .await
         .map_err(|_| "Remote WebUI address task failed".to_owned())??;

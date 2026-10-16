@@ -177,6 +177,9 @@ const zhCN = {
 		remotePairingExpired: "配对链接已过期或用满",
 		remotePairingExpiredDescription:
 			"此配对链接已失效。未完成的地址请重新扫码认证，已有设备授权不受影响。",
+		remoteAddLanAddress: "添加局域网地址",
+		remoteLanAddressEmpty: "未找到可用的局域网 IPv4 地址",
+		remoteLanAddressLoadFailed: "无法获取局域网地址",
 		remoteAddressUrl: "访问地址",
 		remoteAddressConfigHint: "回车添加地址",
 		remotePairingPageTitle: "Pilo 认证",

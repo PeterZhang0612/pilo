@@ -177,6 +177,9 @@ const enUS = {
 		remotePairingExpired: "Pairing link expired or used up",
 		remotePairingExpiredDescription:
 			"This pairing link is no longer available. Scan a new QR code for unfinished addresses. Existing device authorizations remain valid.",
+		remoteAddLanAddress: "Add LAN address",
+		remoteLanAddressEmpty: "No available LAN IPv4 addresses found",
+		remoteLanAddressLoadFailed: "Could not load LAN addresses",
 		remoteAddressUrl: "Access URL",
 		remoteAddressConfigHint: "Press Enter to add an address",
 		remotePairingPageTitle: "Pilo authorization",

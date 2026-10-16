@@ -26,6 +26,7 @@ import {
 	SettingsSection,
 	SettingsStatus,
 } from "./compact-layout";
+import { RemoteLanAddressPicker } from "./remote-lan-address-picker";
 
 /** 双击 / Enter / 铅笔按钮进入重命名,Enter/失焦保存,Escape 取消。 */
 function DeviceNameCell({
@@ -124,6 +125,7 @@ export function RemoteSettings({
 	const [addressDraft, setAddressDraft] = useState<
 		RemoteAccessAddress[] | null
 	>(null);
+	const [savingAddressDraft, setSavingAddressDraft] = useState(false);
 	const savingAddresses = useRef(false);
 	const addressRevision = useRef(0);
 	const draftRevision = useRef(0);
@@ -231,6 +233,7 @@ export function RemoteSettings({
 		)
 			return draft;
 		savingAddresses.current = true;
+		setSavingAddressDraft(true);
 		addressRevision.current += 1;
 		const draftRevisionAtStart = draftRevision.current;
 		try {
@@ -259,6 +262,7 @@ export function RemoteSettings({
 			return null;
 		} finally {
 			savingAddresses.current = false;
+			setSavingAddressDraft(false);
 		}
 	};
 
@@ -386,7 +390,37 @@ export function RemoteSettings({
 				) : null}
 			</SettingsSection>
 
-			<SettingsSection title={t("settings.remoteAccessAddress")}>
+			<SettingsSection
+				title={t("settings.remoteAccessAddress")}
+				headerRight={
+					<RemoteLanAddressPicker
+						port={state.port}
+						addresses={addressDraft ?? state.addresses}
+						disabled={
+							Boolean(busy) ||
+							savingAddressDraft ||
+							(addressDraft ?? state.addresses).filter((item) =>
+								item.baseUrl.trim(),
+							).length >= 32
+						}
+						onAdd={(baseUrl) => {
+							if (busy || savingAddresses.current) return;
+							const current = addressDraft ?? state.addresses;
+							const host = new URL(baseUrl).hostname.replaceAll(".", "-");
+							const id = `lan-${host}-${randomId().replaceAll("-", "")}`;
+							const empty = current.find((item) => !item.baseUrl.trim());
+							const next = empty
+								? current.map((item) =>
+										item.id === empty.id ? { ...item, id, baseUrl } : item,
+									)
+								: [...current, { id, name: "", baseUrl }];
+							draftRevision.current += 1;
+							setAddressDraft(next);
+							void saveAddresses(next);
+						}}
+					/>
+				}
+			>
 				<div className="space-y-2 px-3 py-3">
 					{(addressDraft ?? state.addresses).map((address, index) => (
 						<div key={address.id} className="flex items-center gap-2">

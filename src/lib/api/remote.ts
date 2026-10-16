@@ -37,6 +37,10 @@ export function getRemoteHostState(): Promise<RemoteHostState> {
 	return invoke<RemoteHostState>("remote_host_state");
 }
 
+export function getRemoteLanAddresses(): Promise<string[]> {
+	return invoke<string[]>("remote_lan_addresses");
+}
+
 export function setRemoteEnabled(enabled: boolean): Promise<RemoteHostState> {
 	return invoke<RemoteHostState>("remote_set_enabled", { enabled });
 }

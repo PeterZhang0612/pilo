@@ -9,7 +9,7 @@
 
 Apply code-spec depth when a change touches:
 
-- The HTTP/WebSocket Remote adapter (`runtime/remote/*`).
+- The HTTP/WebSocket Remote adapter and desktop LAN discovery (`runtime/remote/*`).
 - The `RuntimeEventBus` broadcast/replay contract (`runtime/events.rs`).
 - `remote_host_config` / `remote_pairing` / `remote_devices` SQLite tables.
 - The transport-neutral `PiloClient` boundary (`src/lib/api/pilo-client.ts` + adapters).
@@ -27,6 +27,7 @@ Parsed in `runtime/commands/remote.rs`; registered in `lib.rs`:
 
 ```rust
 remote_host_state()                       -> RemoteHostState
+remote_lan_addresses()                    -> string[] // host IPv4 literals, no port
 remote_set_enabled(enabled: bool)         -> RemoteHostState
 remote_set_port(port: u16)                -> RemoteHostState
 remote_set_public_base_url(publicBaseUrl: String) -> RemoteHostState // compatibility
@@ -124,12 +125,27 @@ remote_devices(id, name, pair_ip, token_hash, created_at_ms, last_seen_at_ms, ex
   `lan` address when one exists and no longer exposes entry or name editing;
   legacy `name` values stay in storage but are neither edited nor shown. The
   legacy command edits only the `public` entry.
+- **LAN discovery**: desktop-only, on picker open, never part of the 3-second
+  state poll or an HTTP route. `remote/lan.rs` reads Up interfaces through Windows
+  PowerShell/.NET, macOS `ifconfig -u`, or Linux `ip -o -4 addr show up`, with a
+  5-second timeout and child cleanup. Return numerically sorted, deduplicated IPv4
+  literals; exclude loopback, unspecified, link-local, multicast and broadcast.
+  The listener is IPv4-only. The address-header icon picker combines each IP with
+  the saved listener port, disables already-configured origins, and reuses the existing
+  draft/save flow (including empty rows and the 32-address limit). Disable picks
+  during address saves; preserve drafts and report save failures normally. Do not
+  probe reachability or silently add every interface. WebUI pairing stays unchanged.
+  Quick-added entries use `lan-<IPv4 with dots replaced by hyphens>-<32 hex UUID>`
+  IDs, including when filling an empty row. The IP records the original direct
+  host; the UUID prevents ID collisions if an older entry was manually edited.
 - **Port edits**: `remote_set_port` follows a saved `lan` entry only when its
   URL exactly matches the previous runtime LAN URL (or the current LAN IP with
-  the old port while stopped). Custom URLs and proxy entries stay unchanged.
+  the old port while stopped). It also updates every quick-added LAN entry whose
+  URL still equals `http://<IP encoded in ID>:<old listener port>`. Manually changed
+  hosts, schemes or ports do not follow. Unmarked custom/proxy entries stay unchanged.
   Validate the resulting list before stopping; a duplicate origin rejects the
   change. Persist the port, updated LAN URL and the existing device-clearing
-  policy in one transaction, then restart so links use the new target.
+  policy in one transaction, then restart so links use the new targets.
 - **Pairing TTL / quota**: 10 minutes absolute with a fixed address snapshot and
   one slot per origin. `PairingSession` in `remote/pairing.rs` owns serialized
   exchange and in-memory receipts; `remote/access.rs` owns URL normalization.
@@ -284,6 +300,8 @@ remote_devices(id, name, pair_ip, token_hash, created_at_ms, last_seen_at_ms, ex
 | Slot claimed with a different request proof | `409 pairing address already used`              |
 | Original receipt's device revoked/expired   | `401`; receipt cannot restore authorization     |
 | SQLite insert/commit fails                  | `500`; no receipt or quota consumed             |
+| LAN discovery timeout / process failure      | picker error with retry; keep configured addresses |
+| LAN discovery returns no usable IPv4         | picker empty state; manual entry remains available |
 | Invalid access config / duplicate origin    | desktop command error; keep draft for correction |
 | Too many pairing failures from one IP       | `429 too many authentication attempts`          |
 | Device token revoked while WS open          | socket closed; client must re-probe for `401`   |
@@ -303,6 +321,9 @@ remote_devices(id, name, pair_ip, token_hash, created_at_ms, last_seen_at_ms, ex
 
 ## 5. Good / Base / Bad Cases
 
+- **Good LAN picker**: multiple host IPv4s appear with the saved port; selecting
+  one saves only that origin, while existing origins are marked Added. No suitable
+  interface leaves manual entry unchanged; discovery failure offers retry.
 - **Good desktop**: main and session windows both receive completion; reloading
   or closing the session window does not strand the main window in processing.
 - **Good**: Desktop + two Web clients observe the same session; each subscriber
@@ -330,6 +351,12 @@ socket ping/pong or intervening events preserves input assistance; silent socket
 closes after 5 seconds; repeated hide/resume and disposal leave no probe timers or
 visibility listeners; real reconnect still invalidates predictions and replays
 without creating a new model call; auth expiry still reaches pairing.
+
+LAN picker assertions, pending explicit authorization (no tests added or run):
+multiple/duplicate interfaces, excluded IP classes, timeout/failed command, empty
+result, already-added origins (including default ports/trailing slash), empty-row
+reuse, save overlap/failure, 32-origin cap, Windows PowerShell enumeration and
+narrow-screen keyboard/touch menu behavior.
 
 Assertion points (inline `#[cfg(test)] mod tests`):
 
@@ -366,8 +393,11 @@ Additional multi-address assertion points, pending explicit test authorization
 
 - Config NULL migration, explicit list persistence, duplicate-origin rejection,
   invalid legacy URL correction and address edits retaining the batch TTL.
-- Saved default LAN entry follows listener port edits; custom/proxy URLs stay
-  unchanged; duplicate target rejection precedes stop; port/address writes roll
+- Saved default and multiple quick-added LAN entries follow repeated listener
+  port edits, including stopped/restarted hosts and entries filling empty rows.
+  Manually edited hosts/schemes/ports and unmarked custom/proxy URLs stay unchanged;
+  quick-adding an IP again after editing its old entry retains unique IDs.
+  Duplicate target rejection precedes stop; port/address writes roll
   back together on failure. Device clearing on port edits remains unchanged.
 - Late 401 from an old token after successful pairing preserves the new token
   for JSON and image requests and through workspace error handling.
@@ -417,6 +447,11 @@ pub async fn chat_session_start(/* … 8 params … */) { … }
 ```
 
 ---
+
+LAN discovery: wrong — enumerate interfaces in every `remote_host_state` poll
+or advertise IPv6 against the IPv4 listener. Correct — enumerate on picker open
+through `remote_lan_addresses`, then save one selected IPv4 origin through
+`remote_set_addresses`.
 
 #### Wrong: consuming before persisting a device
 
