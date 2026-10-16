@@ -493,6 +493,8 @@ const zhCN = {
 		noCompaction: "当前没有可压缩的上下文",
 		waitHistory: "请等待历史消息加载后再发送图片",
 		externalReadOnly: "外部 Pi 正在运行，当前会话只读",
+		sessionHeaderMissing:
+			"会话文件头缺失，当前仅可查看和引用历史。修复文件前无法继续对话。",
 		waitCompaction: "当前回复完成后再压缩",
 		lastReplyIncomplete: "上次回复未完成",
 		interruptedDescription:

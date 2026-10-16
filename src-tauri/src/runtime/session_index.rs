@@ -161,7 +161,17 @@ pub async fn reconcile(
             deferred_paths.push(file.path);
             continue;
         }
-        if file.header.get("type").and_then(Value::as_str) != Some("session") {
+        if file.header.get("type").and_then(Value::as_str) != Some("session")
+            || file
+                .header
+                .get("id")
+                .and_then(Value::as_str)
+                .is_none_or(str::is_empty)
+        {
+            // A parse failure is not a deletion; retain the last usable index entry.
+            if previous.is_some() {
+                seen.push(file.path);
+            }
             continue;
         }
         if file.header.get("cwd").and_then(Value::as_str) != Some(session_project.path.as_str()) {
@@ -220,7 +230,13 @@ pub async fn reconcile_paths(
         if file.unchanged || file.deferred {
             continue;
         }
-        if file.header.get("type").and_then(Value::as_str) != Some("session") {
+        if file.header.get("type").and_then(Value::as_str) != Some("session")
+            || file
+                .header
+                .get("id")
+                .and_then(Value::as_str)
+                .is_none_or(str::is_empty)
+        {
             continue;
         }
         if file.header.get("cwd").and_then(Value::as_str) != Some(session_project.path.as_str()) {

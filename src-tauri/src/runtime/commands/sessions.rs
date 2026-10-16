@@ -207,6 +207,17 @@ pub async fn session_delete(
         return Err("session belongs to a different project".to_owned());
     }
 
+    runtime
+        .chat_sessions
+        .stop_session_file(&project.id, &session_path)
+        .await?;
+    super::super::session_activity::reject_external_session_owner(
+        &runtime,
+        &project,
+        Some(&session_path),
+    )
+    .await?;
+
     let value = runtime
         .servers
         .request(

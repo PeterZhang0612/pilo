@@ -296,6 +296,35 @@ impl ChatSessions {
         Ok(())
     }
 
+    pub(crate) async fn stop_session_file(
+        &self,
+        project_id: &str,
+        session_path: &str,
+    ) -> Result<(), String> {
+        // Persisted Pi IDs and runtime keys differ for chats started as drafts.
+        let session_keys = {
+            let registry = self.registry.lock().await;
+            registry
+                .processes
+                .iter()
+                .filter(|(_, process)| {
+                    process.project_id == project_id
+                        && process
+                            .session_path
+                            .lock()
+                            .unwrap_or_else(|error| error.into_inner())
+                            .as_deref()
+                            == Some(session_path)
+                })
+                .map(|(session_key, _)| session_key.clone())
+                .collect::<Vec<_>>()
+        };
+        for session_key in session_keys {
+            self.stop(&session_key, Some("session_delete")).await?;
+        }
+        Ok(())
+    }
+
     pub async fn detach(&self, session_key: &str, reason: Option<&str>) -> Result<(), String> {
         let process = self.close_process(session_key).await;
         let Some(process) = process else {

@@ -195,6 +195,7 @@ pub(super) fn serialize_windowed_history(
         model,
         thinking_level,
         name,
+        header_missing,
         source_message_count,
         stats,
         image_locations,
@@ -236,6 +237,8 @@ pub(super) fn serialize_windowed_history(
     push_json_value(&mut serialized, &thinking_level)?;
     serialized.extend_from_slice(b",\"name\":");
     push_json_value(&mut serialized, &name)?;
+    serialized.extend_from_slice(b",\"headerMissing\":");
+    push_json_value(&mut serialized, &header_missing)?;
     serialized.extend_from_slice(b",\"sourceMessageCount\":");
     push_json_value(&mut serialized, &source_message_count)?;
     serialized.extend_from_slice(b",\"stats\":");

@@ -143,7 +143,7 @@ export function useChatComposerSubmission({
 	);
 
 	useEffect(() => {
-		if (historySubmissionBlocked || running) return;
+		if (externalRunning || historySubmissionBlocked || running) return;
 		const [first, ...rest] = pendingHistorySubmissionsRef.current;
 		if (!first) return;
 		pendingHistorySubmissionsRef.current = [];
@@ -151,6 +151,7 @@ export function useChatComposerSubmission({
 		handleSubmit(createChatSubmission(first));
 		for (const message of rest) handleFollowUp(createChatSubmission(message));
 	}, [
+		externalRunning,
 		handleFollowUp,
 		handleSubmit,
 		historySubmissionBlocked,

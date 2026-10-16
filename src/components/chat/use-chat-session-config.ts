@@ -201,6 +201,7 @@ export function useChatSessionConfig({
 
 	const {
 		sessionState,
+		sessionHeaderMissing,
 		applyHistoryMetadata,
 		refreshSessionState,
 		refreshSessionStats,
@@ -489,6 +490,7 @@ export function useChatSessionConfig({
 			catalogReady,
 		},
 		sessionState,
+		sessionHeaderMissing,
 		commands: catalogCurrent ? modelCatalog.commands : null,
 		modelOptions,
 		selectedModel,

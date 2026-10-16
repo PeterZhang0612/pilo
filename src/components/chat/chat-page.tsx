@@ -160,6 +160,7 @@ function ChatPageImpl(props: ChatPageProps) {
 	});
 	const {
 		sessionState,
+		sessionHeaderMissing,
 		commands,
 		modelScope,
 		modelOptions,
@@ -181,6 +182,7 @@ function ChatPageImpl(props: ChatPageProps) {
 		refreshSessionState,
 		refreshSessionStats,
 	} = sessionConfig;
+	const readOnly = Boolean(session.externalRunning || sessionHeaderMissing);
 	const conversation = useChatConversation({
 		session,
 		activeTurnSessionIdRef,
@@ -323,7 +325,7 @@ function ChatPageImpl(props: ChatPageProps) {
 		client,
 		commands,
 		active,
-		readOnly: session.externalRunning,
+		readOnly,
 		projectMcpApprovalPendingRef,
 		onSetEditorText: setDraft,
 		onRefreshSessionState: refreshSessionState,
@@ -362,7 +364,7 @@ function ChatPageImpl(props: ChatPageProps) {
 		loading: historyPending,
 		busy: runtimeBusy || compacting || Boolean(retryState),
 		blocked:
-			Boolean(session.externalRunning || extensionDialog) ||
+			Boolean(readOnly || extensionDialog) ||
 			modelChanging ||
 			recoveryState.status === "failed" ||
 			recoveryState.status === "reconnecting",
@@ -399,7 +401,7 @@ function ChatPageImpl(props: ChatPageProps) {
 			uiStateKey,
 			writeUiState,
 			initialDeferredHistory: initialDeferredSubmissions.history,
-			externalRunning: session.externalRunning,
+			externalRunning: readOnly,
 			historySubmissionBlocked,
 			running,
 			clearDraft,
@@ -414,7 +416,7 @@ function ChatPageImpl(props: ChatPageProps) {
 	const { forkingMessageId, handleForkAssistant } = useChatFork({
 		client,
 		session,
-		runtimeBusy,
+		runtimeBusy: runtimeBusy || readOnly,
 		historyPending,
 		getConversationMessages,
 		onForkSessionCreated,
@@ -443,7 +445,7 @@ function ChatPageImpl(props: ChatPageProps) {
 		selectedModel,
 		modelChanging,
 		modelLoadState,
-		runtimeBusy,
+		runtimeBusy: runtimeBusy || readOnly,
 		historyPending,
 		loadModelOptions,
 		handleModelChange,
@@ -547,6 +549,7 @@ function ChatPageImpl(props: ChatPageProps) {
 												}
 												forkingMessageId={forkingMessageId}
 												forkDisabled={
+													readOnly ||
 													runtimeBusy ||
 													historyPending ||
 													Boolean(forkingMessageId)
@@ -612,11 +615,13 @@ function ChatPageImpl(props: ChatPageProps) {
 										<ChatComposer
 											nextPrompt={nextPrompt.text}
 											onNextPromptDismiss={nextPrompt.dismiss}
-											value={session.externalRunning ? "" : draft}
+											value={readOnly ? "" : draft}
 											historyKey={session.projectRecord.id}
 											placeholder={
-												session.externalRunning
-													? t("chat.externalReadOnly")
+												readOnly
+													? sessionHeaderMissing
+														? t("chat.sessionHeaderMissing")
+														: t("chat.externalReadOnly")
 													: undefined
 											}
 											onChange={setDraft}
@@ -658,17 +663,18 @@ function ChatPageImpl(props: ChatPageProps) {
 												// 会 preventDefault 后 focus 隐藏 textarea（no-op），吞掉新会话页的 Ctrl+L。
 												!active ||
 												recoveryState.status === "reconnecting" ||
-												Boolean(session.externalRunning)
+												readOnly
 											}
-											muted={Boolean(session.externalRunning)}
+											muted={readOnly}
 											running={running}
 											onStop={handleStop}
 											pendingFollowUps={pendingFollowUps}
-											statusText={session.externalRunning ? "" : piStatusText}
+											statusText={readOnly ? "" : piStatusText}
 											statusError={
-												(session.externalRunning
-													? null
-													: retryState?.errorMessage) ??
+												(sessionHeaderMissing
+													? t("chat.sessionHeaderMissing")
+													: null) ??
+												(readOnly ? null : retryState?.errorMessage) ??
 												historyError ??
 												(historyIndexStale &&
 												!running &&
@@ -691,7 +697,7 @@ function ChatPageImpl(props: ChatPageProps) {
 												modelChanging ||
 												runtimeBusy ||
 												historyPending ||
-												session.externalRunning
+												readOnly
 											}
 											onModelMenuOpen={() => void loadModelOptions()}
 											onModelRefresh={() => void loadModelOptions(true)}
@@ -703,7 +709,7 @@ function ChatPageImpl(props: ChatPageProps) {
 												thinkingChanging ||
 												runtimeBusy ||
 												historyPending ||
-												session.externalRunning ||
+												readOnly ||
 												thinkingLevels.length === 0
 											}
 											onThinkingMenuOpen={() => void loadThinkingLevels()}

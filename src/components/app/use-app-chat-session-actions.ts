@@ -114,11 +114,12 @@ export function useAppChatSessionActions({
 				try {
 					await stopChatSession(
 						pending.session.projectRecord.id,
-						sessionId,
+						pending.session.id,
 						"session_delete",
 					);
 				} catch (error) {
 					console.error("Failed to stop pending chat session", error);
+					return;
 				}
 				setOpenedChats((current) =>
 					current.filter(
@@ -137,7 +138,6 @@ export function useAppChatSessionActions({
 				return;
 			}
 			try {
-				await stopChatSession(session.projectId, sessionId, "session_delete");
 				const deleted = await removeIndexedSession(sessionId, projectId);
 				if (!deleted) return;
 				setOpenedChats((current) =>

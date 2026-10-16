@@ -528,7 +528,11 @@ function RemoteWorkspace() {
 											onChange={chat.handleComposerChange}
 											muted={chat.readOnly}
 											placeholder={
-												chat.readOnly ? t("chat.externalReadOnly") : undefined
+												chat.sessionHeaderMissing
+													? t("chat.sessionHeaderMissing")
+													: chat.readOnly
+														? t("chat.externalReadOnly")
+														: undefined
 											}
 											desktopShortcuts={false}
 											historyKey={chat.activeProjectId || null}
@@ -565,6 +569,9 @@ function RemoteWorkspace() {
 											pendingFollowUps={pendingFollowUps}
 											statusText={chat.composerStatusText}
 											statusError={
+												(chat.sessionHeaderMissing
+													? t("chat.sessionHeaderMissing")
+													: null) ??
 												chat.retryState?.errorMessage ??
 												(chat.historyIndexStale
 													? t("chat.historyIndexStale")

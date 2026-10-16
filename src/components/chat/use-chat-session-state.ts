@@ -49,6 +49,7 @@ export function useChatSessionState({
 }: UseChatSessionStateOptions) {
 	const [sessionState, setSessionState] =
 		useState<ChatSessionRuntimeState | null>(null);
+	const [sessionHeaderMissing, setSessionHeaderMissing] = useState(false);
 	const sessionStateRequestRef = useRef(0);
 	const sessionStateAppliedRef = useRef(0);
 
@@ -58,6 +59,7 @@ export function useChatSessionState({
 		const requestGeneration = ++sessionStateRequestRef.current;
 		sessionStateAppliedRef.current = requestGeneration;
 		setSessionState(null);
+		setSessionHeaderMissing(false);
 	}, [
 		session.id,
 		session.initialModel,
@@ -69,6 +71,7 @@ export function useChatSessionState({
 
 	const applyHistoryMetadata = useCallback(
 		(result: SessionHistory) => {
+			setSessionHeaderMissing(result.headerMissing ?? false);
 			const cachedModels =
 				getCachedProjectPiModels(session.projectRecord.id)?.models ?? [];
 			let historicalModel: PiModel | null = null;
@@ -139,6 +142,7 @@ export function useChatSessionState({
 
 	return {
 		sessionState,
+		sessionHeaderMissing,
 		applyHistoryMetadata,
 		refreshSessionState,
 		refreshSessionStats,

@@ -504,6 +504,8 @@ const enUS = {
 		waitHistory:
 			"Please wait for history to finish loading before sending images",
 		externalReadOnly: "An external Pi is running; this session is read-only",
+		sessionHeaderMissing:
+			"The session file header is missing. History is available to view and reference, but the file must be repaired before continuing.",
 		waitCompaction: "Wait for the current response to finish before compacting",
 		lastReplyIncomplete: "The last reply was incomplete",
 		interruptedDescription:

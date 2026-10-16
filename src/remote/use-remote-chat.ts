@@ -161,7 +161,7 @@ export function useRemoteChat({
 		[conversationStore, initialConversation],
 	);
 	const [runtimeReady, setRuntimeReady] = useState(false);
-	const [readOnly, setReadOnly] = useState(false);
+	const [externalReadOnly, setReadOnly] = useState(false);
 	const [compacting, setCompacting] = useState(false);
 	const [retryState, setRetryState] = useState<RetryState | null>(null);
 	const [composer, setComposer] = useState("");
@@ -316,7 +316,9 @@ export function useRemoteChat({
 		historyModel,
 		historyThinkingLevel,
 		applyHistoryMetadata,
+		sessionHeaderMissing,
 	} = agentConfig;
+	const readOnly = externalReadOnly || sessionHeaderMissing;
 	const routeUiKey = activeProjectId
 		? chatUiStateKey(activeProjectId, routeSessionId)
 		: "remote-draft";
@@ -618,6 +620,7 @@ export function useRemoteChat({
 	}, [selectedSession, selectedSessionPath, startDraft]);
 
 	const ensureDraftRuntime = useCallback(async () => {
+		if (sessionHeaderMissing) throw new Error(t("chat.sessionHeaderMissing"));
 		if (!client || !activeProjectId || !activeSessionKey)
 			throw new Error("Choose a project first");
 		const targetSessionKey = activeSessionKey;
@@ -714,6 +717,8 @@ export function useRemoteChat({
 		runtimeReady,
 		setAgentState,
 		selectedSession,
+		sessionHeaderMissing,
+		t,
 	]);
 
 	const refreshActiveAgentConfig = useCallback(
@@ -970,6 +975,7 @@ export function useRemoteChat({
 		retryState,
 		compacting,
 		readOnly,
+		sessionHeaderMissing,
 		runtimeReady,
 		loadingConversation,
 		historyReady,

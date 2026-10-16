@@ -193,6 +193,7 @@ export function useRemoteChatHistory({
 				if (liveTurnOpenRef.current) state = markExternalTurnLive(state);
 				setConversation(state);
 				onHistoryMetadata(result.history);
+				if (result.history.headerMissing) return null;
 				// The shared event stream already observes running sessions; viewing
 				// history must not start a Pi process just to attach to an idle session.
 				return client.chatState(

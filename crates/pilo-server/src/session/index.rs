@@ -54,11 +54,16 @@ pub(crate) fn session_scan(params: SessionScanParams) -> Result<Value, String> {
 
     let explicit_paths = !params.paths.is_empty();
     let mut paths = if !explicit_paths {
-        let Ok(entries) = std::fs::read_dir(&root) else {
-            return to_value(Vec::<SessionFile>::new());
-        };
+        let entries = match std::fs::read_dir(&root) {
+            Ok(entries) => entries.collect::<Result<Vec<_>, _>>(),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return to_value(Vec::<SessionFile>::new());
+            }
+            Err(error) => return Err(format!("failed to scan session directory: {error}")),
+        }
+        .map_err(|error| format!("failed to list session directory: {error}"))?;
         entries
-            .flatten()
+            .into_iter()
             .map(|entry| entry.path())
             .filter(|path| path.extension().and_then(|value| value.to_str()) == Some("jsonl"))
             .collect::<Vec<_>>()
@@ -82,7 +87,7 @@ pub(crate) fn session_scan(params: SessionScanParams) -> Result<Value, String> {
         } else {
             Vec::new()
         };
-        let mut files = summarize_session_files(session_file_stats(paths))?;
+        let mut files = summarize_session_files(session_file_stats(paths), &params.project)?;
         files.extend(deferred_paths.into_iter().map(|path| SessionFile {
             path: path.to_string_lossy().into_owned(),
             size: 0,
@@ -161,7 +166,8 @@ pub(crate) fn session_scan(params: SessionScanParams) -> Result<Value, String> {
                         else {
                             break;
                         };
-                        let result = summarize_session_file(&candidates[candidate_index]);
+                        let result =
+                            summarize_session_file(&candidates[candidate_index], &params.project);
                         results
                             .lock()
                             .expect("session summary results poisoned")
@@ -220,7 +226,10 @@ fn session_file_stats(paths: Vec<PathBuf>) -> Vec<SessionFileStat> {
     results.into_inner().expect("session stat results poisoned")
 }
 
-fn summarize_session_files(candidates: Vec<SessionFileStat>) -> Result<Vec<SessionFile>, String> {
+fn summarize_session_files(
+    candidates: Vec<SessionFileStat>,
+    project: &str,
+) -> Result<Vec<SessionFile>, String> {
     if candidates.is_empty() {
         return Ok(Vec::new());
     }
@@ -239,7 +248,7 @@ fn summarize_session_files(candidates: Vec<SessionFileStat>) -> Result<Vec<Sessi
                     let Some(candidate) = candidates.get(index) else {
                         break;
                     };
-                    let result = summarize_session_file(candidate);
+                    let result = summarize_session_file(candidate, project);
                     results
                         .lock()
                         .expect("session summary results poisoned")
@@ -262,11 +271,14 @@ fn summarize_session_files(candidates: Vec<SessionFileStat>) -> Result<Vec<Sessi
 }
 
 fn session_file_stat(path: PathBuf) -> Option<SessionFileStat> {
-    let metadata = std::fs::metadata(&path).ok()?;
-    let size = metadata.len();
+    let metadata = match std::fs::metadata(&path) {
+        Ok(metadata) => Some(metadata),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return None,
+        Err(_) => None,
+    };
+    let size = metadata.as_ref().map_or(0, std::fs::Metadata::len);
     let mtime_ns = metadata
-        .modified()
-        .ok()
+        .and_then(|metadata| metadata.modified().ok())
         .and_then(|value| value.duration_since(UNIX_EPOCH).ok())
         .map(|value| value.as_nanos() as u64)
         .unwrap_or(0);
@@ -278,24 +290,86 @@ fn session_file_stat(path: PathBuf) -> Option<SessionFileStat> {
     })
 }
 
-fn summarize_session_file(candidate: &SessionFileStat) -> Result<Option<SessionFile>, String> {
+fn summarize_session_file(
+    candidate: &SessionFileStat,
+    project: &str,
+) -> Result<Option<SessionFile>, String> {
+    let file = read_session_summary(candidate, project)?.unwrap_or_else(|| {
+        eprintln!(
+            "[session-index] cannot read session header: {}",
+            candidate.path_text
+        );
+        // Keep an observed but unreadable path so the Host does not treat it as deleted.
+        SessionFile {
+            path: candidate.path_text.clone(),
+            size: candidate.size,
+            mtime_ns: candidate.mtime_ns,
+            header: Value::Null,
+            unchanged: false,
+            deferred: false,
+            name: None,
+            first_user_message_preview: None,
+        }
+    });
+    Ok(Some(file))
+}
+
+fn read_session_summary(
+    candidate: &SessionFileStat,
+    project: &str,
+) -> Result<Option<SessionFile>, String> {
     let file = match std::fs::File::open(&candidate.path) {
         Ok(value) => value,
         Err(_) => return Ok(None),
     };
     let mut reader = std::io::BufReader::new(file);
     let mut line = String::new();
-    {
-        let mut limited_header = reader.by_ref().take(SESSION_INDEX_HEADER_BYTES as u64);
-        if limited_header.read_line(&mut line).is_err() {
+    let mut consumed = 0;
+    let header = loop {
+        line.clear();
+        let mut limited_header = reader
+            .by_ref()
+            .take((SESSION_INDEX_HEADER_BYTES - consumed) as u64);
+        let Ok(read) = limited_header.read_line(&mut line) else {
+            return Ok(None);
+        };
+        consumed += read;
+        if read == 0 || (!line.ends_with('\n') && candidate.size > consumed as u64) {
             return Ok(None);
         }
-    }
-    if !line.ends_with('\n') && candidate.size > line.len() as u64 {
-        return Ok(None);
-    }
-    let Ok(header) = serde_json::from_str(line.trim()) else {
-        return Ok(None);
+        if let Ok(value) = serde_json::from_str::<Value>(line.trim().trim_start_matches('\u{feff}'))
+        {
+            if value.get("type").and_then(Value::as_str) == Some("session") {
+                break value;
+            }
+            let pi_message = value.get("type").and_then(Value::as_str) == Some("message")
+                && value
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .is_some_and(|id| !id.is_empty())
+                && matches!(
+                    value.pointer("/message/role").and_then(Value::as_str),
+                    Some("user" | "assistant" | "toolResult")
+                );
+            if !pi_message {
+                return Ok(None);
+            }
+            let Some(header) = recover_session_header(&candidate.path, project) else {
+                return Ok(None);
+            };
+            eprintln!(
+                "[session-index] indexing headerless session as read-only: {}",
+                candidate.path_text
+            );
+            // Include the first message in the summary; recovery never changes the JSONL.
+            reader
+                .seek(SeekFrom::Start(0))
+                .map_err(|error| error.to_string())?;
+            break header;
+        }
+        if consumed >= SESSION_INDEX_HEADER_BYTES {
+            return Ok(None);
+        }
     };
 
     let Some(summary) = scan_index(&mut reader, candidate.size)? else {
@@ -310,6 +384,45 @@ fn summarize_session_file(candidate: &SessionFileStat) -> Result<Option<SessionF
         deferred: false,
         name: summary.name,
         first_user_message_preview: summary.first_user_message_preview,
+    }))
+}
+
+fn recover_session_header(path: &std::path::Path, project: &str) -> Option<Value> {
+    let (timestamp, id) = path.file_stem()?.to_str()?.split_once('_')?;
+    if id.len() != 36
+        || !id.bytes().enumerate().all(|(index, byte)| {
+            if matches!(index, 8 | 13 | 18 | 23) {
+                byte == b'-'
+            } else {
+                byte.is_ascii_hexdigit()
+            }
+        })
+        || timestamp.len() != 24
+        || !timestamp
+            .bytes()
+            .enumerate()
+            .all(|(index, byte)| match index {
+                4 | 7 | 13 | 16 | 19 => byte == b'-',
+                10 => byte == b'T',
+                23 => byte == b'Z',
+                _ => byte.is_ascii_digit(),
+            })
+    {
+        return None;
+    }
+    let timestamp = format!(
+        "{}T{}:{}:{}.{}Z",
+        &timestamp[..10],
+        &timestamp[11..13],
+        &timestamp[14..16],
+        &timestamp[17..19],
+        &timestamp[20..23],
+    );
+    Some(serde_json::json!({
+        "type": "session",
+        "id": id,
+        "timestamp": timestamp,
+        "cwd": project,
     }))
 }
 
@@ -412,6 +525,7 @@ fn parse_index_line(line: &[u8]) -> Option<Value> {
     if line.len() > MAX_PARSE_BYTES {
         return None;
     }
+    let line = line.strip_prefix(b"\xef\xbb\xbf").unwrap_or(line);
     serde_json::from_slice::<Value>(line).ok()
 }
 

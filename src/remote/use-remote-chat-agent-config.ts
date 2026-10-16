@@ -38,7 +38,7 @@ export function useRemoteChatAgentConfig({
 	);
 	const [historyMetadata, setHistoryMetadata] = useState<Pick<
 		SessionHistory,
-		"model" | "thinkingLevel" | "name" | "stats"
+		"model" | "thinkingLevel" | "name" | "stats" | "headerMissing"
 	> | null>(null);
 	const [models, setModels] = useState<PiModel[]>([]);
 	const [modelsLoaded, setModelsLoaded] = useState(false);
@@ -64,6 +64,7 @@ export function useRemoteChatAgentConfig({
 			thinkingLevel: history.thinkingLevel,
 			name: history.name,
 			stats: history.stats,
+			headerMissing: history.headerMissing,
 		});
 	}, []);
 	const historyModel = useMemo<PiModel | null>(() => {
@@ -214,6 +215,7 @@ export function useRemoteChatAgentConfig({
 					}
 				: null),
 		setChatState,
+		sessionHeaderMissing: historyMetadata?.headerMissing ?? false,
 		historyModel,
 		historyThinkingLevel,
 		applyHistoryMetadata,

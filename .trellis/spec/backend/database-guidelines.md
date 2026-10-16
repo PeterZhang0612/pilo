@@ -141,6 +141,79 @@ path uniqueness to accommodate an old process; stop using the incompatible build
 Wrong: `DELETE FROM sessions WHERE session_path=?1`.
 Correct: `DELETE FROM sessions WHERE project_id=?1 AND session_path=?2`.
 
+## Headerless Session Indexing and Safe Deletion
+
+### 1. Scope / Trigger
+
+Apply when scanning Pi JSONL, projecting history metadata, or deleting sessions.
+A draft runtime key can remain `draft-session-*` after Pi assigns its persisted
+ID; deleting the file while that runtime lives can let Pi recreate it by append,
+without a session header. This is a possible corruption path, not proof of the
+cause of every headerless file.
+
+### 2. Signatures
+
+- `ChatSessions::stop_session_file(project_id, session_path) -> Result<(), String>`
+  resolves actual runtime keys from the registry, including starting processes.
+- `session_delete(projectId, sessionPath)` remains the shared desktop/WebUI command.
+- History responses add `headerMissing: boolean`; TypeScript accepts an omitted
+  field from older Hosts as `false`. No database schema change is required.
+
+### 3. Contracts
+
+Only within the project's session directory, a standard Pi filename
+`YYYY-MM-DDTHH-MM-SS-mmmZ_<UUID>.jsonl` plus a recognizable first parsed Pi message
+(nonempty entry ID, role `user`/`assistant`/`toolResult`) permits an index-only
+synthetic header. Preserve the title and preview from available records. Never
+write that header to JSONL, invent missing ancestors, or override a real header's
+mismatched `cwd`. Header probing remains bounded to 16 KiB.
+
+History sets `headerMissing` unless its first parsed record is a `session` with
+a nonempty string ID. Desktop and WebUI display an explicit warning and block
+sending, deferred submissions, fork and model/thinking changes for such history.
+WebUI must not start Pi as part of loading it. Index recovery enables listing and
+`@` references, not native Pi resume or file repair.
+
+Deletion resolves the indexed project/path first, stops matching Host runtimes
+by their actual keys, checks the existing external-open-turn guard, then deletes
+the file and cached index. This guard is heuristic; it does not lock external Pi
+processes or serialize concurrent new starts. Unindexed draft deletion uses its
+actual runtime key and preserves the open chat if stopping fails.
+
+### 4. Validation & Error Matrix
+
+- Missing session directory or file (`NotFound`): treat as absent normally.
+- Other directory enumeration error: fail the scan, preserving the old index.
+- Observed file with unreadable/invalid header: keep its path in scan results;
+  retain any previous scoped index row instead of treating parse failure as deletion.
+- Unrecognized headerless filename/record: no synthetic new index entry.
+- Stop failure or externally observed open turn: abort before deleting the file.
+- Headerless history: view/reference only; native Pi may reject resume.
+
+### 5. Good / Base / Bad Cases
+
+- Good: a recognizable headerless file regains its title and `@` entry without
+  modification; opening it shows read-only history on desktop and narrow WebUI.
+- Base: valid headers retain normal indexing, resume and scoped deletion.
+- Bad: a transient permission error removes a cached session, or deletion stops
+  a nonexistent persisted-ID runtime while its draft-key process keeps writing.
+
+### 6. Tests Required (When Authorized)
+
+Pending explicit authorization; no tests added/run for this change. Cover standard
+and invalid recovery filenames, BOM/blank/malformed prefixes, mismatched real cwd,
+read-budget limits, title/first-message extraction, unreadable-row retention,
+actual removal, full/windowed history flags, image offsets, desktop/WebUI deferred
+send blocking, and deletion of draft-key and multiple matching runtimes. Assert
+stop failures prevent deletion and original JSONL bytes stay unchanged by indexing.
+
+### 7. Wrong vs Correct
+
+Wrong: `stop(piSessionId)` followed by file deletion; silently discard every
+unparseable file from a full scan.
+Correct: `stop_session_file(projectId, sessionPath)` before deletion; keep observed
+unreadable paths and recover only index metadata under the contract above.
+
 ## Shared Session Read Progress
 
 ### 1. Scope / Trigger

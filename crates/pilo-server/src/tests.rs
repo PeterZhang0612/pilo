@@ -61,6 +61,14 @@ fn session_index_summary_reads_preview_from_prefix_and_latest_name_from_tail() {
 }
 
 #[test]
+fn session_index_summary_preserves_first_user_preview_with_utf8_bom() {
+    let prefix = "\u{feff}{\"type\":\"message\",\"message\":{\"role\":\"user\",\"content\":\"first message\"}}\n{\"type\":\"message\",\"message\":{\"role\":\"user\",\"content\":\"later message\"}}\n{\"type\":\"session_info\",\"name\":\"BOM session\"}\n";
+    let (name, preview) = scan_prefix_stages_for_test(&[prefix.as_bytes()], b"");
+    assert_eq!(name.as_deref(), Some("BOM session"));
+    assert_eq!(preview.as_deref(), Some("first message"));
+}
+
+#[test]
 fn session_index_summary_across_split_prefix_stages() {
     // 渐进式扫描按阶段切分前缀：跨越阶段边界的行首段不解析，
     // 后续阶段只解析新增的完整行。

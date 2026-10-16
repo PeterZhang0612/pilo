@@ -104,6 +104,9 @@ fn push_entry(
     if line.is_empty() {
         return;
     }
+    let (line, line_offset) = line
+        .strip_prefix(b"\xef\xbb\xbf")
+        .map_or((line, line_offset), |line| (line, line_offset + 3));
     if let Ok(mut value) = serde_json::from_slice::<Value>(line) {
         record_image_locations(&value, line_offset, line.len() as u64, image_locations);
         // User images are fetched from their original JSONL range, not projected
@@ -171,6 +174,13 @@ fn active_branch_indices(entries: &[Value]) -> Vec<usize> {
 fn parse_history_entries(entries: &[Value]) -> SessionHistory {
     let branch = active_branch_indices(entries);
     let mut history = project_branch(entries, &branch);
+    history.header_missing = !entries.first().is_some_and(|entry| {
+        entry.get("type").and_then(Value::as_str) == Some("session")
+            && entry
+                .get("id")
+                .and_then(Value::as_str)
+                .is_some_and(|id| !id.is_empty())
+    });
     history.stats = collect_history_stats(entries, &branch);
     history
 }

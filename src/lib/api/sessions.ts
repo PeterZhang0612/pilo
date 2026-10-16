@@ -71,6 +71,7 @@ export type SessionHistory = {
 	model: { provider: string; id: string } | null;
 	thinkingLevel: string | null;
 	name: string | null;
+	headerMissing?: boolean;
 	sourceMessageCount: number;
 	windowStartMessage?: number;
 	windowMessageCount?: number;

@@ -58,6 +58,7 @@ pub struct SessionHistory {
     pub model: Option<SessionHistoryModel>,
     pub thinking_level: Option<String>,
     pub name: Option<String>,
+    pub header_missing: bool,
     pub source_message_count: usize,
     pub stats: SessionHistoryStats,
     /// Image id → JSONL line range; internal only, never serialized to IPC.
