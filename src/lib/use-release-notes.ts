@@ -73,8 +73,14 @@ export function useReleaseNotes(
 	}, [enabled, version, tag, result?.version]);
 
 	const currentResult = result?.version === version ? result : null;
+	const rawNotes = currentResult?.notes ?? fallbackNotes;
+	// The release workflow appends installer instructions; keep them on GitHub only.
+	const notes =
+		rawNotes
+			?.replace(/^(?:---[ \t]*\r?\n\s*)?### 下载安装[ \t]*\r?$[\s\S]*/m, "")
+			.trim() || null;
 	return {
-		notes: currentResult?.notes ?? (fallbackNotes?.trim() || null),
+		notes,
 		loading: enabled && version !== null && currentResult === null,
 		failed: currentResult?.failed ?? false,
 		openRelease: () => {

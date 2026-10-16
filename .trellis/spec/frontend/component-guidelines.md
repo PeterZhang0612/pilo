@@ -216,6 +216,15 @@ actions go there and appear only for persisted sessions (`session && !session.te
   failure must not block installation. Render Markdown through `ChatMarkdown`.
   Clear failed results when the dialog closes so reopening retries; keep successful
   results cached. A failed response must not trigger a retry loop while open.
+  Strip the trailing `### 下载安装` section (and its preceding separator) appended
+  by the release workflow from both fetched and fallback notes; leave the actual
+  GitHub Release unchanged. If nothing remains, show the existing empty state.
+- Keep the update dialog's header, release-notes toolbar and install footer outside
+  the scroll region. Use a viewport/safe-area-bounded grid with a `minmax(0, 1fr)`
+  notes row; only the notes region scrolls, with `overscroll-contain`.
+  Give the named notes region `tabIndex={0}` and visible keyboard focus so WebKit
+  users can scroll even when the Markdown contains no links or controls.
+  Do not wrap the Markdown in another bordered card.
 - `installUpdate()` in the error state rechecks for updates before another install
   attempt. The check closes the previous `Update` handle, including installer
   bytes retained after an installation failure. Do not download again on that
