@@ -7,7 +7,12 @@ on:
     branches:
       - main
     paths:
+      - "Cargo.toml"
       - "Cargo.lock"
+      - ".cargo/**"
+      - "rust-toolchain"
+      - "rust-toolchain.toml"
+      - "src-tauri/Cargo.toml"
       - "crates/pilo-protocol/**"
       - "crates/pilo-server/**"
       - "scripts/build-pilo-server.sh"
@@ -21,8 +26,67 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  prepare:
+    name: Restore server runtime set
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      cache-hit: ${{ steps.runtimes.outputs.cache-hit }}
+      cache-key: ${{ steps.inputs.outputs.cache-key }}
+      toolchain: ${{ steps.inputs.outputs.toolchain }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Resolve runtime build inputs
+        id: inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          TOOLCHAIN=$(rustc --version | awk '{print $2}')
+          # Include paths and file modes as well as content, including embedded extensions.
+          HASH=$(
+            {
+              rustc --version
+              git ls-tree -r HEAD -- \
+                Cargo.toml Cargo.lock .cargo rust-toolchain rust-toolchain.toml \
+                src-tauri/Cargo.toml crates/pilo-protocol crates/pilo-server \
+                scripts/build-pilo-server.sh scripts/verify-pilo-server-resources.sh \
+                .github/workflows/server-runtimes.yml
+            } | sha256sum | cut -d ' ' -f 1
+          )
+          echo "toolchain=$TOOLCHAIN" >> "$GITHUB_OUTPUT"
+          echo "cache-key=pilo-server-runtimes-v1-$HASH" >> "$GITHUB_OUTPUT"
+
+      - name: Restore exact runtime set
+        id: runtimes
+        uses: actions/cache/restore@v5
+        with:
+          path: src-tauri/resources/pilo-server-*
+          key: ${{ steps.inputs.outputs.cache-key }}
+
+      - name: Verify cached runtime set
+        if: steps.runtimes.outputs.cache-hit == 'true'
+        shell: bash
+        run: bash scripts/verify-pilo-server-resources.sh
+
+      - name: Upload cached runtime set
+        if: steps.runtimes.outputs.cache-hit == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: pilo-server-runtimes
+          path: src-tauri/resources/pilo-server-*
+          if-no-files-found: error
+          retention-days: 14
+
   build:
     name: Build ${{ matrix.target }}
+    needs: prepare
+    if: needs.prepare.outputs.cache-hit != 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -54,6 +118,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
+          toolchain: ${{ needs.prepare.outputs.toolchain }}
           targets: ${{ matrix.rust_target }}
 
       - name: Install Linux ARM64 linker
@@ -90,7 +155,7 @@ jobs:
 
   bundle:
     name: Bundle runtime set
-    needs: build
+    needs: [prepare, build]
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -116,3 +181,9 @@ jobs:
           path: src-tauri/resources/pilo-server-*
           if-no-files-found: error
           retention-days: 14
+
+      - name: Save verified runtime set
+        uses: actions/cache/save@v5
+        with:
+          path: src-tauri/resources/pilo-server-*
+          key: ${{ needs.prepare.outputs.cache-key }}

@@ -116,7 +116,7 @@ case "$PROFILE" in
     PROFILE_DIR='debug'
     ;;
   release)
-    CARGO_ARGS=(build -p pilo-server --release --target "$RUST_TARGET")
+    CARGO_ARGS=(build --locked -p pilo-server --release --target "$RUST_TARGET")
     PROFILE_DIR='release'
     ;;
   *)

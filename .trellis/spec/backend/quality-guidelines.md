@@ -169,3 +169,64 @@ is implied by syntax/lint checks.
 Wrong: dev startup automatically builds remote servers, or dev binaries overwrite
 `src-tauri/resources/`. Correct: explicit dev builds and isolated runtime roots;
 startup only deploys an already built server and its embedded plugins.
+
+### Release server runtime set cache
+
+#### 1. Scope / Trigger
+
+`server-runtimes.yml` serves standalone main builds and the reusable release job.
+Check the complete binary set on Ubuntu before scheduling native build runners;
+Cargo dependency caches alone cannot avoid macOS runner queue time.
+
+#### 2. Signatures
+
+- `prepare` exports `cache-hit`, `cache-key`, and the resolved stable `toolchain`.
+- The cache key is `pilo-server-runtimes-v1-<sha256>`, hashing `rustc --version`
+  and `git ls-tree -r HEAD` entries for workspace/desktop manifests, `Cargo.lock`,
+  `.cargo`, Rust toolchain files, both server/protocol crates (including embedded
+  extensions), the build/verification scripts, and the runtime workflow itself.
+- The consumer interface remains the `pilo-server-runtimes` artifact containing
+  all four files required by `scripts/verify-pilo-server-resources.sh`.
+
+#### 3. Contracts
+
+- Only `cache-hit == 'true'` permits reuse. Do not configure prefix restore keys.
+- An exact hit verifies and uploads the set in `prepare`; `build` and `bundle`
+  skip, so no Windows/macOS runtime runner is requested.
+- A miss builds all targets with the exact Rust release resolved by `prepare`.
+  Release server builds use `--locked`; debug/manual dev behavior is unchanged.
+  `bundle` verifies and uploads the complete set before saving the cache.
+- Save and restore the same path on Ubuntu. Main builds seed the default-branch
+  cache, which tags can restore; different tags cannot share tag-only caches.
+- Keep main push path filters aligned with the hashed inputs. A version bump
+  invalidates the set because the server embeds `CARGO_PKG_VERSION`. Main must
+  finish seeding the matching cache before a release can reuse it.
+
+#### 4. Validation & Error Matrix
+
+- Missing/evicted cache or changed inputs: rebuild; never use the latest unrelated
+  artifact or a partial cache match.
+- Exact cache hit missing a required nonempty file: fail verification.
+- Build, lockfile, or set verification failure: do not save or consume that set.
+- Cache save unavailable: the verified uploaded artifact remains usable for the
+  current run; later runs may rebuild.
+
+#### 5. Good / Base / Bad Cases
+
+- Good: frontend-only changes reuse the same complete runtime set from main.
+- Base: first run or changed extension/version/Rust release builds all targets.
+- Bad: reuse a previous version's server or schedule macOS just to check a cache.
+
+#### 6. Tests Required
+
+Pending explicit authorization: CI cold miss/hit runs must confirm four target
+builds versus zero native runtime jobs, identical artifact filenames, unchanged
+release download behavior, and invalidation on embedded extension, version,
+lockfile, toolchain and build-input path changes. Do not infer measured speedup
+from workflow edits without a real Actions run.
+
+#### 7. Wrong vs Correct
+
+Wrong: download the most recent successful server build regardless of inputs.
+Correct: exact input-keyed set reuse, with normal builds on a miss and required
+file verification before handing the artifact to desktop packaging.
