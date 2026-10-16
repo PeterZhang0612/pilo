@@ -359,14 +359,15 @@ function ChatPageImpl(props: ChatPageProps) {
 		draft,
 		hasAttachments: composerImages.length > 0,
 		active,
+		loading: historyPending,
 		busy: runtimeBusy || compacting || Boolean(retryState),
 		blocked:
 			Boolean(session.externalRunning || extensionDialog) ||
-			historyPending ||
 			modelChanging ||
 			recoveryState.status === "failed" ||
 			recoveryState.status === "reconnecting",
 		model: selectedModel,
+		getSessionState: client.getPiAgentState,
 		subscribe: true,
 	});
 	const { fileSuggestions, handleSuggestionTrigger } = useChatFileSuggestions({

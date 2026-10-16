@@ -142,16 +142,25 @@ share `useNextPrompt`, `useNextPromptSettings`, settings fields and `ChatCompose
 
 ### Frontend lifecycle
 
-- Trigger only in an interactive active view with empty draft, no attachments,
-  enabled settings, and no blocking UI. Window blur or document hiding must not
-  block generation, cancel pending work or discard results: allow background
-  generation and retain suggestions for returning to the foreground. Switching
-  the selected Session still invalidates work. Wait for idle after the live
-  completion; do not generate on mount, focus, state hydration or replay.
-- Event handlers read the latest committed options from a ref updated in a
-  layout effect, not by mutating refs during render. Invalidation effects use
-  explicit identity/editor/transport dependencies even when cleanup does not read
-  them; explain that deliberate trigger contract when lint needs a local exception.
+- Trigger for an observed interactive Session with empty draft, no attachments,
+  enabled settings, and no blocking UI, even when another Session is selected.
+  Window blur, document hiding and selection changes must not cancel pending work
+  or discard results. `createNextPromptSessionCache` owns per-runtime-session
+  requests/results; WebUI retains observed sessions in its workspace hook and
+  Desktop retains them in mounted chat controllers. Cache only in memory, retain
+  at most 64 idle entries, and never evict a running turn or pending request to
+  meet that limit. Controller/workspace disposal clears its cache.
+- Only a live `assistant_message_end` (`agent_settled`) triggers generation.
+  Resolve current Pi identity/model and verify idle state through the existing
+  `get_state` RPC before requesting; this also handles a new WebUI draft whose
+  startup completed after selection changed. Never start Pi or generate on mount,
+  focus, state hydration, selection return or replay.
+- Event handlers read committed options/settings: update the hook ref and cache
+  contexts in layout effects, never during render. Distinguish view selection
+  (`active`, display only), transport availability (`connected`) and temporary
+  history loading (`loading`). Loading hides cached text without overwriting the
+  retained session context; compare hydrated identity/editor/model changes once
+  loading finishes, so a return to the same Session does not erase its result.
 - Web passes `chat.identifiedSessionId`, not `chat.chatState.sessionId`: the latter
   is a statistics projection and does not carry the live Pi Session identity.
 - Desktop uses the existing multiplexed runtime channel. Web feeds its existing
@@ -161,13 +170,15 @@ share `useNextPrompt`, `useNextPromptSettings`, settings fields and `ChatCompose
   A healthy Web foreground return probes the existing socket instead of forcing
   reconnect; ping/pong is consumed by the adapter, never forwarded to this hook.
   Actual transport failure still invalidates work. See [Remote WebUI](./remote-webui.md).
-- Result matching includes requestId, Session ID, Pi generation, Connection,
-  model/config key and revision. Input/attachments, Esc (even while pending),
-  submit, run, dialog/readOnly, transport/session/model/config changes
-  clear results and best-effort cancel. Saving settings locally already disables
-  eligibility and cancels pending work, before the Host reply arrives; failure
-  retains formal settings but never restores the old suggestion. A 20-second
-  client timer discards late work.
+- Result matching includes requestId, Session ID, Pi generation and revision;
+  committed Connection/model/identity changes invalidate the matching entry.
+  Input/attachments, Esc (even while pending), submit, run and dialog/readOnly
+  clear only that Session's result and best-effort cancel its request. Selecting
+  another Session is not an identity change. Settings changes/saving invalidate
+  every cached Session on that Connection; transport failure/resync invalidates
+  all results/work, retaining contexts for future live completions on the same
+  client. Replacing the client drops contexts too. A failed settings save never
+  restores an old suggestion. A 20-second client timer discards late work.
 - `randomId()` is a correlation ID helper, not a pairing proof. It works on
   ordinary HTTP LAN origins where `crypto.randomUUID()` may not exist.
 - Ghost Text uses textarea placeholder, never its value. Empty-draft sizing uses
@@ -244,6 +255,11 @@ log SSH config, model credentials, prediction context or suggestion body.
 - Good: two clients receive one live settled leaf and request the same config;
   one complete call publishes their separate request IDs. One client typing
   cancels only its own interest. Adoption fills but does not send.
+- Good session switching: send in A, select B before A settles, and generate/cache
+  A's suggestion from its live completion. Switching during prediction retains
+  the request; returning after completion shows the cached result without a new
+  call. Typing or dismissing in B must not clear A. Hydration temporarily hides,
+  but does not invalidate, A's cached result.
 - Base: default disabled or viewing idle history starts neither Pi nor prediction;
   absent cached models still allows follow-chat configuration.
 - Bad: old Web replay, changed settings, typed draft, fork or new run cannot
@@ -262,6 +278,11 @@ new token budget or diagnostic fields.
 
 Remaining assertion points for future verification are not claims that these
 behaviors have been run:
+
+- Session cache: background completion after selection changes, switching while
+  pending/ready, repeated A/B switches, per-session typing/Esc isolation, new-draft
+  identity resolution after leaving during startup, loading/hydration retention,
+  per-Connection settings invalidation, disconnect/resync and replay suppression.
 
 - Storage: defaults, paired model fields, monotonic concurrent UPSERT revisions,
   Connection cascade, unknown/invalid identities and preserving model on disable.

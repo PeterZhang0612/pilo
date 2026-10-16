@@ -282,6 +282,11 @@ export function useRemoteChat({
 		setRetryState,
 	});
 	const { rpc, rpcForSession, handleSocketMessage, abortPiRetry } = transport;
+	const readSessionState = useCallback(
+		(targetSessionKey: string) =>
+			rpcForSession<PiAgentState>(targetSessionKey, { type: "get_state" }),
+		[rpcForSession],
+	);
 	const agentConfig = useRemoteChatAgentConfig({
 		client,
 		rpc,
@@ -998,5 +1003,6 @@ export function useRemoteChat({
 		respondToExtensionDialog: extensionUi.respondToExtensionDialog,
 		dismissExtensionNotification: extensionUi.dismissExtensionNotification,
 		handleSocketMessage,
+		readSessionState,
 	};
 }

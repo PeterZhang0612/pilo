@@ -239,10 +239,12 @@ function RemoteWorkspace() {
 		draft: chat.composer,
 		hasAttachments: chat.images.length > 0,
 		active: networkState === "connected",
+		connected: networkState === "connected",
+		loading: !chat.historyReady,
 		busy: active || chat.sending || chat.compacting || Boolean(chat.retryState),
-		blocked:
-			chat.readOnly || !chat.historyReady || Boolean(chat.extensionDialog),
+		blocked: chat.readOnly || Boolean(chat.extensionDialog),
 		model: chat.selectedModel,
+		getSessionState: chat.readSessionState,
 		refreshKey: `${connection.resyncKey}:${connection.snapshotRefreshKey}`,
 	});
 	const { handleSocketMessage } = chat;
