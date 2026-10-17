@@ -8,7 +8,12 @@ use tokio::{
 
 use crate::domain::{Connection, ConnectionKind};
 
-use super::ssh::{ssh_command, wrap_posix_script};
+use super::{
+    connection_diagnostics::ConnectionDiagnostics,
+    ssh::{
+        ASKPASS_ATTEMPT_ENV, ssh_command, stderr_without_askpass_diagnostics, wrap_posix_script,
+    },
+};
 
 const SERVER_REMOTE_DIR: &str = if cfg!(debug_assertions) {
     ".cache/pilo-dev/server"
@@ -53,6 +58,7 @@ static SERVER_ARTIFACTS: OnceCell<Mutex<HashMap<ServerTarget, Arc<ServerArtifact
 pub(super) async fn spawn_server(
     connection: &Connection,
     force_redeploy: bool,
+    diagnostics: &ConnectionDiagnostics,
 ) -> Result<SpawnedServer, String> {
     match &connection.kind {
         ConnectionKind::Local => {
@@ -68,7 +74,12 @@ pub(super) async fn spawn_server(
                     "PILO_SERVER_RUNTIME_DIR",
                     pilo_server::runtime_directory().map_err(|error| error.to_string())?,
                 );
-                return spawn_piped_server(command, &connection.name, false);
+                return diagnostics.stage("spawn").finish(spawn_piped_server(
+                    command,
+                    &connection.name,
+                    false,
+                    diagnostics,
+                ));
             }
             let target = ServerTarget::current()?;
             let mut command = Command::new(server_binary(target)?);
@@ -76,22 +87,37 @@ pub(super) async fn spawn_server(
                 "PILO_SERVER_RUNTIME_DIR",
                 pilo_server::runtime_directory().map_err(|error| error.to_string())?,
             );
-            spawn_piped_server(command, &connection.name, false)
+            diagnostics.stage("spawn").finish(spawn_piped_server(
+                command,
+                &connection.name,
+                false,
+                diagnostics,
+            ))
         }
-        ConnectionKind::Wsl { .. } => spawn_wsl_server(connection, force_redeploy).await,
-        ConnectionKind::Ssh { .. } => spawn_ssh_server(connection, force_redeploy).await,
+        ConnectionKind::Wsl { .. } => {
+            spawn_wsl_server(connection, force_redeploy, diagnostics).await
+        }
+        ConnectionKind::Ssh { .. } => {
+            spawn_ssh_server(connection, force_redeploy, diagnostics).await
+        }
     }
 }
 
 async fn spawn_wsl_server(
     connection: &Connection,
     force_redeploy: bool,
+    diagnostics: &ConnectionDiagnostics,
 ) -> Result<SpawnedServer, String> {
     let ConnectionKind::Wsl { distro } = &connection.kind else {
         return Err("WSL pilo-server spawn requires a WSL connection".to_owned());
     };
-    let target = probe_wsl_target(distro).await?;
-    let reused_deployment = deploy_server_wsl(distro, target, force_redeploy).await?;
+    let target = diagnostics
+        .stage("platform_probe")
+        .finish(probe_wsl_target(distro, diagnostics).await)?;
+    log::info!(target: "connection-diagnostics", "platform detected attemptId={} platform={:?} arch={:?}", diagnostics.attempt_id, target.platform, target.arch);
+    let reused_deployment = diagnostics
+        .stage("deploy")
+        .finish(deploy_server_wsl(distro, target, force_redeploy, diagnostics).await)?;
     let mut command = Command::new("wsl.exe");
     command.args([
         "--distribution",
@@ -101,29 +127,46 @@ async fn spawn_wsl_server(
         "-c",
         &format!("PILO_SERVER_RUNTIME_DIR=\"$HOME/{SERVER_REMOTE_DIR}\" exec \"$HOME/{SERVER_REMOTE_DIR}/pilo-server\""),
     ]);
-    spawn_piped_server(command, &connection.name, reused_deployment)
+    diagnostics.stage("spawn").finish(spawn_piped_server(
+        command,
+        &connection.name,
+        reused_deployment,
+        diagnostics,
+    ))
 }
 
 async fn spawn_ssh_server(
     connection: &Connection,
     force_redeploy: bool,
+    diagnostics: &ConnectionDiagnostics,
 ) -> Result<SpawnedServer, String> {
     let ConnectionKind::Ssh { target: _ } = &connection.kind else {
         return Err("SSH pilo-server spawn requires an SSH connection".to_owned());
     };
-    let server_target = probe_ssh_target(connection).await?;
-    let reused_deployment = deploy_server_ssh(connection, server_target, force_redeploy).await?;
-    let mut command = ssh_command(connection)?;
-    command.arg(wrap_posix_script(&format!(
-        "PILO_SERVER_RUNTIME_DIR=\"$HOME/{SERVER_REMOTE_DIR}\" exec \"$HOME/{SERVER_REMOTE_DIR}/pilo-server\""
-    )));
-    spawn_piped_server(command, &connection.name, reused_deployment)
+    let server_target = diagnostics
+        .stage("platform_probe")
+        .finish(probe_ssh_target(connection, diagnostics).await)?;
+    log::info!(target: "connection-diagnostics", "platform detected attemptId={} platform={:?} arch={:?}", diagnostics.attempt_id, server_target.platform, server_target.arch);
+    let reused_deployment = diagnostics
+        .stage("deploy")
+        .finish(deploy_server_ssh(connection, server_target, force_redeploy, diagnostics).await)?;
+    let spawn = diagnostics.stage("spawn");
+    let result = (|| {
+        let mut command = ssh_command(connection)?;
+        command.env(ASKPASS_ATTEMPT_ENV, diagnostics.attempt_id.to_string());
+        command.arg(wrap_posix_script(&format!(
+            "PILO_SERVER_RUNTIME_DIR=\"$HOME/{SERVER_REMOTE_DIR}\" exec \"$HOME/{SERVER_REMOTE_DIR}/pilo-server\""
+        )));
+        spawn_piped_server(command, &connection.name, reused_deployment, diagnostics)
+    })();
+    spawn.finish(result)
 }
 
 fn spawn_piped_server(
     mut command: Command,
     label: &str,
     reused_deployment: bool,
+    diagnostics: &ConnectionDiagnostics,
 ) -> Result<SpawnedServer, String> {
     super::hide_console_window(&mut command);
     command
@@ -133,6 +176,7 @@ fn spawn_piped_server(
         .kill_on_drop(true);
     let mut child = command
         .spawn()
+        .inspect_err(|error| diagnostics.io_error("spawn", error))
         .map_err(|error| format!("failed to start pilo-server for '{label}': {error}"))?;
     let stdin = child
         .stdin
@@ -155,7 +199,10 @@ fn spawn_piped_server(
     })
 }
 
-async fn probe_wsl_target(distro: &str) -> Result<ServerTarget, String> {
+async fn probe_wsl_target(
+    distro: &str,
+    diagnostics: &ConnectionDiagnostics,
+) -> Result<ServerTarget, String> {
     let mut command = Command::new("wsl.exe");
     command.args([
         "--distribution",
@@ -172,7 +219,9 @@ async fn probe_wsl_target(distro: &str) -> Result<ServerTarget, String> {
     )
     .await
     .map_err(|_| format!("timed out while probing WSL platform for '{distro}'"))?
+    .inspect_err(|error| diagnostics.io_error("platform_probe", error))
     .map_err(|error| format!("failed to probe WSL platform for '{distro}': {error}"))?;
+    diagnostics.process_exit("platform_probe", Some(output.status), &output.stderr);
     if !output.status.success() {
         return Err(format!(
             "failed to probe WSL platform for '{distro}': {}",
@@ -186,19 +235,25 @@ async fn probe_wsl_target(distro: &str) -> Result<ServerTarget, String> {
     Ok(target)
 }
 
-async fn probe_ssh_target(connection: &Connection) -> Result<ServerTarget, String> {
+async fn probe_ssh_target(
+    connection: &Connection,
+    diagnostics: &ConnectionDiagnostics,
+) -> Result<ServerTarget, String> {
     let mut command = ssh_command(connection)?;
+    command.env(ASKPASS_ATTEMPT_ENV, diagnostics.attempt_id.to_string());
     command.arg(wrap_posix_script(
         "printf '%s\\t%s\\n' \"$(uname -s)\" \"$(uname -m)\"",
     ));
     let output = tokio::time::timeout(std::time::Duration::from_secs(15), command.output())
         .await
         .map_err(|_| "timed out while probing remote pilo-server platform".to_owned())?
+        .inspect_err(|error| diagnostics.io_error("platform_probe", error))
         .map_err(|error| format!("failed to probe remote pilo-server platform: {error}"))?;
+    diagnostics.process_exit("platform_probe", Some(output.status), &output.stderr);
     if !output.status.success() {
         return Err(format!(
             "failed to probe remote pilo-server platform: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
+            stderr_without_askpass_diagnostics(&output.stderr).trim()
         ));
     }
     parse_target_probe(&output.stdout, "remote")
@@ -208,8 +263,11 @@ async fn deploy_server_wsl(
     distro: &str,
     target: ServerTarget,
     force_redeploy: bool,
+    diagnostics: &ConnectionDiagnostics,
 ) -> Result<bool, String> {
-    let artifact = server_artifact(target).await?;
+    let artifact = diagnostics
+        .stage("artifact")
+        .finish(server_artifact(target).await)?;
     let source = normalize_windows_path_for_wsl(&artifact.path.to_string_lossy());
     // The deploy script is content-addressed: reuse requires the installed
     // binary to fingerprint exactly like the current build, so the ready check
@@ -236,7 +294,9 @@ async fn deploy_server_wsl(
     )
     .await
     .map_err(|_| format!("timed out while deploying pilo-server to WSL '{distro}'"))?
+    .inspect_err(|error| diagnostics.io_error("deploy", error))
     .map_err(|error| format!("failed to deploy pilo-server to WSL '{distro}': {error}"))?;
+    diagnostics.process_exit("deploy", Some(output.status), &output.stderr);
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     if output.status.success() && stdout.trim() == "ready" {
@@ -306,8 +366,11 @@ async fn deploy_server_ssh(
     connection: &Connection,
     target: ServerTarget,
     force_redeploy: bool,
+    diagnostics: &ConnectionDiagnostics,
 ) -> Result<bool, String> {
-    let artifact = server_artifact(target).await?;
+    let artifact = diagnostics
+        .stage("artifact")
+        .finish(server_artifact(target).await)?;
     let source = &artifact.path;
     // Content-addressed deploy: reuse requires the installed binary to
     // fingerprint exactly like the current build, so the ready check never
@@ -317,6 +380,7 @@ async fn deploy_server_ssh(
         fingerprint = artifact.fingerprint,
     );
     let mut command = ssh_command(connection)?;
+    command.env(ASKPASS_ATTEMPT_ENV, diagnostics.attempt_id.to_string());
     command.arg(wrap_posix_script(&install_script));
     command
         .stdin(Stdio::piped())
@@ -325,6 +389,7 @@ async fn deploy_server_ssh(
         .kill_on_drop(true);
     let mut child = command
         .spawn()
+        .inspect_err(|error| diagnostics.io_error("deploy", error))
         .map_err(|error| format!("failed to deploy pilo-server: {error}"))?;
     let mut stdin = child
         .stdin
@@ -339,15 +404,19 @@ async fn deploy_server_ssh(
         .stderr
         .take()
         .ok_or_else(|| "pilo-server deploy stderr unavailable".to_owned())?;
+    let attempt_id = diagnostics.attempt_id;
     let stderr_task = tokio::spawn(async move {
         let mut bytes = Vec::new();
-        let _ = stderr.read_to_end(&mut bytes).await;
+        if let Err(error) = stderr.read_to_end(&mut bytes).await {
+            log::warn!(target: "connection-diagnostics", "deploy stderr read failed attemptId={attempt_id} kind={:?} osCode={:?}", error.kind(), error.raw_os_error());
+        }
         bytes
     });
 
     let status_line =
         match tokio::time::timeout(std::time::Duration::from_secs(8), stdout.next_line()).await {
             Ok(line) => line
+                .inspect_err(|error| diagnostics.io_error("deploy", error))
                 .map_err(|error| format!("failed to read pilo-server deploy status: {error}"))?
                 .unwrap_or_default(),
             Err(_) => {
@@ -356,7 +425,10 @@ async fn deploy_server_ssh(
                 let _ = child.start_kill();
                 drop(stdin);
                 let stderr = stderr_task.await.unwrap_or_default();
-                let detail = String::from_utf8_lossy(&stderr).trim().to_owned();
+                diagnostics.process_exit("deploy", None, &stderr);
+                let detail = stderr_without_askpass_diagnostics(&stderr)
+                    .trim()
+                    .to_owned();
                 return Err(if detail.is_empty() {
                     "timed out while preparing remote pilo-server".to_owned()
                 } else {
@@ -366,51 +438,83 @@ async fn deploy_server_ssh(
         };
     if status_line == "ready" {
         drop(stdin);
-        let status = child.wait().await.map_err(|error| error.to_string())?;
+        let status = child
+            .wait()
+            .await
+            .inspect_err(|error| diagnostics.io_error("deploy", error))
+            .map_err(|error| error.to_string())?;
         let stderr = stderr_task.await.unwrap_or_default();
+        diagnostics.process_exit("deploy", Some(status), &stderr);
         if status.success() {
             return Ok(true);
         }
         return Err(format!(
             "failed to reuse pilo-server: {}",
-            String::from_utf8_lossy(&stderr).trim()
+            stderr_without_askpass_diagnostics(&stderr).trim()
         ));
     }
     if status_line != "upload" {
         drop(stdin);
-        let _ = child.wait().await;
+        let status = child
+            .wait()
+            .await
+            .inspect_err(|error| diagnostics.io_error("deploy", error))
+            .ok();
         let stderr = stderr_task.await.unwrap_or_default();
+        diagnostics.process_exit("deploy", status, &stderr);
         return Err(format!(
             "unexpected pilo-server deploy status '{status_line}': {}",
-            String::from_utf8_lossy(&stderr).trim()
+            stderr_without_askpass_diagnostics(&stderr).trim()
         ));
     }
 
-    let mut source_file = tokio::fs::File::open(source)
-        .await
-        .map_err(|error| format!("failed to open pilo-server '{}': {error}", source.display()))?;
-    let uploaded = tokio::io::copy(&mut source_file, &mut stdin)
-        .await
-        .map_err(|error| format!("failed to upload pilo-server: {error}"))?;
-    if uploaded != artifact.size {
-        return Err(format!(
-            "pilo-server upload was truncated: expected {} bytes, wrote {uploaded}",
-            artifact.size
-        ));
-    }
+    let uploaded = diagnostics.stage("upload").finish(
+        async {
+            let mut source_file = tokio::fs::File::open(source)
+                .await
+                .inspect_err(|error| diagnostics.io_error("upload", error))
+                .map_err(|error| {
+                    format!("failed to open pilo-server '{}': {error}", source.display())
+                })?;
+            let uploaded = tokio::io::copy(&mut source_file, &mut stdin)
+                .await
+                .inspect_err(|error| diagnostics.io_error("upload", error))
+                .map_err(|error| format!("failed to upload pilo-server: {error}"))?;
+            if uploaded != artifact.size {
+                return Err(format!(
+                    "pilo-server upload was truncated: expected {} bytes, wrote {uploaded}",
+                    artifact.size
+                ));
+            }
+            Ok(uploaded)
+        }
+        .await,
+    )?;
+    log::info!(target: "connection-diagnostics", "upload complete attemptId={} uploadedBytes={uploaded} expectedBytes={}", diagnostics.attempt_id, artifact.size);
     drop(stdin);
-    let installed_line = stdout
-        .next_line()
-        .await
-        .map_err(|error| format!("failed to read pilo-server install status: {error}"))?
-        .unwrap_or_default();
-    let status = child.wait().await.map_err(|error| error.to_string())?;
-    let stderr = stderr_task.await.unwrap_or_default();
-    if !status.success() || installed_line != "installed" {
-        return Err(format!(
-            "failed to deploy pilo-server ({installed_line}): {}",
-            String::from_utf8_lossy(&stderr).trim()
-        ));
-    }
-    Ok(false)
+    diagnostics.stage("install").finish(
+        async {
+            let installed_line = stdout
+                .next_line()
+                .await
+                .inspect_err(|error| diagnostics.io_error("install", error))
+                .map_err(|error| format!("failed to read pilo-server install status: {error}"))?
+                .unwrap_or_default();
+            let status = child
+                .wait()
+                .await
+                .inspect_err(|error| diagnostics.io_error("install", error))
+                .map_err(|error| error.to_string())?;
+            let stderr = stderr_task.await.unwrap_or_default();
+            diagnostics.process_exit("install", Some(status), &stderr);
+            if !status.success() || installed_line != "installed" {
+                return Err(format!(
+                    "failed to deploy pilo-server ({installed_line}): {}",
+                    stderr_without_askpass_diagnostics(&stderr).trim()
+                ));
+            }
+            Ok(false)
+        }
+        .await,
+    )
 }

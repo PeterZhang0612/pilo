@@ -3,6 +3,7 @@ mod cache_keep_alive;
 mod chat_service;
 mod chat_sessions;
 pub mod commands;
+mod connection_diagnostics;
 mod credentials;
 pub(crate) mod debug_trace;
 pub(crate) mod desktop_startup;

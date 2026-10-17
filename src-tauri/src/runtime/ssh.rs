@@ -5,7 +5,17 @@ use tokio::process::Command;
 use crate::domain::{Connection, ConnectionKind, SshAuthMethod, SshTarget};
 
 const SSH_CONNECT_TIMEOUT_SECONDS: u64 = 5;
-const ASKPASS_CONNECTION_ENV: &str = "PILO_SSH_ASKPASS_CONNECTION_ID";
+pub(super) const ASKPASS_CONNECTION_ENV: &str = "PILO_SSH_ASKPASS_CONNECTION_ID";
+pub(super) const ASKPASS_ATTEMPT_ENV: &str = "PILO_SSH_DIAGNOSTIC_ATTEMPT_ID";
+pub(super) const ASKPASS_DIAGNOSTIC_PREFIX: &str = "[pilo-ssh-askpass]";
+
+pub(super) fn stderr_without_askpass_diagnostics(stderr: &[u8]) -> String {
+    // Diagnostic records must not change frontend error classification.
+    String::from_utf8_lossy(stderr)
+        .split_inclusive('\n')
+        .filter(|line| !line.starts_with(ASKPASS_DIAGNOSTIC_PREFIX))
+        .collect()
+}
 
 pub(crate) fn ssh_base_args(target: &SshTarget) -> Result<Vec<String>, String> {
     let batch_mode = !matches!(target.auth_method(), SshAuthMethod::Password);

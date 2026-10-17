@@ -21,7 +21,7 @@ use tower_http::timeout::TimeoutLayer;
 
 use crate::{
     domain::{Project, RemoteDevice},
-    runtime::{host_paths::HostPaths, storage},
+    runtime::{connection_diagnostics::request_failure_reason, host_paths::HostPaths, storage},
 };
 
 use super::pairing::PairingSession;
@@ -181,6 +181,7 @@ pub(crate) fn router(
             StatusCode::REQUEST_TIMEOUT,
             Duration::from_secs(45),
         ))
+        .layer(from_fn(middleware::log_request_failure))
         .with_state(state)
 }
 
@@ -249,8 +250,17 @@ async fn asset(State(state): State<RemoteHttpState>, uri: Uri) -> Response {
         })
 }
 
+#[derive(Clone, Copy)]
+struct ApiFailureDiagnostic {
+    reason: Option<&'static str>,
+}
+
 fn api_error(status: StatusCode, message: &str) -> Response {
-    (status, Json(json!({ "error": message }))).into_response()
+    let mut response = (status, Json(json!({ "error": message }))).into_response();
+    response.extensions_mut().insert(ApiFailureDiagnostic {
+        reason: request_failure_reason("http", message),
+    });
+    response
 }
 
 #[cfg(test)]
