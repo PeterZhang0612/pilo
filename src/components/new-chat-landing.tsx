@@ -239,7 +239,7 @@ export function NewChatLanding({
 	);
 
 	const loadModels = useCallback(
-		async (force = false) => {
+		async (force = false, silent = false) => {
 			if (!projectId || modelLoadingRef.current) return;
 			const cached = getCachedProjectPiModels(projectId);
 			if (!force && cached && !isProjectPiModelsIncomplete(cached)) {
@@ -248,7 +248,9 @@ export function NewChatLanding({
 			}
 			const requestId = ++modelRequestRef.current;
 			modelLoadingRef.current = true;
-			setModelLoadState("loading");
+			if (!silent) {
+				setModelLoadState("loading");
+			}
 			setModelError(null);
 			try {
 				const result = await refreshProjectPiModels(projectId);
@@ -300,7 +302,11 @@ export function NewChatLanding({
 				if (cached) applyModelSnapshot(cached);
 				if (!cached || isProjectPiModelsIncomplete(cached)) {
 					void loadModels();
+					return;
 				}
+				// 每次进入新会话都后台静默重探模型目录，改完 Pi 配置无需等 TTL。
+				// 结果由 subscribeProjectPiModels 回推；如果用户未手动改过模型，自动采用最新默认模型。
+				void loadModels(true, true);
 			})
 			.catch((error) => {
 				if (disposed) return;
@@ -396,7 +402,11 @@ export function NewChatLanding({
 				}
 			}
 
-			onStartSession(submission, selectedModel, selectedThinkingLevel);
+			onStartSession(
+				submission,
+				modelSelectionDirtyRef.current ? selectedModel : null,
+				thinkingSelectionDirtyRef.current ? selectedThinkingLevel : null,
+			);
 			updateDraft("");
 		},
 		[
