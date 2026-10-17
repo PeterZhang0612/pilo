@@ -136,15 +136,17 @@ Images reference existing files, not immutable snapshots: deleting or overwritin
 ## Development
 
 Run `pnpm hooks:install` once per clone to enable pre-commit checks. Every
-commit runs Rust formatting checks, workspace checks and Clippy using the
-same commands as CI. Any failure blocks the commit; files are not auto-formatted.
-Rust and the platform-specific Tauri build dependencies must be installed.
+commit runs `pnpm check` (frontend formatting and lint), `pnpm exec tsc --noEmit`
+(TypeScript types), then Rust formatting checks, workspace checks and Clippy.
+Any failure blocks the commit; files are not auto-formatted. Full frontend
+builds and tests are not part of this hook. Install the project's Node.js
+dependencies, Rust and the platform-specific Tauri build dependencies first.
 
 The hook uses Git for Windows' bundled `sh` on Windows and the system `sh`
-on macOS/Linux. Ensure `cargo` is on the committing process's `PATH` and install
-its check components with `rustup component add rustfmt clippy`. Windows needs
-the MSVC build tools and WebView2; macOS needs Xcode Command Line Tools; Linux
-needs the Tauri system libraries. Each checkout needs its own hook installation,
+on macOS/Linux. Ensure `pnpm` and `cargo` are on the committing process's `PATH`.
+Install Rust check components with `rustup component add rustfmt clippy`.
+Windows needs the MSVC build tools and WebView2; macOS needs Xcode Command Line
+Tools; Linux needs the Tauri system libraries. Each checkout needs its own hook installation,
 including separate Windows and WSL checkouts. Checks target the current host;
 a WSL pass does not validate Windows or macOS code.
 

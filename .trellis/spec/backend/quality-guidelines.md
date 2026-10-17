@@ -18,13 +18,17 @@ cargo clippy --all-targets --all-features -- -D warnings
 them (`#[allow(...)]` only with a comment explaining why).
 
 Enable the versioned `.githooks/pre-commit` hook once per clone with
-`pnpm hooks:install`. It checks Rust formatting, then runs workspace check and
-Clippy with `--workspace --all-targets --all-features`, matching CI. Any nonzero
-exit blocks the commit. The hook checks the working tree without formatting or
-staging files; keep its executable bit and LF line endings for Git on Windows.
+`pnpm hooks:install`. It runs `pnpm check` (frontend format/lint) and
+`pnpm exec tsc --noEmit` (TypeScript), then checks Rust formatting and runs
+workspace check and Clippy with `--workspace --all-targets --all-features`,
+matching CI's Rust commands. Full frontend builds and tests stay outside the
+hook. Any nonzero exit blocks the commit. The hook checks the working tree
+without formatting or staging files; keep its executable bit and LF line
+endings for Git on Windows.
 Use only POSIX `sh` syntax: Windows uses Git for Windows' bundled shell, while
-macOS/Linux use the system shell. Cargo must be on the committing process's
-`PATH`. Hook configuration is local to each checkout, not copied by source sync.
+macOS/Linux use the system shell. Both pnpm and Cargo must be on the committing
+process's `PATH`, and project Node.js dependencies must be installed. Hook
+configuration is local to each checkout, not copied by source sync.
 These checks cover the current host only; WSL cannot validate native Windows
 or macOS code paths.
 
