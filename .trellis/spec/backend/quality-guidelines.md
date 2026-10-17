@@ -17,6 +17,21 @@ cargo clippy --all-targets --all-features -- -D warnings
 `clippy -D warnings` means a warning fails the check. Fix warnings, don't silence
 them (`#[allow(...)]` only with a comment explaining why).
 
+Enable the versioned `.githooks/pre-commit` hook once per clone with
+`pnpm hooks:install`. It runs `pnpm check` (frontend format/lint), then
+`cargo fmt --all --check` (Rust formatting). TypeScript type checking, Rust
+workspace check and Clippy stay outside the hook to keep commits fast; CI's
+checks are unchanged, including TypeScript checking through `pnpm build`. Full
+frontend builds and tests also stay outside the hook. Any nonzero exit blocks
+the commit. The hook checks the working tree without formatting or staging
+files; keep its executable bit and LF line endings for Git on Windows.
+Use only POSIX `sh` syntax: Windows uses Git for Windows' bundled shell, while
+macOS/Linux use the system shell. Both pnpm and Cargo must be on the committing
+process's `PATH`, and project Node.js dependencies must be installed. Hook
+configuration is local to each checkout, not copied by source sync.
+These checks cover the current host only; WSL cannot validate native Windows
+or macOS code paths.
+
 ## Code Standards
 
 - **Edition 2024**, `resolver = "2"` workspace.
@@ -60,6 +75,32 @@ them (`#[allow(...)]` only with a comment explaining why).
 - `pnpm tauri dev` and desktop-window/installer verification must run on Windows.
   WSL is for code, `cargo check`, and static validation only.
 
+### Linux Wayland window decorations
+
+- Keep the desktop Tauri dependency at `2.12` or newer and commit `Cargo.lock`.
+  `cargo tree --locked -i tao` must resolve Tao >= 0.36.0; older Tao forces GTK
+  client-side decorations even when KWin supports server-side decorations.
+- When upgrading the Rust `tauri` minor version, update the direct
+  `@tauri-apps/api` dependency and `pnpm-lock.yaml` to the same major/minor.
+  `pnpm build` does not run the Tauri packaging version check; verify the
+  installed API version against `Cargo.lock` before packaging.
+- Keep `app.windows[].decorations: true` in `src-tauri/tauri.conf.json`.
+  The Windows-only builder override in `desktop_window.rs` intentionally disables
+  decorations for its custom title bar; do not extend that override to Linux.
+- Do not use `GTK_CSD=0`, force X11, or install a custom GTK HeaderBar as a fix.
+  The upstream fix is https://tauri.app/release/tao/v0.36.0/.
+- After rebuilding, manually verify KDE title bar buttons and native Wayland
+  scaling on KWin. Static compilation cannot verify compositor behavior.
+- On Linux, initialize GLib's program name from the configured product name
+  before creating the Tauri runtime. GDK uses it as the Wayland `app_id` when
+  GTK application registration is disabled; it must match the case-sensitive
+  desktop entry basename (`Pilo` for `Pilo.desktop`), not `Icon=pilo` or the
+  executable name. This also covers secondary windows.
+- Keep `enableGTKAppId` disabled: enabling it registers on D-Bus and changes
+  multi-instance behavior. Do not change AppImage finalization just to fix the
+  installed deb/rpm window icon. Development builds use `Pilo Dev` and need a
+  matching desktop entry for compositor-provided icons.
+
 ### Bundled server resource paths
 
 - Initialize the server resource directory from `app.path().resource_dir()` in
@@ -80,10 +121,26 @@ them (`#[allow(...)]` only with a comment explaining why).
 
 ### Linux AppImage finalization
 
+- Desktop metadata lives in `bundle.category`, `shortDescription`,
+  `longDescription`, and `homepage`. deb and rpm share
+  `src-tauri/linux/pilo.desktop`; AppImage inherits the deb desktop template.
+  Use a `.desktop` extension: oxfmt treats `.hbs` as HTML and destroys the
+  required line-based desktop entry syntax.
+  Keep `Exec`, `Icon`, `Name`, and categories as Tauri template variables, retain
+  optional MIME associations, and validate the rendered desktop entry with
+  `desktop-file-validate`. Localized comments and search keywords belong in the
+  shared template, not in separate package-specific copies.
+- Align package and desktop descriptions with the English/Chinese README
+  introduction. Application versions inherit `[workspace.package].version`;
+  the optional desktop entry `Version` describes the file format, not Pilo's
+  release version, and must not be bumped with app releases.
+
 - Run `scripts/finalize-linux-appimage.sh <AppImage> <AppDir> <runtime-dir>
   <AppImage-output-plugin>` after Tauri bundling and before collecting assets.
-  It restores all four original server binaries into the prepared AppDir and
-  removes `libwayland-client.so*`, which conflicts with host Mesa/EGL.
+  It restores all four original server binaries into the prepared AppDir,
+  removes `libwayland-client.so*` that conflicts with host Mesa/EGL, and removes
+  linuxdeploy's forced `GDK_BACKEND=x11` so GTK can use native Wayland
+  per-monitor scaling while retaining its automatic X11 fallback.
 - Never run linuxdeploy over restored server resources: its ELF patching makes
   the static PIE Linux runtimes segfault even for `--fingerprint`. Repack with
   the AppImage output plugin alone, using the copy cached by Tauri.
@@ -230,3 +287,83 @@ from workflow edits without a real Actions run.
 Wrong: download the most recent successful server build regardless of inputs.
 Correct: exact input-keyed set reuse, with normal builds on a miss and required
 file verification before handing the artifact to desktop packaging.
+
+### Pi executable discovery
+
+#### 1. Scope / Trigger
+
+`crates/pilo-server/src/environment.rs` owns Pi discovery for Local/WSL/SSH.
+Desktop and WebUI use the same server path; do not implement browser-side or
+Tauri-only executable discovery.
+
+#### 2. Signatures
+
+- `resolve_pi_executable(state, requested) -> Result<(String, String), String>`
+  returns the executable and its runtime `PATH`.
+- `environment.pi_probe { executable?: string }` validates that executable with
+  `--version`; `pi.start { piExecutable?: string, ... }` uses the same resolver.
+  Neither wire schema changes.
+
+#### 3. Contracts
+
+- Explicit executable overrides automatic discovery. A broken default Pi must
+  not prevent starting a valid explicit executable or inspecting a project whose
+  Pi runtime is local rather than in the connection environment.
+- Preserve shell/inherited `PATH` priority, then append environment-configured
+  and common global bin directories. Include npm prefixes, `PNPM_HOME` (root and
+  `bin` layouts), `BUN_INSTALL/bin`, and managed Pi's `.pi/agent/bin` or
+  `PI_CODING_AGENT_DIR/bin`. Keep the official installer's standalone Node path:
+  `XDG_DATA_HOME/pi-node/current/bin` (default `.local/share/pi-node/current/bin`)
+  or Windows `LOCALAPPDATA/pi-node/current`.
+- Windows supplements inherited `PATH` from persisted user/machine environment
+  using a hidden, noninteractive, profile-free PowerShell process. Resolve
+  percent-variable references in that child only; never write the registry or
+  mutate the server's process environment.
+- If no Pi is found, refresh the shell/persisted path and query available package
+  managers in parallel: `npm prefix -g`, `pnpm bin -g`, `bun pm bin -g`. Only npm
+  needs `/bin` appended on Unix. Probes run from the user's home when available,
+  disable Corepack downloads, and do not install Pi or a package manager.
+- Retain the full runtime `PATH` from successful fallback discovery in the shared
+  login-path cache, including refreshed shell paths and package-manager bins. A
+  later explicit-path probe/start must reuse it after settings save the detected
+  executable; adding only Pi's parent loses Node in a separate install directory.
+- Do not cache Pi selection, version, or a missing-Pi result in `ToolchainInfo`.
+  Keep absent fallback directories in `PATH` so a later install can be found.
+- Unix candidates must be files with execute bits. Windows discovery accepts
+  native/batch extensions, preserves supported `PATHEXT` order, and never
+  automatically selects an extensionless shell script or a `.ps1` shim.
+
+#### 4. Validation & Error Matrix
+
+- Shell/persisted-path probe: five-second timeout; preserve inherited path on
+  failure. Individual CLI probes: eight-second timeout.
+- Missing/broken package manager: ignore its optional directory query, allowing
+  the others to succeed. Missing Pi: preserve the `Pi executable` / `not found
+  in PATH` error signals and suggest an explicit executable path.
+- Found Pi with a failing `--version`: report that failure, not a fake version
+  or an automatic switch to a different installed Pi.
+
+#### 5. Good / Base / Bad Cases
+
+- Good: managed Pi outside inherited `PATH` starts with its standalone Node;
+  custom npm/pnpm/bun global bins are discovered without hardcoded package names.
+- Base: Pi already on the selected environment's `PATH` keeps priority.
+- Bad: the probe finds Pi in an augmented path but RPC starts with the old path.
+
+#### 6. Tests Required
+
+Pending explicit authorization: npm/pnpm/bun default and custom global bins;
+Windows `.cmd`/`.exe` versus extensionless shims, explicit `pi.cmd`, Unicode and
+space-containing paths, persisted `%PNPM_HOME%`, managed Pi plus standalone Node,
+Unix execute permissions, post-install retry, explicit override with a broken
+default, and probe/start path parity. Cover installing Node and Pi in separate
+custom directories after server startup, then auto-probing, saving the detected
+absolute executable, and starting RPC with the refreshed Node path still present.
+No automated or native-runtime validation is implied by source review or formatting.
+
+#### 7. Wrong vs Correct
+
+Wrong: cache a missing Pi forever, assume every global executable lives in
+npm's default directory, or invoke a guessed package-internal CLI file.
+Correct: resolve the public Pi executable in its own environment, carry its
+runtime path into RPC startup, and retain explicit-path configuration as fallback.

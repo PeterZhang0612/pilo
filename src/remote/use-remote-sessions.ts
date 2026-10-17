@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
+	mergeProjectSessions,
 	sameStringSet,
 	toProjectExternalActivity,
 	type ProjectExternalActivity,
@@ -31,10 +32,18 @@ export function useRemoteSessions({
 	snapshotRefreshKey,
 }: UseRemoteSessionsOptions) {
 	const [projects, setProjects] = useState<Project[]>([]);
+	const [bootstrapSettled, setBootstrapSettled] = useState(false);
 	const [chatSessions, setChatSessions] = useState<
 		PiloClientBootstrap["chatSessions"]
 	>([]);
 	const [rawSessions, setRawSessions] = useState<SessionIndexEntry[]>([]);
+	const [refreshErrors, setRefreshErrors] = useState<
+		ReadonlyMap<string, string>
+	>(() => new Map());
+	const refreshRequestsRef = useRef(
+		new Map<string, { promise: Promise<void>; rerun: boolean }>(),
+	);
+	const sessionRevisionsRef = useRef(new Map<string, number>());
 	const [externalActivity, setExternalActivity] = useState<
 		ReadonlyMap<string, ProjectExternalActivity>
 	>(() => new Map());
@@ -65,8 +74,30 @@ export function useRemoteSessions({
 			if (!handleExpiredAuth(error)) {
 				setFatalError(error instanceof Error ? error.message : String(error));
 			}
+		} finally {
+			setBootstrapSettled(true);
 		}
 	}, [client, handleExpiredAuth, setFatalError]);
+
+	const advanceSessionRevision = useCallback((projectId: string) => {
+		const revision = (sessionRevisionsRef.current.get(projectId) ?? 0) + 1;
+		sessionRevisionsRef.current.set(projectId, revision);
+		return revision;
+	}, []);
+
+	const removeIndexedSession = useCallback(
+		(projectId: string, sessionPath: string) => {
+			advanceSessionRevision(projectId);
+			setRawSessions((current) =>
+				current.filter(
+					(session) =>
+						session.projectId !== projectId ||
+						session.sessionPath !== sessionPath,
+				),
+			);
+		},
+		[advanceSessionRevision],
+	);
 
 	const refreshProjectSessions = useCallback(
 		async (projectId: string, showProgress = false) => {
@@ -80,14 +111,65 @@ export function useRemoteSessions({
 				});
 			}
 			try {
-				const next = await client.listSessions(projectId);
-				setRawSessions((current) => [
-					...current.filter((session) => session.projectId !== projectId),
-					...next,
-				]);
+				const existing = refreshRequestsRef.current.get(projectId);
+				if (existing) {
+					existing.rerun = true;
+					await existing.promise;
+					return;
+				}
+				const request = { promise: Promise.resolve(), rerun: false };
+				const refresh = async () => {
+					// Like desktop, show the Host index before contacting the server.
+					const cachedRevision = advanceSessionRevision(projectId);
+					try {
+						const cached = await client.listCachedSessions(projectId);
+						if (sessionRevisionsRef.current.get(projectId) === cachedRevision) {
+							setRawSessions((current) =>
+								mergeProjectSessions(current, projectId, cached),
+							);
+						}
+					} catch (error) {
+						if (handleExpiredAuth(error)) return;
+						console.debug("Failed to load cached remote sessions", error);
+					}
+					do {
+						request.rerun = false;
+						const revision = advanceSessionRevision(projectId);
+						try {
+							/* oxlint-disable-next-line no-await-in-loop -- Queued scans must run serially. */
+							const next = await client.listSessions(projectId);
+							if (sessionRevisionsRef.current.get(projectId) === revision) {
+								setRawSessions((current) =>
+									mergeProjectSessions(current, projectId, next),
+								);
+							}
+						} catch (error) {
+							if (handleExpiredAuth(error)) return;
+							if (!request.rerun) throw error;
+						}
+					} while (request.rerun);
+					setRefreshErrors((current) => {
+						if (!current.has(projectId)) return current;
+						const nextErrors = new Map(current);
+						nextErrors.delete(projectId);
+						return nextErrors;
+					});
+				};
+				request.promise = refresh();
+				refreshRequestsRef.current.set(projectId, request);
+				try {
+					await request.promise;
+				} finally {
+					refreshRequestsRef.current.delete(projectId);
+				}
 			} catch (error) {
 				if (!handleExpiredAuth(error)) {
-					console.debug("Failed to refresh remote sessions", error);
+					setRefreshErrors((current) =>
+						new Map(current).set(
+							projectId,
+							error instanceof Error ? error.message : String(error),
+						),
+					);
 				}
 			} finally {
 				if (showProgress) {
@@ -100,8 +182,66 @@ export function useRemoteSessions({
 				}
 			}
 		},
-		[client, handleExpiredAuth],
+		[advanceSessionRevision, client, handleExpiredAuth],
 	);
+
+	useEffect(() => {
+		if (!client) return;
+		let disposed = false;
+		const revisions = new Map<string, number>();
+		const unlisten = client.listenChatEvents((event) => {
+			if (
+				(event.type !== "sessions_indexed" &&
+					event.type !== "session_index_error") ||
+				!projectIds.includes(event.projectId)
+			) {
+				return;
+			}
+			const projectId = event.projectId;
+			const revision = (revisions.get(projectId) ?? 0) + 1;
+			revisions.set(projectId, revision);
+			const isCurrent = () =>
+				!disposed && revisions.get(projectId) === revision;
+			const refresh = async () => {
+				// Wait for all queued scans before reading the committed background batch.
+				let pending = refreshRequestsRef.current.get(projectId);
+				while (pending) {
+					/* oxlint-disable-next-line no-await-in-loop -- Wait until newer queued scans have also settled. */
+					await pending.promise.catch(() => undefined);
+					if (!isCurrent()) return;
+					pending = refreshRequestsRef.current.get(projectId);
+				}
+				if (!isCurrent()) return;
+				if (event.type === "session_index_error") {
+					setRefreshErrors((current) =>
+						new Map(current).set(projectId, event.message),
+					);
+				}
+				const sessionRevision = sessionRevisionsRef.current.get(projectId);
+				const cached = await client.listCachedSessions(projectId);
+				if (
+					!isCurrent() ||
+					sessionRevisionsRef.current.get(projectId) !== sessionRevision
+				)
+					return;
+				setRawSessions((current) =>
+					mergeProjectSessions(current, projectId, cached),
+				);
+			};
+			void refresh().catch((error) => {
+				if (isCurrent() && !handleExpiredAuth(error)) {
+					console.warn(
+						"Failed to load background-indexed remote sessions",
+						error,
+					);
+				}
+			});
+		});
+		return () => {
+			disposed = true;
+			unlisten();
+		};
+	}, [client, handleExpiredAuth, projectIds]);
 
 	const refreshAllSessions = useCallback(async () => {
 		if (!client) {
@@ -225,12 +365,15 @@ export function useRemoteSessions({
 
 	return {
 		projects,
+		bootstrapSettled,
 		chatSessions,
 		rawSessions,
-		setRawSessions,
+		removeIndexedSession,
 		externalActivity,
 		isExternalOpenTurn,
 		refreshingProjectIds,
+		refreshError: refreshErrors.values().next().value ?? null,
+		clearRefreshErrors: () => setRefreshErrors(new Map()),
 		reloadBootstrap,
 		refreshProjectSessions,
 		refreshAllSessions,

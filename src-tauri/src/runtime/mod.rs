@@ -3,8 +3,10 @@ mod cache_keep_alive;
 mod chat_service;
 mod chat_sessions;
 pub mod commands;
+mod connection_diagnostics;
 mod credentials;
 pub(crate) mod debug_trace;
+pub(crate) mod desktop_startup;
 mod events;
 mod git;
 mod host_paths;
@@ -30,7 +32,7 @@ mod session_snapshot;
 mod session_watcher;
 #[allow(dead_code)]
 pub(crate) mod ssh;
-mod storage;
+pub(crate) mod storage;
 mod terminal;
 mod token_usage;
 #[allow(dead_code)]

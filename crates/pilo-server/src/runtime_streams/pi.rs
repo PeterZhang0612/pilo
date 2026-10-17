@@ -19,7 +19,7 @@ use tokio::{
     sync::Mutex,
 };
 
-use crate::environment::{cached_toolchain, process_command, resolve_program};
+use crate::environment::{process_command, resolve_pi_executable};
 use crate::{PiOutputTasks, PiStarts, ServerState};
 
 pub(crate) struct PiProcess {
@@ -354,18 +354,8 @@ fn trace_pi_rpc_line(stream_id: &str, bytes: &[u8]) {
 }
 
 pub(crate) async fn pi_start(state: &ServerState, params: PiStartParams) -> Result<Value, String> {
-    let toolchain = cached_toolchain(state).await?;
-    let path = toolchain.path.clone();
-    let pi_executable = params
-        .pi_executable
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(|value| resolve_program(&path, value))
-        .unwrap_or_else(|| toolchain.pi_executable.clone());
-    if pi_executable.is_empty() {
-        return Err("Pi executable 'pi' was not found in PATH".to_owned());
-    }
+    let (pi_executable, path) =
+        resolve_pi_executable(state, params.pi_executable.as_deref()).await?;
     let mut processes = state.pi.lock().await;
     if processes.contains_key(&params.stream_id) {
         trace_pi(

@@ -12,7 +12,7 @@ use crate::domain::{Project, SessionIndexEntry, SessionReconcileResult};
 
 use super::{pi_workspace, server_client::ServerManager, storage};
 
-const INITIAL_SESSION_INDEX_LIMIT: usize = 20;
+const INITIAL_SESSION_INDEX_LIMIT: usize = 10;
 pub const BACKGROUND_SESSION_INDEX_BATCH: usize = 64;
 /// 只剥离 Windows verbatim 前缀；普通路径（含 POSIX 路径）原样返回，
 /// 不解析 `..`、不做大小写归并。

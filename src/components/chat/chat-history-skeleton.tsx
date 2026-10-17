@@ -42,7 +42,7 @@ function AssistantSkeleton({
 function UserSkeleton({ className }: { className: string }) {
 	return (
 		<div className="flex justify-end py-2 @min-[40rem]:py-3">
-			<Bone strong className={cn("h-11 rounded-2xl", className)} />
+			<Bone strong className={cn("h-11 rounded-bubble", className)} />
 		</div>
 	);
 }

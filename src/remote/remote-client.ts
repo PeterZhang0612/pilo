@@ -6,6 +6,7 @@ import type {
 	NextPromptRequest,
 } from "@/lib/next-prompt";
 import { describeDevice } from "@/lib/device-name";
+import { registerChatFile } from "@/lib/chat/chat-file-lifecycle";
 import type { SessionReadState } from "@/lib/session-read-state";
 import type { RemoteAccessAddress } from "@/lib/api/remote";
 import type { ChatSessionRuntimeState } from "@/lib/api/chat-session-client";
@@ -214,11 +215,17 @@ export function loadRemoteBootstrap(token: string) {
 	return remoteFetch<PiloClientBootstrap>(token, "/api/v1/bootstrap");
 }
 
-export function loadRemoteSessions(token: string, projectId: string) {
+export function loadRemoteSessions(
+	token: string,
+	projectId: string,
+	cached = false,
+) {
 	const query = new URLSearchParams({ projectId });
+	if (cached) query.set("cached", "true");
 	return remoteFetch<SessionIndexEntry[]>(
 		token,
 		`/api/v1/sessions?${query.toString()}`,
+		{ cache: "no-store" },
 	);
 }
 
@@ -412,6 +419,33 @@ export function loadRemoteProjectImage(
 ) {
 	const query = new URLSearchParams({ projectId, path });
 	return remoteFetchBytes(token, `/api/v1/files/image?${query.toString()}`);
+}
+
+export async function uploadRemoteChatFile(
+	token: string,
+	projectId: string,
+	file: File,
+) {
+	const query = new URLSearchParams({ projectId, name: file.name });
+	const path = await remoteFetch<string>(
+		token,
+		`/api/v1/chat/files?${query.toString()}`,
+		{
+			method: "POST",
+			headers: { "content-type": "application/octet-stream" },
+			body: file,
+		},
+	);
+	return registerChatFile(path, () => {
+		const cleanupQuery = new URLSearchParams({ projectId, path });
+		return remoteFetch<void>(
+			token,
+			`/api/v1/chat/files?${cleanupQuery.toString()}`,
+			{
+				method: "DELETE",
+			},
+		);
+	});
 }
 
 export function generateRemoteSessionTitle(

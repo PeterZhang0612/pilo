@@ -26,6 +26,7 @@ import { ChatPendingQueue } from "@/components/chat/chat-pending-queue";
 import { ChatTodoCapsule } from "@/components/chat/chat-todo-capsule";
 import { useScrollbarGutterWidth } from "@/components/chat/use-scrollbar-gutter";
 import { DraftProjectPicker } from "@/components/chat/draft-project-picker";
+import { BootShellRemover } from "@/components/boot-shell-remover";
 import { SessionHeader } from "@/components/chat/chat-session-header";
 import {
 	ChatImageLightbox,
@@ -52,7 +53,10 @@ import { useRemoteTheme } from "./use-remote-theme";
 
 export function RemoteApp() {
 	return isRemotePairingLocation() ? (
-		<RemotePairingPage />
+		<>
+			<BootShellRemover />
+			<RemotePairingPage />
+		</>
 	) : (
 		<RemoteWorkspace />
 	);
@@ -142,6 +146,7 @@ function RemoteWorkspace() {
 		setFatalError,
 		token,
 	} = connection;
+	const visibleError = fatalError ?? sessions.refreshError;
 	const active = chat.conversationUi.active;
 	const updateBlocked =
 		active || chat.sending || chat.compacting || chat.retryState !== null;
@@ -290,7 +295,7 @@ function RemoteWorkspace() {
 
 	// 移动端侧栏长按删除：删除后从本地索引移除，避免整个侧栏重刷。
 	const { client, handleExpiredAuth } = connection;
-	const { setRawSessions } = sessions;
+	const { removeIndexedSession } = sessions;
 	const handleDeleteMobileSession = useCallback(
 		(sessionId: string, projectId: string) => {
 			const session = sidebarSessions.find(
@@ -300,13 +305,7 @@ function RemoteWorkspace() {
 			void client
 				.deleteSession(session.projectId, session.sessionPath)
 				.then(() => {
-					setRawSessions((current) =>
-						current.filter(
-							(item) =>
-								item.projectId !== projectId ||
-								item.sessionPath !== session.sessionPath,
-						),
-					);
+					removeIndexedSession(projectId, session.sessionPath);
 				})
 				.catch((error) => {
 					if (!handleExpiredAuth(error)) {
@@ -314,12 +313,13 @@ function RemoteWorkspace() {
 					}
 				});
 		},
-		[client, handleExpiredAuth, setRawSessions, sidebarSessions],
+		[client, handleExpiredAuth, removeIndexedSession, sidebarSessions],
 	);
 
 	if (!token) {
 		return (
 			<div className="flex min-h-[var(--remote-viewport-height,100dvh)] items-center justify-center bg-background p-6">
+				<BootShellRemover />
 				<div className="w-full max-w-sm rounded-2xl border bg-card p-6 text-center shadow-sm">
 					<WifiOff className="mx-auto size-6 text-muted-foreground" />
 					<h1 className="mt-4 text-base font-semibold">Pilo Remote</h1>
@@ -368,6 +368,11 @@ function RemoteWorkspace() {
 
 	return (
 		<TooltipProvider>
+			<BootShellRemover
+				ready={
+					sessions.bootstrapSettled || !browserOnline || Boolean(fatalError)
+				}
+			/>
 			<SessionMentionProvider projects={projects} sessions={sidebarSessions}>
 				<SessionMentionScope
 					connectionId={chat.activeProject?.connection.id ?? ""}
@@ -542,6 +547,22 @@ function RemoteWorkspace() {
 											}
 											desktopShortcuts={false}
 											historyKey={chat.activeProjectId || null}
+											attachmentScopeKey={chat.activeSessionKey}
+											onUploadFile={
+												client && chat.activeProjectId
+													? async (file) => {
+															try {
+																return await client.uploadChatFile(
+																	chat.activeProjectId,
+																	file,
+																);
+															} catch (error) {
+																handleExpiredAuth(error);
+																throw error;
+															}
+														}
+													: undefined
+											}
 											suggestions={chat.composerSuggestions}
 											onSuggestionTrigger={chat.handleSuggestionTrigger}
 											images={chat.images}
@@ -636,13 +657,24 @@ function RemoteWorkspace() {
 
 						<ChatImageLightbox />
 
-						{fatalError ? (
-							<div className="fixed inset-x-3 bottom-24 z-50 mx-auto max-w-lg rounded-xl border border-destructive/30 bg-background px-3 py-2 text-xs shadow-lg">
+						{visibleError ? (
+							<div
+								role="alert"
+								className="fixed inset-x-3 bottom-24 z-50 mx-auto max-w-lg rounded-xl border border-destructive/30 bg-background px-3 py-2 text-xs shadow-lg"
+							>
 								<div className="flex items-start gap-2">
-									<p className="min-w-0 flex-1 text-destructive">
-										{fatalError}
+									<p className="min-w-0 flex-1 break-words text-destructive">
+										{visibleError}
 									</p>
-									<button type="button" onClick={() => setFatalError(null)}>
+									<button
+										type="button"
+										aria-label={t("common.close")}
+										className="flex size-11 shrink-0 items-center justify-center rounded-md"
+										onClick={() => {
+											setFatalError(null);
+											sessions.clearRefreshErrors();
+										}}
+									>
 										<X className="size-3.5" />
 									</button>
 								</div>

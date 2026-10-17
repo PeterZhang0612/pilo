@@ -57,9 +57,13 @@ re-styling them.
   an already-started project scan still finishes. The server allows at most two
   concurrent content scans per connection server, separate from its 64-request
   overall limit. This is admission control, not cancellation of blocking scans.
-- Mobile project sessions render 50 rows per page. Keep selection/deletion
-  available on every page, localized controls with 44px touch targets and
-  announced page changes. Recent sessions retain their existing 50-row limit.
+- Mobile project sessions initially reveal 50 rows, then append batches of 50
+  when a sentinel comes within 240px of the drawer scroll viewport's bottom.
+  Keep earlier rows mounted, reveal through the selected session's batch, and
+  disconnect observers on cleanup. This limits rendering, not fetched data.
+  Keep selection/deletion available with 44px touch targets and announce the
+  visible/total count. Recent sessions retain their existing 50-row limit;
+  desktop/wide WebUI navigation is unchanged.
 - Desktop project preview caches highlighting per open tab, including plain-text
   fallback. `highlightProjectFile` skips Shiki above 200,000 code units, 2,000
   lines or 2,000 characters on a line; avoid repeated synchronous tokenization
@@ -145,6 +149,22 @@ spacing, type sizes, or control heights.
   in VitePWA's CSS precache pattern. Declare
   `@layer theme, base, components, utilities` before injecting cached custom CSS
   so that user CSS cannot accidentally establish the wrong layer order.
+  Boot geometry must also match the mounted layout: read cached `uiFontSize`
+  with the same 15 default, 12–18 range and `/ 14` scale as PreferencesProvider;
+  mobile WebUI stays at 100%. Use sidebar row height/padding/gap tokens, not
+  pixel snapshots. Reserve the landing project-picker row (`pilo.boot.hasProjects`
+  is only a last-observed visibility hint written by DraftProjectPicker), otherwise
+  the centered hero moves when the composer dock grows. Hero logo/gap use rem;
+  heading size follows the conversation column's 40rem container breakpoint,
+  not viewport width. Wide WebUI retains its sidebar; <=1023px hides it.
+  `BootShellRemover` belongs to the ready screen, not the unconditional root
+  bootstrap: desktop waits for `projectsReady && connectionsReady`; WebUI waits
+  for the first bootstrap attempt to settle, while offline/auth/pairing/error
+  screens must still be revealed. Wait for `document.fonts.ready` before the
+  removal frame. A first React commit can have no projects yet; revealing it
+  moves the hero down, then back up when the picker arrives (~18px observed on
+  Windows). Verify the last boot frame against the first uncovered frame and
+  later frames through the desktop WebDriver, not just steady-state rectangles.
 - `--pilo-conversation-max-width` is the shared desktop/session/WebUI measure;
   omitting it uses device defaults, and narrow WebUI stays full-width.
   Android `theme-color` follows computed `--background` after family/mode/CSS
@@ -161,6 +181,51 @@ spacing, type sizes, or control heights.
 
 ## Shared Chat Interaction Contracts
 
+- `useChatStickyScroll` keeps per-element resize heights in a ref-backed
+  `WeakMap` across observer rebinds. Starting/ending an assistant message must
+  not reset the viewport/content baseline: a turn-end error can grow the DOM
+  in the same commit that changes `activeAssistantMessageId` to null. Only a
+  new element skips its first measurement. Preserve reading ownership; resize
+  correction clamps only while following. Observe the active assistant row's
+  real content box as well as the outer content and viewport; the message row
+  itself is `display: contents`. Virtua updates an ancestor height during its
+  row-resize delivery, so observing only that ancestor defers following until
+  another frame and visibly displaces the processing status. When verification
+  is authorized, sample the status position after resize delivery, not just
+  monotonic `scrollTop`, and cover a final multiline error in a plain short chat
+  on desktop and WebUI.
+- While following, the live assistant status uses a bottom-sticky constraint
+  with the assistant column's block-padding token plus 1 CSS px of rounding
+  headroom. Native scroll offsets round to device pixels while line boxes keep
+  fractional heights; monotonic scrolling can still move the whole status by
+  less than a pixel. Keep the status in document flow for short content and
+  remove the sticky constraint when reading. The scrollport's bottom padding
+  already contributes to the sticky view rectangle; adding it again displaces
+  the status by that padding. The live content wrapper supplies a small block
+  `::before` spacer balanced by an equal negative top margin. This preserves
+  layout while giving even an empty status room inside its sticky containing
+  block; padding or merely preventing margin collapse does not supply that
+  room. Otherwise the empty-to-first-output transition still moves by about 1px.
+  Verify constant frame/task status coordinates from the empty status through
+  the first output and during overflowing text/tool output, plus normal
+  short-chat flow and manual
+  upward scrolling on desktop and narrow WebUI.
+- User-bubble and composer outer right edges share `ConversationColumn` geometry.
+  The composer sits outside `.chat-scrollbar`, so desktop, WebUI and the loading
+  fallback use `useScrollbarGutterWidth` to compensate its actual gutter (zero
+  for overlay scrollbars). Rebind after every commit: conditional mounting and
+  keyed session switches replace `ref.current` without changing the ref object;
+  `[enabled, ref]` alone misses these changes. Disconnect the previous observer
+  and cancel pending measurements on cleanup. When verification is authorized,
+  compare the edges before/after draft/session switches with both overlay and
+  space-consuming scrollbars; an overlay-only check hides missing compensation.
+- `ChatConversationViewport` uses `contain: size layout style`, leaving painting
+  and clipping to its native overflow scroller rather than adding paint
+  containment with `strict`. Keep this shared across plain and virtualized
+  conversations. When verification is authorized, check partially covered user
+  bubbles and work-duration disclosures on a real Android WebView near the
+  composer edge; desktop Chrome's mobile emulation is not equivalent. The Via
+  disappearing-content report still needs real-device confirmation.
 - Keep the composer's original single-row toolbar, model label truncation,
   visible reasoning level and context percentage across theme families. Preserve
   WebUI's narrow-screen rules in `src/index.css`, including its compact attachment
@@ -368,11 +433,14 @@ actions go there and appear only for persisted sessions (`session && !session.te
   Session values still use `sessionMentionValue` and resolve against the scoped
   catalog. Do not read or inject conversation content, add a second conversation
   store, or serialize titles instead of paths.
-- Completed file picks always use quoted project-relative paths, e.g.
-  `@"src/index.ts"`, including paths without spaces. This distinguishes a chip
-  from a still-editable unquoted `@src` query without separate draft metadata.
-  Only complete quoted relative-path lines are file chips; empty/incomplete
-  quotes, absolute/Windows/tilde paths and old inline mentions remain text.
+- Completed project file picks use quoted project-relative paths, e.g.
+  `@"src/index.ts"`, including paths without spaces. Uploaded files instead use
+  the server-returned absolute `.../attachments/<canonical-16-byte-base64url-id>/<name>`
+  path in the project's environment, including Windows/UNC paths. The shared
+  `fileMentionPath` parser recognizes both forms so chips, input history, cleanup,
+  search and sent messages agree. This distinguishes a chip from a still-editable
+  unquoted `@src` query without separate draft metadata. Empty/incomplete quotes,
+  unrelated absolute paths, tilde paths and old inline mentions remain text.
   Resolve known sessions first so a quoted session path never becomes a file.
 - Keep the native textarea for body editing. `FileMentionBadge` and
   `SessionMentionBadge` share `PathMentionBadge`: compact icon + name chips in
@@ -389,8 +457,21 @@ actions go there and appear only for persisted sessions (`session && !session.te
   instructions; hidden paths and controls must not count as matches. Pure search
   projections are covered by `tests/unit/chat-message-search.test.ts`. Require
   `document.body.dataset.testStatus === "passed"`.
-- Composer chips and the borderless textarea share `--pilo-composer-line-height`
-  (`max(1.75rem, readingFontSize × 1.6px)`). Align them by **text baseline**, not
+- Composer chips use `--pilo-composer-line-height`
+  (`max(1.75rem, readingFontSize × 1.6px)`) for their geometry. The textarea uses
+  `leading-[normal]` (native font leading, **not** Tailwind's `leading-normal`
+  multiplier of 1.5) and symmetric block padding of
+  `max(0px, (var(--pilo-composer-line-height) - 1lh) / 2)` to align its first line
+  without inflating its text line-height. WebKit paints a trailing blank-line
+  caret at the full line-height, so do not restore chip-height leading on the
+  textarea. Reducing the multiplier only reduces the jump; it does not remove
+  the mismatch between font-height text carets and line-height blank carets.
+  The browser fixture requires native leading, checks finite autosizing and
+  covers trailing/repeated newlines. Verify actual caret painting in WebKit:
+  Chromium/style assertions alone missed this bug. Native leading removes the
+  inflated caret, though WebKit can retain a 1 CSS px native difference between
+  text and blank-line carets; do not claim pixel equality from a style assertion.
+  Align chips by **text baseline**, not
   by box center: the compact chip label carries
   `leading-(--pilo-composer-line-height)`, the chip's flex containers use
   `items-baseline` (the icon stays `self-center`), and the wrapping row uses
@@ -398,13 +479,27 @@ actions go there and appear only for persisted sessions (`session && !session.te
   chip text ~1.5px above the reading-size body baseline because the font sizes
   differ. Fixed `h-7`/`items-center` chips beside independently scaled reading
   text drift vertically. Mobile keeps its 16px font-size floor but must not
-  override this shared line-height; retain the separate coarse-pointer 44px hit
-  target. The browser fixture compares the chip label baseline with the first
-  text-line baseline for empty, single-character and multiline drafts. Check
-  independent UI/reading sizes and both pointer modes.
+  override the chip line-height or re-couple textarea leading to it; retain the
+  separate coarse-pointer 44px hit target. The browser fixture compares the chip label baseline with the first
+  text-line baseline for empty, single-character and multiline drafts. Measure
+  that baseline with a zero-height inline DOM marker and allow at most 1 CSS px
+  of native rounding; canvas font-bound estimates can falsely fail with native
+  leading and independently scaled UI/reading fonts. Check independent UI/reading
+  sizes and both pointer modes.
 - Textarea autosizing keeps a whole-pixel minimum from `rows × lineHeight` plus
-  padding/borders for both empty and non-empty text. Integer `scrollHeight` must
-  not shrink that minimum on the first character and shift the inline chips.
+  padding/borders for both empty and non-empty text. Computed `line-height: normal`
+  is not numeric: measure the native row box with `height: auto` and no CSS
+  minimum on a hidden, absolutely positioned textarea clone in the same parent.
+  Never remove the live textarea's minimum to measure native leading: its
+  temporary shrink expands the adjacent chat viewport, and Chromium clamps
+  `scrollTop` before the size is restored, producing a few-pixel rebound on
+  streaming renders even though final DOM heights are unchanged. Keep the probe
+  out of layout and the accessibility tree, remove duplicate IDs/names, and
+  remove it immediately after measurement. Do not replace native leading with
+  a multiplier just to make `parseFloat` work. Integer `scrollHeight` must not
+  shrink the minimum on the first character and shift the inline chips. When
+  verification is authorized, replay overflowing text in plain and virtualized
+  chats at UI sizes 14/15 and check scroll offsets, not only settled heights.
 - With a collapsed caret at body offset 0, Backspace removes the last reference
   atomically; elsewhere, text deletion and selection stay native. Handle mobile
   `beforeinput` / `deleteContentBackward` as well as keyboard Backspace, without

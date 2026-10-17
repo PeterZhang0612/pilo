@@ -2,11 +2,12 @@ import type { ReactNode, Ref } from "react";
 
 import { cn } from "@/lib/utils";
 
+// Keep native font leading so WebKit does not stretch the caret after a newline.
 export const CHAT_COMPOSER_TEXTAREA_CLASS_NAME = cn(
-	"input-scrollbar resize-none border-0 bg-transparent text-[length:var(--pilo-reading-font-size)] leading-(--pilo-composer-line-height) shadow-none",
+	"input-scrollbar resize-none border-0 bg-transparent text-[length:var(--pilo-reading-font-size)] leading-[normal] shadow-none",
 	"focus-visible:ring-0 focus-visible:ring-offset-0",
 	"text-input-foreground placeholder:text-input-placeholder",
-	"min-h-(--pilo-ui-composer-input-height) px-1 py-0",
+	"min-h-(--pilo-ui-composer-input-height) px-1 py-[max(0px,calc((var(--pilo-composer-line-height)_-_1lh)/2))]",
 	"disabled:bg-transparent disabled:text-muted-foreground disabled:opacity-100",
 );
 

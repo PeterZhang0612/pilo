@@ -336,14 +336,16 @@ const ChatConversationViewportImpl = forwardRef<
 			<div className="relative isolate min-h-0 w-full flex-1">
 				<div
 					ref={bindScrollRef}
+					data-chat-following={viewportSticky ? "" : undefined}
 					aria-hidden={showSwitchSkeleton || undefined}
 					onScroll={
 						plainShortChat
 							? (event) => syncScrollState(event.currentTarget.scrollTop)
 							: undefined
 					}
+					// Native overflow owns clipping; avoid a second paint-containment clip in WebView.
 					className={cn(
-						"chat-scrollbar h-full w-full overflow-x-hidden overflow-y-auto overscroll-none [contain:strict]",
+						"chat-scrollbar h-full w-full overflow-x-hidden overflow-y-auto overscroll-none [contain:size_layout_style]",
 						showSwitchSkeleton && "invisible",
 					)}
 					// scrollbar-gutter: stable 由 .chat-scrollbar 统一提供且恒定，

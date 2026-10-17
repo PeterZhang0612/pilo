@@ -1,4 +1,3 @@
-export const CHAT_IMAGE_ACCEPT = "image/png,image/jpeg,image/webp,image/gif";
 export const MAX_CHAT_IMAGE_COUNT = 8;
 export const MAX_CHAT_IMAGE_BYTES = 10 * 1024 * 1024;
 export const MAX_CHAT_IMAGE_TOTAL_BYTES = 20 * 1024 * 1024;

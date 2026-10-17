@@ -1,0 +1,9 @@
+#!/bin/sh
+
+set -eu
+
+printf '[pre-commit] Checking frontend formatting and lint...\n'
+pnpm check
+
+printf '[pre-commit] Checking Rust formatting...\n'
+cargo fmt --all --check

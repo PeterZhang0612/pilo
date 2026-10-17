@@ -22,6 +22,7 @@ import {
 	DialogContent,
 	DialogDescription,
 	DialogTitle,
+	ScrollArea,
 	Spinner,
 	Tooltip,
 	TooltipContent,
@@ -213,12 +214,17 @@ export function SidebarFooter() {
 							if (!next) void refreshRemote();
 						}}
 					>
-						<DialogContent className="w-[calc(100vw-4rem)] max-w-[680px] gap-3 overflow-y-auto">
-							<DialogTitle>{t("settings.remote")}</DialogTitle>
+						<DialogContent className="w-[calc(100vw-2rem)] max-w-[680px] grid-rows-[auto_minmax(0,1fr)] gap-3 overflow-hidden sm:w-[calc(100vw-4rem)]">
+							<DialogTitle className="pr-8">{t("settings.remote")}</DialogTitle>
 							<DialogDescription className="sr-only">
 								{t("settings.remoteDescription")}
 							</DialogDescription>
-							<RemoteSettings initialState={remoteState} />
+							<ScrollArea
+								className="min-h-0"
+								viewportClassName="overscroll-contain pr-3"
+							>
+								<RemoteSettings initialState={remoteState} />
+							</ScrollArea>
 						</DialogContent>
 					</Dialog>
 				</Suspense>

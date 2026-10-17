@@ -197,7 +197,7 @@ export function SettingsDialog({
 					</nav>
 
 					<main className="flex min-h-0 min-w-0 flex-1 flex-col">
-						<header className="mt-2 flex h-12 shrink-0 items-center px-4 pr-12 md:px-8">
+						<header className="mt-2 flex h-12 shrink-0 items-center px-4 pr-12 md:px-6">
 							<DialogTitle className="sr-only md:not-sr-only">
 								{t(activeTabConfig.labelKey)}
 							</DialogTitle>

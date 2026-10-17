@@ -66,6 +66,15 @@ pub enum RuntimeEvent {
         #[serde(rename = "completionId")]
         completion_id: String,
     },
+    SessionsIndexed {
+        #[serde(rename = "projectId")]
+        project_id: String,
+    },
+    SessionIndexError {
+        #[serde(rename = "projectId")]
+        project_id: String,
+        message: String,
+    },
     SessionReadStateChanged {
         state: crate::domain::SessionReadState,
         #[serde(rename = "completionId", skip_serializing_if = "Option::is_none")]

@@ -29,6 +29,7 @@ import {
 	type ChatSubmission,
 } from "@/lib/chat/chat-submission";
 import { fileMentionPath } from "@/lib/chat/chat-mentions";
+import { retainChatFiles } from "@/lib/chat/chat-file-lifecycle";
 import { isImeComposingKeyboardEvent } from "@/lib/ime";
 import { type PiModel, runtimeErrorMessage } from "@/lib/api/pi-runtime";
 import { usePreferences } from "@/lib/preferences-provider";
@@ -59,6 +60,7 @@ export type ChatComposerInputOptions = {
 	attachments: readonly ChatImageAttachment[];
 	selectedModel?: PiModel | null;
 	disabled?: boolean;
+	submitBlocked?: boolean;
 	compacting?: boolean;
 	running?: boolean;
 	onSubmit?: (submission: ChatSubmission) => void;
@@ -81,6 +83,7 @@ export function useChatComposerInput({
 	attachments,
 	selectedModel = null,
 	disabled = false,
+	submitBlocked = false,
 	compacting = false,
 	running = false,
 	onSubmit,
@@ -172,13 +175,37 @@ export function useChatComposerInput({
 		if (panel && panel.clientHeight === 0) return;
 		textarea.style.height = "auto";
 		const styles = window.getComputedStyle(textarea);
-		const lineHeight = Number.parseFloat(styles.lineHeight);
+		let lineHeight = Number.parseFloat(styles.lineHeight);
 		const padding =
 			Number.parseFloat(styles.paddingTop) +
 			Number.parseFloat(styles.paddingBottom);
 		const border =
 			Number.parseFloat(styles.borderTopWidth) +
 			Number.parseFloat(styles.borderBottomWidth);
+		if (!Number.isFinite(lineHeight)) {
+			// Measure native rows out of flow: shrinking the live textarea briefly
+			// expands the chat viewport and clamps its scrollTop before we restore it.
+			const probe = textarea.cloneNode(false) as HTMLTextAreaElement;
+			probe.removeAttribute("id");
+			probe.removeAttribute("name");
+			probe.setAttribute("aria-hidden", "true");
+			probe.tabIndex = -1;
+			Object.assign(probe.style, {
+				position: "absolute",
+				top: "0",
+				left: "0",
+				width: styles.width,
+				height: "auto",
+				minHeight: "0",
+				visibility: "hidden",
+				pointerEvents: "none",
+			});
+			textarea.parentElement?.append(probe);
+			lineHeight =
+				(probe.getBoundingClientRect().height - padding - border) /
+				textarea.rows;
+			probe.remove();
+		}
 		// Keep the empty row height after typing; scrollHeight rounds fractional line heights.
 		const minHeight = Math.max(
 			Number.parseFloat(styles.minHeight),
@@ -327,6 +354,7 @@ export function useChatComposerInput({
 		createChatSubmission(submissionText, attachments);
 
 	const rememberSubmission = (submission: ChatSubmission) => {
+		retainChatFiles(submission.text);
 		if (submission.text) appendChatInputHistory(historyKey, submission.text);
 		resetHistoryNavigation();
 	};
@@ -351,6 +379,7 @@ export function useChatComposerInput({
 		if (
 			!chatSubmissionHasContent(submission) ||
 			disabled ||
+			submitBlocked ||
 			compacting ||
 			sendingNowRef.current ||
 			!canSendImages()
@@ -387,6 +416,7 @@ export function useChatComposerInput({
 		if (
 			!chatSubmissionHasContent(submission) ||
 			disabled ||
+			submitBlocked ||
 			compacting ||
 			sendingNowRef.current ||
 			!running ||

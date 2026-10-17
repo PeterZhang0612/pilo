@@ -1,17 +1,20 @@
+#[cfg(unix)]
+use std::time::UNIX_EPOCH;
 use std::{
     path::PathBuf,
     sync::atomic::{AtomicBool, AtomicUsize, Ordering},
-    time::UNIX_EPOCH,
 };
 
 use notify::{Event, EventKind};
+#[cfg(unix)]
 use serde_json::json;
 use tokio::io::AsyncWriteExt;
 
 use super::*;
+#[cfg(unix)]
+use crate::fs_ops::{FsSearchParams, checked_existing_path, checked_mutation_path, fs_search};
 use crate::{
     command::read_bounded_output,
-    fs_ops::{FsSearchParams, checked_existing_path, checked_mutation_path, fs_search},
     session::{
         SESSION_INDEX_HEADER_BYTES, SESSION_INDEX_PREFIX_STAGES, SESSION_INDEX_TAIL_BYTES,
         SessionIndexSummary, collect_session_change_paths, is_session_change, scan_index,

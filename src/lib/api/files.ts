@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { registerChatFile } from "@/lib/chat/chat-file-lifecycle";
 
 export type FsEntryKind = "file" | "directory" | "symlink" | "other";
 
@@ -36,6 +37,20 @@ export function readProjectImage(
 		id: projectId,
 		path,
 	}).then((data) => new Uint8Array(data));
+}
+
+export async function uploadChatFile(
+	projectId: string,
+	file: File,
+): Promise<string> {
+	const path = await invoke<string>("project_chat_file_upload", {
+		id: projectId,
+		name: file.name,
+		data: Array.from(new Uint8Array(await file.arrayBuffer())),
+	});
+	return registerChatFile(path, () =>
+		invoke<void>("project_chat_file_remove", { id: projectId, path }),
+	);
 }
 
 export function writeProjectFile(

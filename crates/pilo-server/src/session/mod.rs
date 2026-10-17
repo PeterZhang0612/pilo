@@ -26,7 +26,11 @@ pub(crate) use watch::{collect_session_change_paths, is_session_change};
 /// 文件监听和外部活动探测会一起失效。
 fn session_dir_key(project: &str) -> String {
     let normalized = windows_verbatim_path(project.trim());
-    let normalized = normalized.trim_start_matches(['/', '\\']);
+    // Pi removes one leading separator, including for UNC paths.
+    let normalized = normalized
+        .strip_prefix('/')
+        .or_else(|| normalized.strip_prefix('\\'))
+        .unwrap_or(&normalized);
     format!("--{}--", normalized.replace(['/', '\\', ':'], "-"))
 }
 
@@ -68,17 +72,20 @@ mod tests {
         }
     }
 
-    /// `--E--my_projects-pilo--` 就是 Pi 在 `~/.pi/agent/sessions` 下真实创建的目录名。
     #[test]
-    fn session_dir_key_matches_pi_directory_names() {
+    fn session_directory_keys_match_pi_for_drive_unc_and_posix_paths() {
         for (project, expected) in [
-            ("/root/code/pilo", "--root-code-pilo--"),
-            (r"E:\my_projects\pilo", "--E--my_projects-pilo--"),
+            (r"D:\work", "--D--work--"),
+            ("D:/work", "--D--work--"),
             (r"\\?\E:\my_projects\pilo", "--E--my_projects-pilo--"),
-            (r"\\?\UNC\server\share\code", "--server-share-code--"),
-            (r"\\server\share\code", "--server-share-code--"),
+            (r"\\?\UNC\server\share\code", "---server-share-code--"),
+            (r"\\host\share\work", "---host-share-work--"),
+            ("//host/share/work", "---host-share-work--"),
+            ("/home/user/work", "--home-user-work--"),
+            (" /home/user/work ", "--home-user-work--"),
+            ("/", "----"),
         ] {
-            assert_eq!(session_dir_key(project), expected, "project={project}");
+            assert_eq!(session_dir_key(project), expected, "project={project:?}");
         }
     }
 }

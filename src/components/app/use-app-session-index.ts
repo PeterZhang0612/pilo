@@ -432,7 +432,13 @@ export function useAppSessionIndex(projectIds: readonly string[]) {
 				);
 			}
 			if (event.type === "indexed") {
-				void listSessions(event.projectId)
+				const loadIndexed = async () => {
+					await projectRefreshRequestsRef.current
+						.get(event.projectId)
+						?.promise.catch(() => undefined);
+					return listSessions(event.projectId);
+				};
+				void loadIndexed()
 					.then((sessions) => {
 						if (!isCurrentProjectGeneration(event.projectId, generation))
 							return;

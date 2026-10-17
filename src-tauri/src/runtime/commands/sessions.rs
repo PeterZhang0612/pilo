@@ -1,11 +1,15 @@
 use std::sync::{Arc, Mutex as StdMutex};
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::domain::{SessionIndexEntry, SessionReconcileResult, SessionUiStateUpdate};
 
-use super::super::{PiloRuntime, pi_workspace, project, session_index, storage};
+use super::super::{
+    PiloRuntime,
+    events::{RuntimeEvent, RuntimeEventBus, RuntimeEventEnvelope},
+    pi_workspace, project, session_index, storage,
+};
 
 mod history;
 mod naming;
@@ -140,14 +144,30 @@ pub async fn session_reconcile(
                             "projectId": background_project.id,
                         }),
                     );
+                    background_app
+                        .state::<RuntimeEventBus>()
+                        .send(RuntimeEventEnvelope::global(
+                            RuntimeEvent::SessionsIndexed {
+                                project_id: background_project.id.clone(),
+                            },
+                        ));
                 }
                 if let Some(error) = failure {
+                    let message = format!("background session indexing failed: {error}");
+                    background_app
+                        .state::<RuntimeEventBus>()
+                        .send(RuntimeEventEnvelope::global(
+                            RuntimeEvent::SessionIndexError {
+                                project_id: background_project.id.clone(),
+                                message: message.clone(),
+                            },
+                        ));
                     let _ = background_app.emit(
                         "pilo://sessions",
                         serde_json::json!({
                             "type": "error",
                             "projectId": background_project.id,
-                            "message": format!("background session indexing failed: {error}"),
+                            "message": message,
                         }),
                     );
                 }

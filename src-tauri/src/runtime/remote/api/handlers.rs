@@ -1,6 +1,6 @@
 use axum::{
     Json,
-    body::Body,
+    body::{Body, Bytes},
     extract::{Query, State},
     http::{StatusCode, header},
     response::{IntoResponse, Response},
@@ -13,7 +13,7 @@ use tauri::Manager;
 use crate::runtime::{
     PiloRuntime, RuntimeEventBus,
     chat_service::{self, ChatSessionRequest},
-    pi_workspace, remote_fs, session_history, session_index, storage,
+    pi_workspace, remote_fs, session_history, storage,
 };
 
 use super::{RemoteHttpState, api_error, get_project};
@@ -108,6 +108,8 @@ pub(super) async fn session_mark_read(
 #[serde(rename_all = "camelCase")]
 pub(super) struct SessionsQuery {
     project_id: String,
+    #[serde(default)]
+    cached: bool,
 }
 
 pub(super) async fn sessions(
@@ -118,9 +120,20 @@ pub(super) async fn sessions(
         Ok(project) => project,
         Err(error) => return api_error(StatusCode::NOT_FOUND, &error),
     };
-    let runtime = state.app.state::<PiloRuntime>();
-    match session_index::reconcile(&state.app, &runtime.servers, &project).await {
-        Ok(work) => Json(work.result.sessions).into_response(),
+    if query.cached {
+        return match crate::runtime::commands::session_list(state.app.clone(), project.id) {
+            Ok(sessions) => Json(sessions).into_response(),
+            Err(error) => api_error(StatusCode::INTERNAL_SERVER_ERROR, &error),
+        };
+    }
+    match crate::runtime::commands::session_reconcile(
+        state.app.clone(),
+        state.app.state::<PiloRuntime>(),
+        project.id,
+    )
+    .await
+    {
+        Ok(result) => Json(result.sessions).into_response(),
         Err(error) => api_error(StatusCode::INTERNAL_SERVER_ERROR, &error),
     }
 }
@@ -326,6 +339,51 @@ pub(super) async fn project_image(
             .unwrap_or_else(|error| {
                 api_error(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string())
             }),
+        Err(error) => api_error(StatusCode::BAD_REQUEST, &error),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct ChatFileUploadQuery {
+    project_id: String,
+    name: String,
+}
+
+pub(super) async fn chat_file_upload(
+    State(state): State<RemoteHttpState>,
+    Query(query): Query<ChatFileUploadQuery>,
+    data: Bytes,
+) -> Response {
+    let project = match get_project(&state.paths, &query.project_id) {
+        Ok(project) => project,
+        Err(error) => return api_error(StatusCode::NOT_FOUND, &error),
+    };
+    let runtime = state.app.state::<PiloRuntime>();
+    match remote_fs::upload_chat_file(&runtime.servers, &project, &query.name, &data).await {
+        Ok(path) => Json(path).into_response(),
+        Err(error) => api_error(StatusCode::BAD_REQUEST, &error),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct ChatFileRemoveQuery {
+    project_id: String,
+    path: String,
+}
+
+pub(super) async fn chat_file_remove(
+    State(state): State<RemoteHttpState>,
+    Query(query): Query<ChatFileRemoveQuery>,
+) -> Response {
+    let project = match get_project(&state.paths, &query.project_id) {
+        Ok(project) => project,
+        Err(error) => return api_error(StatusCode::NOT_FOUND, &error),
+    };
+    let runtime = state.app.state::<PiloRuntime>();
+    match remote_fs::remove_chat_file(&runtime.servers, &project, &query.path).await {
+        Ok(()) => StatusCode::NO_CONTENT.into_response(),
         Err(error) => api_error(StatusCode::BAD_REQUEST, &error),
     }
 }

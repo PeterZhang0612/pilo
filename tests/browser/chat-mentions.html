@@ -164,18 +164,32 @@
 					const firstLineBaseline = (element) => {
 						const styles = getComputedStyle(element);
 						const rect = element.getBoundingClientRect();
-						const canvas = document.createElement("canvas").getContext("2d");
-						canvas.font = `${styles.fontStyle} ${styles.fontWeight} ${styles.fontSize} ${styles.fontFamily}`;
-						const metrics = canvas.measureText("H");
+						// Measure the browser's actual baseline, not rounded canvas font bounds.
+						const lineBox = document.createElement("span");
+						Object.assign(lineBox.style, {
+							position: "absolute",
+							visibility: "hidden",
+							font: styles.font,
+							whiteSpace: "nowrap",
+						});
+						lineBox.textContent = "H";
+						const marker = document.createElement("span");
+						Object.assign(marker.style, {
+							display: "inline-block",
+							width: "0",
+							height: "0",
+						});
+						lineBox.append(marker);
+						document.body.append(lineBox);
+						const baseline =
+							marker.getBoundingClientRect().top -
+							lineBox.getBoundingClientRect().top;
+						lineBox.remove();
 						return (
 							rect.top +
 							Number.parseFloat(styles.borderTopWidth) +
 							Number.parseFloat(styles.paddingTop) +
-							(Number.parseFloat(styles.lineHeight) -
-								metrics.fontBoundingBoxAscent -
-								metrics.fontBoundingBoxDescent) /
-								2 +
-							metrics.fontBoundingBoxAscent
+							baseline
 						);
 					};
 					const assertFirstLineAlignment = () => {
@@ -184,7 +198,7 @@
 							Math.abs(
 								firstLineBaseline(chip.querySelector(".truncate")) -
 									firstLineBaseline(textarea),
-							) < 1,
+							) <= 1,
 							`${id}: file chip text is not baseline-aligned with the first text line`,
 						);
 						assert(
@@ -195,7 +209,17 @@
 					};
 					assertFirstLineAlignment();
 					const emptyHeight = textarea.getBoundingClientRect().height;
-					for (const text of ["字", "后续文字 hello\n第二行\nThird line"]) {
+					// A numeric multiplier still makes WebKit stretch the blank-line caret.
+					assert(
+						getComputedStyle(textarea).lineHeight === "normal",
+						`${id}: textarea must use native font leading`,
+					);
+					for (const text of [
+						"字",
+						"字\n",
+						"字\n\n",
+						"后续文字 hello\n第二行\nThird line",
+					]) {
 						input(textarea, text);
 						await until(() =>
 							section
@@ -203,6 +227,12 @@
 								.textContent.startsWith(text),
 						);
 						assertFirstLineAlignment();
+						assert(
+							Number.isFinite(Number.parseFloat(textarea.style.height)) &&
+								textarea.getBoundingClientRect().height >= emptyHeight &&
+								textarea.scrollHeight <= textarea.clientHeight + 1,
+							`${id}: native line-height broke multiline autosizing`,
+						);
 						if (text === "字") {
 							assert(
 								textarea.getBoundingClientRect().height === emptyHeight,
@@ -350,7 +380,7 @@
 				}
 				document.body.dataset.testStatus = "passed";
 				document.querySelector("#results").textContent =
-					"PASS: desktop + WebUI mobile chip/body baseline alignment, stable autosizing, touch targets, path popover, Backspace, submission, search highlights and next/previous navigation for files, sessions and Skill instructions";
+					"PASS: desktop + WebUI mobile chip/body baseline alignment, stable autosizing, native caret leading, touch targets, path popover, Backspace, submission, search highlights and next/previous navigation for files, sessions and Skill instructions";
 			} catch (error) {
 				document.body.dataset.testStatus = "failed";
 				document.querySelector("#results").textContent =

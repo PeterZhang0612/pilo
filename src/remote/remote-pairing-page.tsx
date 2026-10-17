@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CheckCircle2, ExternalLink, ShieldCheck } from "lucide-react";
 
+import { sortRemoteAddresses } from "@/lib/remote-addresses";
 import { Button, Spinner } from "@/ui";
 import {
 	getRemotePairingInfo,
@@ -253,7 +254,7 @@ export function RemotePairingPage() {
 				) : null}
 				{!boot.target && info ? (
 					<div className="space-y-3">
-						{info.addresses.map((address) => (
+						{sortRemoteAddresses(info.addresses).map((address) => (
 							<a
 								key={address.id}
 								className="flex min-h-14 items-center justify-between gap-3 rounded-xl border p-3 transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"

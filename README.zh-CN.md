@@ -134,6 +134,18 @@ bash scripts/build-pilo-server.sh <target>
 
 ## 开发
 
+每次克隆后运行一次 `pnpm hooks:install`，启用提交前检查。每次提交会依次执行
+`pnpm check`（前端格式和 lint）、`pnpm exec tsc --noEmit`（TypeScript 类型检查），
+再执行 Rust 格式检查、workspace 检查和 Clippy；任何一步失败都会阻止提交，
+不会自动格式化文件。钩子不执行完整前端构建或测试。需要先安装项目的 Node.js
+依赖、Rust 和当前平台的 Tauri 构建依赖。
+
+钩子在 Windows 使用 Git for Windows 自带的 `sh`，macOS/Linux 使用系统 `sh`。
+提交进程的 `PATH` 中需有 `pnpm` 和 `cargo`，并通过 `rustup component add rustfmt clippy`
+安装检查组件。Windows 需要 MSVC 构建工具和 WebView2；macOS 需要 Xcode Command
+Line Tools；Linux 需要 Tauri 系统库。每份仓库均需单独启用钩子，包括 Windows
+和 WSL 的两份仓库。检查针对当前宿主平台，WSL 通过不代表 Windows 或 macOS 通过。
+
 | 命令                                                                   | 用途                                          |
 | ---------------------------------------------------------------------- | --------------------------------------------- |
 | `pnpm check`                                                           | 运行 oxfmt 格式检查和 oxlint                  |

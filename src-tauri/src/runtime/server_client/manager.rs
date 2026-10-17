@@ -4,9 +4,21 @@ use serde::de::DeserializeOwned;
 use serde_json::Value;
 use tokio::sync::Mutex;
 
-use crate::domain::Connection;
+use crate::{domain::Connection, runtime::connection_diagnostics::request_failure_reason};
 
 use super::ServerClient;
+
+fn log_request_setup_failure(
+    connection: &Connection,
+    method: &str,
+    stage: &str,
+    started: std::time::Instant,
+    error: &str,
+) {
+    if let Some(reason) = request_failure_reason(method, error) {
+        log::warn!(target: "pilo-server", "request setup failed connectionId={:?} method={method:?} stage={stage} elapsedMs={} reason={reason}", connection.id, started.elapsed().as_millis());
+    }
+}
 
 pub(super) fn retryable_read_method(method: &str) -> bool {
     matches!(
@@ -111,14 +123,19 @@ impl ServerManager {
         params: Value,
         binary: Vec<Vec<u8>>,
     ) -> Result<(Value, Vec<Vec<u8>>), String> {
-        let client = self.client(connection).await?;
+        let started = std::time::Instant::now();
+        let client = self.client(connection).await.inspect_err(|error| {
+            log_request_setup_failure(connection, method, "connect", started, error);
+        })?;
         let retry_params =
             (retryable_read_method(method) && binary.is_empty()).then(|| params.clone());
         match client.request_with_binary(method, params, binary).await {
             Ok(response) => Ok(response),
             Err(error) if retry_params.is_some() && client.is_closed() => {
                 self.invalidate_client(&connection.id, &client).await;
-                let retry_client = self.client(connection).await?;
+                let retry_client = self.client(connection).await.inspect_err(|error| {
+                    log_request_setup_failure(connection, method, "reconnect", started, error);
+                })?;
                 retry_client
                     .request_with_binary(
                         method,
@@ -146,6 +163,7 @@ impl ServerManager {
             .request_raw(connection, method, params, Vec::new())
             .await?;
         if !binary.is_empty() {
+            log::warn!(target: "pilo-server", "response invalid connectionId={:?} method={method:?} reason=unexpected_binary", connection.id);
             return Err(format!(
                 "pilo-server method '{method}' returned unexpected binary attachments"
             ));
@@ -178,8 +196,11 @@ impl ServerManager {
         method: &str,
         params: Value,
     ) -> Result<T, String> {
-        serde_json::from_value(self.request(connection, method, params).await?)
-            .map_err(|error| format!("invalid pilo-server response for {method}: {error}"))
+        let started = std::time::Instant::now();
+        serde_json::from_value(self.request(connection, method, params).await?).map_err(|error| {
+            log::warn!(target: "pilo-server", "response invalid connectionId={:?} method={method:?} elapsedMs={} reason=invalid_response", connection.id, started.elapsed().as_millis());
+            format!("invalid pilo-server response for {method}: {error}")
+        })
     }
 
     pub async fn stop_all(&self) {

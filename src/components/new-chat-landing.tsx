@@ -18,7 +18,7 @@ import {
 	type PiThinkingLevel,
 } from "@/lib/api/pi-runtime";
 import { createPiCommandSuggestions } from "@/lib/chat/pi-command-suggestions";
-import { searchProjectFiles } from "@/lib/api/files";
+import { searchProjectFiles, uploadChatFile } from "@/lib/api/files";
 import {
 	getNextPiScopeModel,
 	getProjectScopeModels,
@@ -424,7 +424,10 @@ export function NewChatLanding({
 					reserveWindowControls={reserveWindowControls}
 					sidebarCollapsed={sidebarCollapsed}
 				/>
-				<div className="relative flex min-h-0 flex-1 flex-col">
+				<div
+					data-chat-panel=""
+					className="relative flex min-h-0 flex-1 flex-col"
+				>
 					<div className="flex min-h-0 w-full flex-1 flex-col">
 						<ConversationColumn className="flex flex-1 items-center justify-center">
 							<ChatEmptyHero />
@@ -440,6 +443,11 @@ export function NewChatLanding({
 							<ChatComposer
 								value={draft}
 								historyKey={projectId}
+								onUploadFile={
+									projectId
+										? (file) => uploadChatFile(projectId, file)
+										: undefined
+								}
 								onChange={updateDraft}
 								onSubmit={handleSubmit}
 								disabled={false}

@@ -12,6 +12,7 @@ import { tauriPiloClient } from "@/lib/api/tauri-pilo-client";
 import { promptEnhanceModel } from "@/lib/prompt-enhance";
 import { SessionMentionScope } from "@/components/chat/session-mention-context";
 import { ChatComposer } from "@/components/chat/chat-composer";
+import { uploadChatFile } from "@/lib/api/files";
 import { ConversationColumn } from "@/components/chat/chat-conversation-column";
 import {
 	ChatConversationViewport,
@@ -624,6 +625,10 @@ function ChatPageImpl(props: ChatPageProps) {
 											onNextPromptDismiss={nextPrompt.dismiss}
 											value={readOnly ? "" : draft}
 											historyKey={session.projectRecord.id}
+											attachmentScopeKey={`${session.projectRecord.id}:${session.id}`}
+											onUploadFile={(file) =>
+												uploadChatFile(session.projectRecord.id, file)
+											}
 											placeholder={
 												readOnly
 													? sessionHeaderMissing

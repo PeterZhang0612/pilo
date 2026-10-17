@@ -14,6 +14,35 @@ function withDefaultScheme(input: string): string {
 	return `${scheme}://${input.replace(/^\/\//, "")}`;
 }
 
+function isLanAddress(baseUrl: string): boolean {
+	try {
+		const octets = new URL(withDefaultScheme(baseUrl.trim())).hostname
+			.split(".")
+			.map(Number);
+		return (
+			octets.length === 4 &&
+			octets.every(Number.isInteger) &&
+			(octets[0] === 10 ||
+				(octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) ||
+				(octets[0] === 192 && octets[1] === 168))
+		);
+	} catch {
+		return false;
+	}
+}
+
+export function sortRemoteAddresses<T extends RemoteAccessAddress>(
+	addresses: readonly T[],
+): T[] {
+	const lan: T[] = [];
+	const other: T[] = [];
+	for (const address of addresses) {
+		if (isLanAddress(address.baseUrl)) lan.push(address);
+		else other.push(address);
+	}
+	return [...lan, ...other];
+}
+
 export function remoteAddressConfig(
 	addresses: RemoteAccessAddress[],
 	entryAddressId: string,

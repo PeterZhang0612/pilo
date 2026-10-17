@@ -66,12 +66,12 @@ function ContextIcon({
 				cy="12"
 				r={RING_RADIUS}
 				fill="none"
-				stroke="var(--pilo-context-usage-color)"
+				stroke="currentColor"
 				strokeWidth="2"
 				strokeLinecap="round"
 				strokeDasharray={RING_CIRCUMFERENCE}
 				strokeDashoffset={dashOffset}
-				className="-rotate-90 origin-center motion-safe:transition-[stroke-dashoffset] motion-safe:duration-200 motion-safe:ease-out"
+				className="-rotate-90 origin-center opacity-70 motion-safe:transition-[stroke-dashoffset] motion-safe:duration-200 motion-safe:ease-out"
 			/>
 		</svg>
 	);
@@ -122,7 +122,7 @@ function ContextDetails({
 				</div>
 				<div className="relative h-1.5 w-full overflow-hidden rounded-full bg-muted">
 					<div
-						className="h-full rounded-full bg-(--pilo-context-usage-color) transition-[width] duration-200"
+						className="h-full rounded-full bg-foreground/70 transition-[width] duration-200"
 						style={{ width: `${ringPercent}%` }}
 					/>
 				</div>

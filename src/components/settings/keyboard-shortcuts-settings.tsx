@@ -1,4 +1,8 @@
-import { useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import {
+	useEffect,
+	useState,
+	type KeyboardEvent as ReactKeyboardEvent,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { RotateCcw } from "lucide-react";
 import { toast } from "sonner";
@@ -14,6 +18,15 @@ import {
 	type ShortcutCommandId,
 } from "@/lib/keyboard-shortcuts";
 import { usePreferences } from "@/lib/preferences-provider";
+import {
+	DEFAULT_DESKTOP_SHORTCUT,
+	desktopShortcutFromKeyboardEvent,
+	getDesktopShortcut,
+	hasDesktopShortcutConflict,
+	isDesktopIntegrationAvailable,
+	setDesktopShortcut,
+	type DesktopShortcutSettings,
+} from "@/lib/desktop-integration";
 import { cn } from "@/lib/utils";
 import { Button, Hint } from "@/ui";
 import {
@@ -50,18 +63,20 @@ function ShortcutEditor({
 	recording,
 	onStartRecording,
 	onStopRecording,
+	canUseShortcuts,
 }: {
 	commandId: ShortcutCommandId;
 	recording: boolean;
 	onStartRecording: () => void;
 	onStopRecording: () => void;
+	canUseShortcuts: (shortcuts: readonly string[]) => Promise<boolean>;
 }) {
 	const { t } = useTranslation();
 	const { keyboardShortcuts, setKeyboardShortcut, resetKeyboardShortcut } =
 		usePreferences();
 	const shortcut = keyboardShortcuts[commandId];
 	const isCustom = shortcut !== DEFAULT_KEYBOARD_SHORTCUTS[commandId];
-	const resetShortcut = () => {
+	const resetShortcut = async () => {
 		const defaultShortcut = DEFAULT_KEYBOARD_SHORTCUTS[commandId];
 		const conflictId = findShortcutConflict(
 			keyboardShortcuts,
@@ -76,10 +91,13 @@ function ShortcutEditor({
 			});
 			return;
 		}
+		if (!(await canUseShortcuts([defaultShortcut]))) return;
 		resetKeyboardShortcut(commandId);
 	};
 
-	const handleKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+	const handleKeyDown = async (
+		event: ReactKeyboardEvent<HTMLButtonElement>,
+	) => {
 		if (!recording) return;
 		event.preventDefault();
 		event.stopPropagation();
@@ -105,6 +123,7 @@ function ShortcutEditor({
 			});
 			return;
 		}
+		if (!(await canUseShortcuts([next]))) return;
 		setKeyboardShortcut(commandId, next);
 		onStopRecording();
 	};
@@ -153,6 +172,160 @@ function ShortcutEditor({
 	);
 }
 
+function DesktopShortcutSettings() {
+	const { t } = useTranslation();
+	const { keyboardShortcuts } = usePreferences();
+	const [settings, setSettings] = useState<DesktopShortcutSettings | null>(
+		null,
+	);
+	const [loadError, setLoadError] = useState(false);
+	const [saving, setSaving] = useState(false);
+	const [recording, setRecording] = useState(false);
+
+	useEffect(() => {
+		let active = true;
+		void getDesktopShortcut().then(
+			(value) => {
+				if (active) setSettings(value);
+			},
+			(error) => {
+				console.error("Failed to load desktop shortcut", error);
+				if (active) setLoadError(true);
+			},
+		);
+		return () => {
+			active = false;
+		};
+	}, []);
+
+	const retry = async () => {
+		setLoadError(false);
+		try {
+			setSettings(await getDesktopShortcut());
+		} catch (error) {
+			console.error("Failed to load desktop shortcut", error);
+			setLoadError(true);
+		}
+	};
+
+	const save = async (shortcut: string) => {
+		if (saving) return;
+		const conflict = SHORTCUT_COMMANDS.find(
+			(command) => keyboardShortcuts[command.id] === shortcut,
+		);
+		if (conflict) {
+			toast.error(t("shortcuts.conflict"), {
+				description: t("shortcuts.conflictDescription", {
+					label: t(conflict.labelKey),
+				}),
+			});
+			return;
+		}
+		setRecording(false);
+		setSaving(true);
+		try {
+			setSettings(await setDesktopShortcut(shortcut));
+		} catch (error) {
+			console.error("Failed to save desktop shortcut", error);
+			toast.error(t("desktop.shortcutSaveFailed"));
+		} finally {
+			setSaving(false);
+		}
+	};
+
+	const record = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+		if (!recording) return;
+		event.preventDefault();
+		event.stopPropagation();
+		if (event.key === "Escape") {
+			setRecording(false);
+			return;
+		}
+		if (event.repeat || event.nativeEvent.isComposing) return;
+		const shortcut = desktopShortcutFromKeyboardEvent(event.nativeEvent);
+		if (!shortcut) return;
+		if (!isSafeGlobalShortcut(shortcut)) {
+			toast.error(t("shortcuts.modifierRequired"), {
+				description: t("shortcuts.modifierDescription"),
+			});
+			return;
+		}
+		void save(shortcut);
+	};
+
+	return (
+		<SettingsSection title={t("desktop.globalShortcut")}>
+			<SettingsRow label={t("desktop.show")} helper={t("desktop.shortcutHint")}>
+				{loadError ? (
+					<div role="alert" className="flex flex-wrap items-center gap-2">
+						<span className="text-xs text-destructive">
+							{t("desktop.shortcutLoadFailed")}
+						</span>
+						<Button variant="ghost" size="sm" onClick={() => void retry()}>
+							{t("common.retry")}
+						</Button>
+					</div>
+				) : (
+					<div className="flex flex-wrap items-center gap-2">
+						<Button
+							type="button"
+							variant="outline"
+							className="pointer-coarse:min-h-11"
+							disabled={!settings || saving}
+							data-shortcut-recording={recording ? "true" : undefined}
+							aria-label={t("shortcuts.change", { label: t("desktop.show") })}
+							onClick={() => setRecording(true)}
+							onBlur={() => setRecording(false)}
+							onKeyDown={record}
+						>
+							{recording ? (
+								t("settings.pressNewShortcut")
+							) : settings ? (
+								<ShortcutKeys shortcut={settings.shortcut} />
+							) : (
+								t("common.loading")
+							)}
+						</Button>
+						<Button
+							type="button"
+							variant="ghost"
+							size="icon"
+							className="pointer-coarse:min-h-11 pointer-coarse:min-w-11"
+							disabled={
+								!settings ||
+								saving ||
+								settings.shortcut === DEFAULT_DESKTOP_SHORTCUT
+							}
+							aria-label={t("shortcuts.reset", { label: t("desktop.show") })}
+							onClick={() => void save(DEFAULT_DESKTOP_SHORTCUT)}
+						>
+							<RotateCcw className="size-3.5" />
+						</Button>
+						{settings && !settings.registered ? (
+							<div
+								aria-live="polite"
+								className="flex flex-wrap items-center gap-2"
+							>
+								<span className="text-xs text-destructive">
+									{t("desktop.shortcutUnavailable")}
+								</span>
+								<Button
+									variant="ghost"
+									size="sm"
+									disabled={saving}
+									onClick={() => void save(settings.shortcut)}
+								>
+									{t("common.retry")}
+								</Button>
+							</div>
+						) : null}
+					</div>
+				)}
+			</SettingsRow>
+		</SettingsSection>
+	);
+}
+
 export function KeyboardShortcutsSettings() {
 	const { t } = useTranslation();
 	const {
@@ -172,8 +345,24 @@ export function KeyboardShortcutsSettings() {
 		);
 	const newlineKeys = sendMessageShortcut === "enter" ? "shift+enter" : "enter";
 
+	const canUseShortcuts = async (shortcuts: readonly string[]) => {
+		try {
+			if (!(await hasDesktopShortcutConflict(shortcuts))) return true;
+			toast.error(t("shortcuts.conflict"), {
+				description: t("shortcuts.conflictDescription", {
+					label: t("desktop.show"),
+				}),
+			});
+		} catch (error) {
+			console.error("Failed to check desktop shortcut", error);
+			toast.error(t("desktop.shortcutLoadFailed"));
+		}
+		return false;
+	};
+
 	return (
 		<div className={SETTINGS_CONTAINER_CLASS}>
+			{isDesktopIntegrationAvailable() ? <DesktopShortcutSettings /> : null}
 			{(["app", "session"] as const).map((section, sectionIndex) => (
 				<SettingsSection
 					key={section}
@@ -194,7 +383,13 @@ export function KeyboardShortcutsSettings() {
 									variant="ghost"
 									size="icon"
 									disabled={!hasCustomShortcut}
-									onClick={() => {
+									onClick={async () => {
+										if (
+											!(await canUseShortcuts(
+												Object.values(DEFAULT_KEYBOARD_SHORTCUTS),
+											))
+										)
+											return;
 										resetKeyboardShortcuts();
 										setSendMessageShortcut("enter");
 										setRecordingCommandId(null);
@@ -213,6 +408,7 @@ export function KeyboardShortcutsSettings() {
 						<SettingsRow key={command.id} label={t(command.labelKey)}>
 							<ShortcutEditor
 								commandId={command.id}
+								canUseShortcuts={canUseShortcuts}
 								recording={recordingCommandId === command.id}
 								onStartRecording={() => setRecordingCommandId(command.id)}
 								onStopRecording={() => setRecordingCommandId(null)}

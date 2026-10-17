@@ -225,7 +225,7 @@ export const AssistantMessage = memo(function AssistantMessage({
 					});
 
 	return (
-		<ConversationColumn className="group py-2 @min-[40rem]:py-3">
+		<ConversationColumn className="group [--chat-assistant-block-padding:0.5rem] py-(--chat-assistant-block-padding) @min-[40rem]:[--chat-assistant-block-padding:0.75rem]">
 			<div
 				className="w-full text-foreground"
 				style={{
@@ -234,7 +234,14 @@ export const AssistantMessage = memo(function AssistantMessage({
 					minHeight: replyRunwayPx,
 				}}
 			>
-				<div className="relative">
+				{/* Layout-neutral headroom lets an empty status satisfy its sticky inset. */}
+				<div
+					className={
+						streamingLabel
+							? "relative -mt-1 before:block before:h-1"
+							: "relative"
+					}
+				>
 					{contentNodes}
 					{visibleErrorMessage ? (
 						<div
@@ -245,7 +252,10 @@ export const AssistantMessage = memo(function AssistantMessage({
 						</div>
 					) : null}
 					{streamingLabel || message.stopReason === "aborted" ? (
-						<div className="mt-1 flex min-h-6 items-center gap-1 text-muted-foreground">
+						<div
+							className="mt-1 flex min-h-6 items-center gap-1 text-muted-foreground"
+							data-chat-streaming-status={streamingLabel ? "" : undefined}
+						>
 							{streamingLabel ? (
 								<ChatAgentActivityIndicator label={streamingLabel} />
 							) : (

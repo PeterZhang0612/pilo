@@ -141,6 +141,77 @@ path uniqueness to accommodate an old process; stop using the incompatible build
 Wrong: `DELETE FROM sessions WHERE session_path=?1`.
 Correct: `DELETE FROM sessions WHERE project_id=?1 AND session_path=?2`.
 
+## Windows Pi Session Workspace Paths
+
+### 1. Scope / Trigger
+
+Windows Local Pi startup and session scan/search/watch/activity, including
+Local-Pi SSH anchors. Desktop and WebUI use the same Host workspace adapter.
+
+### 2. Signatures
+
+- `resolve_session_project_with_paths` and `resolve_pi_runtime_with_paths` return
+  runtime-only project views through `normalize_local_pi_project(Project)`.
+- Server `session_dir_key(project)` mirrors Pi's default session-directory key.
+  No command, protocol or database schema changes.
+
+### 3. Contracts
+
+On Windows, normalize only projects whose resolved connection is Local:
+`\\?\D:\work` becomes `D:\work`, and `\\?\UNC\host\share\work` becomes
+`\\host\share\work`. Update the runtime view's path and metadata cwd together.
+Keep the stored project path, stable project ID, original workspace identity and
+JSONL unchanged. Do not apply the Host's Windows rules to WSL/SSH workspace paths.
+
+Use the same runtime cwd for Pi startup and session indexing: header cwd checks
+must see the value Pi writes. Merely sanitizing the scan directory can hide the
+error while still dropping sessions or breaking Pi's own directory creation.
+Pi encodes cwd by removing exactly one leading slash/backslash, then replacing
+slashes, backslashes and colons with hyphens and surrounding the result with `--`.
+In particular, ordinary UNC keys retain one encoded leading separator.
+
+### 4. Validation & Error Matrix
+
+- Verbatim drive cwd -> no `?` in Pi directory names; scan must not fail with
+  Windows `os error 123`.
+- Existing canonical stored project -> runtime normalization without re-add or
+  migration; original project ID and stored path remain unchanged.
+- UNC cwd -> `---host-share-work--`, not `--host-share-work--`.
+- Missing ordinary session directory -> empty result, not a scan error.
+- POSIX WSL/SSH workspace -> unchanged.
+
+### 5. Good / Base / Bad Cases
+
+Good: canonical Local projects scan Pi's actual directory and match header cwd.
+Base: ordinary drive/POSIX paths retain their current identity. Bad: suppress
+`os error 123` as an empty list, or strip every leading UNC separator.
+
+### 6. Coverage
+
+Windows Dev manual verification: previously failing Local reconciliation and
+watcher restart succeed with the stored canonical path intact; two WSL projects
+still reconcile. An isolated Windows embedded server finds Pi-generated drive
+and UNC fixture sessions through full scan, targeted scan and search; fixtures
+are removed without touching the user's agent directory. This checks UNC key
+encoding, not live network-share access.
+
+Regression tests in `runtime/pi_workspace.rs` exercise both workspace adapters
+with ordinary/verbatim drive and UNC paths, check that only the runtime path/cwd
+change, and preserve WSL/SSH paths. Windows normalization assertions run on Windows;
+other hosts assert unchanged paths. These tests use a test-only `HostPaths` and
+never access the database or filesystem. `pilo-server/src/session/mod.rs` tests
+Pi-compatible drive/UNC/POSIX directory keys on every host. These tests pass in
+the WSL workspace test run; Windows-only normalization assertions still require
+a Windows run. Live network-share access and JSONL scan integration remain
+outside their coverage.
+
+### 7. Wrong vs Correct
+
+Wrong: change `environment.inspect` output and regenerate existing project IDs,
+or fix scan alone while passing verbatim cwd to Pi.
+Correct: normalize the runtime-only Local project view once for both Pi and
+session services, preserving the authoritative project and JSONL.
+
 ## Headerless Session Indexing and Safe Deletion
 
 ### 1. Scope / Trigger

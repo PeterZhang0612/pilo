@@ -6,6 +6,17 @@ import { fileURLToPath } from "node:url";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const children = [];
 let closing = false;
+
+function isRunning(pid) {
+	try {
+		process.kill(pid, 0);
+		return true;
+	} catch (error) {
+		// ESRCH means the process is already gone, EPERM that it exists but is owned by someone else.
+		return error.code === "EPERM";
+	}
+}
+
 function shutdown(code) {
 	if (closing) return;
 	closing = true;
@@ -22,7 +33,9 @@ function shutdown(code) {
 					timeout: 5000,
 				},
 			);
-			if (result.error || result.status !== 0) {
+			// Ctrl+C reaches every process on the console, so children are usually already
+			// gone and taskkill exits with 128 ("no such process") by the time we get here.
+			if (result.error || (result.status !== 0 && isRunning(child.pid))) {
 				console.error(
 					`Failed to stop dev process tree ${child.pid}`,
 					result.error ?? result.status,

@@ -1,0 +1,210 @@
+/*
+ * Codex — an unofficial Codex desktop-inspired theme for Pilo.
+ * Paste this entire file into Settings → Appearance → Custom CSS,
+ * name it "Codex", then choose Save and apply.
+ * Light/dark mode follows Pilo's Color mode setting.
+ * Uses only public theme tokens; no external fonts, assets or selector overrides.
+ */
+
+:root {
+	/* White workspace, soft gray navigation, monochrome actions. */
+	--background: 0 0% 100%;
+	--foreground: 0 0% 12.9%;
+	--card: 0 0% 98%;
+	--card-foreground: var(--foreground);
+	--popover: 0 0% 100%;
+	--popover-foreground: var(--foreground);
+	--tooltip-background: 0 0% 12.9%;
+	--tooltip-foreground: 0 0% 100%;
+	--primary: 0 0% 12.9%;
+	--primary-foreground: 0 0% 100%;
+	--button-hover: 0 0% 25.9%;
+	--secondary: 0 0% 94.1%;
+	--secondary-foreground: var(--foreground);
+	--muted: 0 0% 94.1%;
+	--muted-foreground: 0 0% 40%;
+	--hover: 0 0% 92.9%;
+	--hover-foreground: var(--foreground);
+	--border: 0 0% 89.8%;
+	--input: 0 0% 94.1%;
+	--input-foreground: var(--foreground);
+	--input-placeholder: var(--muted-foreground);
+	--input-border: 0 0% 80%;
+	--input-field: 0 0% 100%;
+	--switch-track: 0 0% 74.9%;
+	--ring: 0 0% 40%;
+	--sidebar-background: 0 0% 97.6%;
+	--sidebar-foreground: var(--foreground);
+	--sidebar-foreground-muted: var(--muted-foreground);
+	--sidebar-primary: var(--primary);
+	--sidebar-hover: 0 0% 93.3%;
+	--sidebar-hover-foreground: var(--foreground);
+	--sidebar-selection: 0 0% 90.2%;
+	--sidebar-selection-foreground: var(--foreground);
+	--sidebar-border: var(--border);
+	--sidebar-ring: var(--ring);
+	--button-secondary: 0 0% 94.1%;
+	--button-secondary-foreground: var(--foreground);
+	--button-secondary-hover: 0 0% 89.8%;
+	--scrollbar-thumb: 0 0% 80%;
+	--scrollbar-thumb-hover: 0 0% 65.1%;
+	--scrollbar-thumb-active: 0 0% 50.2%;
+	--code-background: 0 0% 96.1%;
+	--code-foreground: var(--foreground);
+	--code-border: var(--border);
+	--skeleton-line: 0 0% 92.2%;
+	--skeleton-line-strong: 0 0% 87.8%;
+
+	/* Color is reserved for syntax and semantic status, not navigation. */
+	--syntax-keyword: 270 50% 40%;
+	--syntax-string: 140 50% 28%;
+	--syntax-number: 25 75% 32%;
+	--syntax-comment: 0 0% 40%;
+	--syntax-function: 215 65% 38%;
+	--syntax-variable: 0 0% 20%;
+	--syntax-title: 215 65% 38%;
+	--syntax-attr: 25 75% 32%;
+	--syntax-builtin: 190 65% 28%;
+
+	/* Edge-attached navigation replaces Lody's floating sidebar. */
+	--pilo-sidebar-margin: 0;
+	--pilo-sidebar-height: 100%;
+	--pilo-sidebar-width: 100%;
+	--pilo-sidebar-border-width: 0 1px 0 0;
+	--pilo-sidebar-border-color: hsl(var(--sidebar-border) / 0.65);
+	--pilo-sidebar-radius: 0;
+	--pilo-sidebar-padding: 0.5rem;
+	--pilo-sidebar-shadow: none;
+	--pilo-sidebar-session-height: 2rem;
+	--pilo-sidebar-session-context-height: 3.25rem;
+	--pilo-sidebar-session-padding: 0.25rem 0.5rem;
+	--pilo-sidebar-session-context-padding: 0.375rem 0.5rem;
+	--pilo-sidebar-session-gap: 0.125rem;
+	--pilo-sidebar-selected-border: transparent;
+	--pilo-sidebar-selected-background: hsl(var(--sidebar-selection));
+	--pilo-sidebar-selected-foreground: hsl(var(--sidebar-selection-foreground));
+	--pilo-project-selected-foreground: hsl(var(--sidebar-selection-foreground));
+	--pilo-mobile-sidebar-radius: 0;
+	--pilo-mobile-selected-background: hsl(var(--sidebar-selection));
+	--pilo-mobile-confirm-selected-background: hsl(var(--sidebar-selection));
+	--pilo-mobile-selected-ring-width: 0px;
+
+	/* Quiet reading column and a single rounded composer surface. */
+	--pilo-conversation-max-width: min(94%, 50rem);
+	--pilo-radius-md: 0.5rem;
+	--pilo-radius-lg: 0.75rem;
+	--pilo-radius-xl: 1rem;
+	--pilo-bubble-radius: 1.25rem;
+	--pilo-composer-radius: 1.5rem;
+	--pilo-composer-padding: 0.5rem 0.75rem;
+	--pilo-composer-background: hsl(var(--input-field));
+	--pilo-composer-border: hsl(var(--input-border));
+	--pilo-composer-focus-border: hsl(var(--ring));
+	--pilo-user-bubble-bg: hsl(var(--muted));
+	--pilo-user-bubble-border: transparent;
+	--pilo-display-font-family: var(--pilo-page-font-family);
+	--pilo-shadow-composer: 0 2px 8px rgb(0 0 0 / 0.04);
+	--pilo-shadow-composer-hover: var(--pilo-shadow-composer);
+	--pilo-shadow-composer-focus: var(--pilo-shadow-composer);
+
+	/* Flat controls; elevation belongs to menus and floating panels. */
+	--pilo-button-primary-shadow: 0 0 #0000;
+	--pilo-button-secondary-shadow: 0 0 #0000;
+	--pilo-field-shadow: 0 0 #0000;
+	--pilo-field-hover-border: hsl(var(--muted-foreground));
+	--pilo-field-focus-border: hsl(var(--ring));
+	--pilo-floating-radius: 0.75rem;
+	--pilo-menu-radius: 0.75rem;
+	--pilo-menu-padding: 0.25rem;
+	--pilo-menu-item-height: 2rem;
+	--pilo-menu-item-gap: 0.125rem;
+	--pilo-menu-checked-background: hsl(var(--muted));
+	--pilo-select-padding: 0.25rem;
+	--pilo-select-gap: 0.125rem;
+	--pilo-select-item-height: 2rem;
+	--pilo-select-item-radius: max(
+		0px,
+		calc(var(--pilo-floating-radius) - var(--pilo-select-padding) - 1px)
+	);
+	--pilo-select-checked-background: hsl(var(--muted));
+	--pilo-select-checked-foreground: hsl(var(--foreground));
+	--pilo-shadow-panel: 0 2px 12px rgb(0 0 0 / 0.06);
+	--pilo-shadow-floating:
+		0 4px 12px rgb(0 0 0 / 0.06), 0 12px 32px rgb(0 0 0 / 0.1);
+	--pilo-shadow-popover: var(--pilo-shadow-floating);
+	--pilo-menu-background: hsl(var(--popover));
+	--pilo-menu-edge: hsl(var(--border));
+	--pilo-menu-shadow:
+		0 0 0 1px var(--pilo-menu-edge), var(--pilo-shadow-floating);
+	--pilo-tooltip-border: transparent;
+	--pilo-tooltip-shadow: var(--pilo-shadow-floating);
+
+	/* Match the shape on touch without inheriting compact desktop sizes.
+	 * Other mobile dimensions, safe areas and motion keep Pilo's defaults.
+	 */
+	--pilo-mobile-radius-md: 0.5rem;
+	--pilo-mobile-radius-lg: 0.75rem;
+	--pilo-mobile-radius-xl: 1rem;
+	--pilo-mobile-bubble-radius: 1.25rem;
+	--pilo-mobile-composer-radius: 1.5rem;
+	--pilo-mobile-composer-padding: 0.5rem 0.75rem;
+	--pilo-mobile-floating-radius: 0.75rem;
+	--pilo-mobile-menu-radius: 0.75rem;
+	--pilo-mobile-menu-item-gap: 0.125rem;
+	--pilo-mobile-select-gap: 0.125rem;
+	--pilo-mobile-select-item-radius: max(
+		0px,
+		calc(
+			var(--pilo-mobile-floating-radius) - var(--pilo-mobile-select-padding) -
+				1px
+		)
+	);
+}
+
+:root.dark {
+	/* Charcoal workspace, darker navigation, raised graphite inputs. */
+	--background: 0 0% 12.9%;
+	--foreground: 0 0% 92.9%;
+	--card: 0 0% 16.1%;
+	--popover: 0 0% 17.6%;
+	--tooltip-background: 0 0% 92.9%;
+	--tooltip-foreground: 0 0% 12.9%;
+	--primary: 0 0% 92.9%;
+	--primary-foreground: 0 0% 12.9%;
+	--button-hover: 0 0% 82%;
+	--secondary: 0 0% 18.4%;
+	--muted: 0 0% 18.4%;
+	--muted-foreground: 0 0% 69%;
+	--hover: 0 0% 23.5%;
+	--border: 0 0% 24.7%;
+	--input: 0 0% 18.4%;
+	--input-border: 0 0% 36.1%;
+	--input-field: 0 0% 18.4%;
+	--switch-track: 0 0% 36.1%;
+	--ring: 0 0% 70.2%;
+	--sidebar-background: 0 0% 9%;
+	--sidebar-hover: 0 0% 16.1%;
+	--sidebar-selection: 0 0% 21.2%;
+	--button-secondary: 0 0% 18.4%;
+	--button-secondary-hover: 0 0% 25.1%;
+	--scrollbar-thumb: 0 0% 32.2%;
+	--scrollbar-thumb-hover: 0 0% 43.1%;
+	--scrollbar-thumb-active: 0 0% 54.9%;
+	--code-background: 0 0% 9%;
+	--skeleton-line: 0 0% 20%;
+	--skeleton-line-strong: 0 0% 25.1%;
+	--syntax-keyword: 270 75% 80%;
+	--syntax-string: 140 45% 70%;
+	--syntax-number: 30 85% 75%;
+	--syntax-comment: 0 0% 62.7%;
+	--syntax-function: 210 85% 75%;
+	--syntax-variable: 0 0% 88.2%;
+	--syntax-title: 210 85% 75%;
+	--syntax-attr: 30 85% 75%;
+	--syntax-builtin: 185 60% 70%;
+
+	--pilo-shadow-composer: 0 2px 8px rgb(0 0 0 / 0.12);
+	--pilo-shadow-panel: 0 2px 12px rgb(0 0 0 / 0.2);
+	--pilo-shadow-floating:
+		0 4px 12px rgb(0 0 0 / 0.2), 0 12px 32px rgb(0 0 0 / 0.3);
+}

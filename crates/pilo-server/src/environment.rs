@@ -6,7 +6,7 @@ use std::process::Stdio;
 use pilo_protocol::{EnvironmentInfo, PiExecutableInfo};
 use serde::Deserialize;
 use serde_json::Value;
-use tokio::process::Command;
+use tokio::{process::Command, sync::Mutex};
 
 use crate::{ServerState, to_value};
 
@@ -32,8 +32,6 @@ pub(crate) struct ToolchainInfo {
     pub(crate) path: String,
     pub(crate) home: String,
     pub(crate) shell: String,
-    pub(crate) pi_executable: String,
-    pub(crate) pi_version: String,
     pub(crate) node_executable: String,
     pub(crate) node_version: String,
     pub(crate) git_executable: String,
@@ -90,27 +88,33 @@ pub(crate) async fn environment_inspect(
     .await
     .map_err(|error| format!("project probe task failed: {error}"))??;
     let toolchain = cached_toolchain(state).await?;
-    let pi = if params.pi_runtime.as_deref() == Some("local") {
-        PiExecutableInfo {
-            executable: String::new(),
-            version: String::new(),
+    let pi_probe = async {
+        if params.pi_runtime.as_deref() == Some("local") {
+            Ok(PiExecutableInfo {
+                executable: String::new(),
+                version: String::new(),
+            })
+        } else {
+            probe_pi_executable(state, params.pi_executable.as_deref()).await
         }
-    } else {
-        probe_pi_executable(state, params.pi_executable.as_deref()).await?
     };
-    let git_branch = if toolchain.git_executable.is_empty() {
-        None
-    } else {
-        let value = command_text(
-            &toolchain.git_executable,
-            &["symbolic-ref", "--quiet", "--short", "HEAD"],
-            Some(&cwd),
-            &toolchain.path,
-        )
-        .await
-        .unwrap_or_default();
-        (!value.is_empty()).then_some(value)
+    let git_probe = async {
+        if toolchain.git_executable.is_empty() {
+            None
+        } else {
+            let value = command_text(
+                &toolchain.git_executable,
+                &["symbolic-ref", "--quiet", "--short", "HEAD"],
+                Some(&cwd),
+                &toolchain.path,
+            )
+            .await
+            .unwrap_or_default();
+            (!value.is_empty()).then_some(value)
+        }
     };
+    let (pi, git_branch) = tokio::join!(pi_probe, git_probe);
+    let pi = pi?;
     to_value(EnvironmentInfo {
         cwd: cwd.to_string_lossy().into_owned(),
         path: toolchain.path.clone(),
@@ -137,24 +141,71 @@ async fn probe_pi_executable(
     state: &ServerState,
     requested: Option<&str>,
 ) -> Result<PiExecutableInfo, String> {
-    let requested = requested.map(str::trim).filter(|value| !value.is_empty());
-    if requested.is_none() {
-        let toolchain = cached_toolchain(state).await?;
-        if toolchain.pi_executable.is_empty() {
-            return Err("Pi executable 'pi' was not found in PATH".to_owned());
-        }
-        return Ok(PiExecutableInfo {
-            executable: toolchain.pi_executable.clone(),
-            version: toolchain.pi_version.clone(),
-        });
-    }
-
-    let path = cached_login_path(state).await;
-    let executable = resolve_program(&path, requested.expect("requested path checked"));
+    let (executable, path) = resolve_pi_executable(state, requested).await?;
     let version = command_text(&executable, &["--version"], None, &path).await?;
     Ok(PiExecutableInfo {
         executable,
         version,
+    })
+}
+
+pub(crate) async fn resolve_pi_executable(
+    state: &ServerState,
+    requested: Option<&str>,
+) -> Result<(String, String), String> {
+    let mut path = tool_search_path(&cached_login_path(state).await);
+    if let Some(requested) = requested.map(str::trim).filter(|value| !value.is_empty()) {
+        let executable = resolve_program(&path, requested);
+        if let Some(parent) = Path::new(&executable)
+            .parent()
+            .filter(|dir| dir.is_absolute())
+        {
+            path = append_search_paths(&path, [parent.to_path_buf()]);
+        }
+        return Ok((executable, path));
+    }
+    if let Some(executable) = find_command(&path, "pi") {
+        return Ok((executable, path));
+    }
+
+    // A retry after installation must not reuse a cached "not found" result.
+    if let Some(current) = login_path(&default_shell()).await {
+        path = append_search_paths(&current, std::env::split_paths(&path));
+    }
+    path = tool_search_path(&path);
+    if find_command(&path, "pi").is_none() {
+        let (npm, pnpm, bun) = tokio::join!(
+            global_bin_dir(&path, "npm", &["prefix", "-g"]),
+            global_bin_dir(&path, "pnpm", &["bin", "-g"]),
+            global_bin_dir(&path, "bun", &["pm", "bin", "-g"]),
+        );
+        path = append_search_paths(&path, [npm, pnpm, bun].into_iter().flatten());
+    }
+    let executable = find_command(&path, "pi")
+        .ok_or_else(|| "Pi executable 'pi' was not found in PATH or global install directories; configure the Pi executable path explicitly".to_owned())?;
+    // Saving the detected executable must retain its refreshed runtime PATH.
+    if let Some(cached) = state.login_path.get() {
+        let mut cached = cached.lock().await;
+        path = append_search_paths(&path, std::env::split_paths(cached.as_str()));
+        *cached = path.clone();
+    }
+    Ok((executable, path))
+}
+
+async fn global_bin_dir(path: &str, name: &str, args: &[&str]) -> Option<PathBuf> {
+    let program = find_command(path, name)?;
+    let home = std::env::home_dir();
+    let output = command_text(&program, args, home.as_deref(), path)
+        .await
+        .ok()?;
+    let dir = PathBuf::from(output.trim());
+    if !dir.is_absolute() {
+        return None;
+    }
+    Some(if name == "npm" && !cfg!(windows) {
+        dir.join("bin")
+    } else {
+        dir
     })
 }
 
@@ -182,14 +233,38 @@ pub(crate) fn default_shell() -> String {
 }
 
 async fn login_path(shell: &str) -> Option<String> {
-    if cfg!(windows) {
-        return std::env::var("PATH").ok();
-    }
     const MARKER: &str = "__PILO_LOGIN_PATH__";
-    let mut command = Command::new(shell);
+    let mut command = if cfg!(windows) {
+        let mut command = Command::new("powershell.exe");
+        command.args([
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            r"[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+$inherited = $env:PATH
+foreach ($scope in @('Machine', 'User')) {
+    $vars = [Environment]::GetEnvironmentVariables($scope)
+    foreach ($key in $vars.Keys) {
+        if ($key -ne 'Path') {
+            [Environment]::SetEnvironmentVariable($key, [Environment]::ExpandEnvironmentVariables([string]$vars[$key]), 'Process')
+        }
+    }
+}
+$p = @($inherited, [Environment]::GetEnvironmentVariable('Path', 'User'), [Environment]::GetEnvironmentVariable('Path', 'Machine'))
+[Console]::Write('__PILO_LOGIN_PATH__' + ($p -join ';'))",
+        ]);
+        command
+    } else {
+        let mut command = Command::new(shell);
+        command.args(["-ilc", &format!("printf '{MARKER}%s' \"$PATH\"")]);
+        command
+    };
     command
-        .args(["-ilc", &format!("printf '{MARKER}%s' \"$PATH\"")])
+        .stdin(std::process::Stdio::null())
         .kill_on_drop(true);
+    #[cfg(windows)]
+    command.creation_flags(0x0800_0000);
     let output = tokio::time::timeout(std::time::Duration::from_secs(5), command.output())
         .await
         .ok()?
@@ -209,10 +284,15 @@ pub(crate) async fn cached_login_path(state: &ServerState) -> String {
         .login_path
         .get_or_init(|| async {
             let shell = default_shell();
-            login_path(&shell)
-                .await
-                .unwrap_or_else(|| std::env::var("PATH").unwrap_or_default())
+            let inherited = std::env::var("PATH").unwrap_or_default();
+            let login = login_path(&shell).await.unwrap_or_default();
+            Mutex::new(tool_search_path(&append_search_paths(
+                &login,
+                std::env::split_paths(&inherited),
+            )))
         })
+        .await
+        .lock()
         .await
         .clone()
 }
@@ -226,17 +306,9 @@ pub(crate) async fn cached_toolchain(state: &ServerState) -> Result<&ToolchainIn
             let home = std::env::var("HOME")
                 .or_else(|_| std::env::var("USERPROFILE"))
                 .unwrap_or_default();
-            let pi_executable = find_command(&path, "pi").unwrap_or_default();
             let node_executable = find_command(&path, "node").unwrap_or_default();
             let git_executable = find_command(&path, "git").unwrap_or_default();
 
-            let pi_version_probe = async {
-                if pi_executable.is_empty() {
-                    Ok(String::new())
-                } else {
-                    command_text(&pi_executable, &["--version"], None, &path).await
-                }
-            };
             let node_version_probe = async {
                 if node_executable.is_empty() {
                     String::new()
@@ -255,15 +327,12 @@ pub(crate) async fn cached_toolchain(state: &ServerState) -> Result<&ToolchainIn
                         .unwrap_or_default()
                 }
             };
-            let (pi_version, node_version, git_version) =
-                tokio::join!(pi_version_probe, node_version_probe, git_version_probe);
+            let (node_version, git_version) = tokio::join!(node_version_probe, git_version_probe);
 
             Ok(ToolchainInfo {
                 path,
                 home,
                 shell,
-                pi_executable,
-                pi_version: pi_version?,
                 node_executable,
                 node_version,
                 git_executable,
@@ -273,30 +342,150 @@ pub(crate) async fn cached_toolchain(state: &ServerState) -> Result<&ToolchainIn
         .await
 }
 
-fn find_command(path: &str, name: &str) -> Option<String> {
-    let extensions = if cfg!(windows) {
-        std::env::var("PATHEXT")
-            .unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".to_owned())
-            .split(';')
-            .map(|value| value.trim().to_ascii_lowercase())
-            .filter(|value| !value.is_empty())
-            .collect::<Vec<_>>()
-    } else {
-        Vec::new()
-    };
-    std::env::split_paths(path).find_map(|dir| {
-        if cfg!(windows)
-            && let Some(candidate) = extensions.iter().find_map(|extension| {
-                let candidate = dir.join(format!("{name}{extension}"));
-                candidate.is_file().then_some(candidate)
+fn append_search_paths(path: &str, extra: impl IntoIterator<Item = PathBuf>) -> String {
+    let mut dirs = Vec::<PathBuf>::new();
+    for dir in std::env::split_paths(path).chain(extra) {
+        if dir.as_os_str().is_empty()
+            || dirs.iter().any(|existing| {
+                if cfg!(windows) {
+                    existing
+                        .to_string_lossy()
+                        .eq_ignore_ascii_case(&dir.to_string_lossy())
+                } else {
+                    existing == &dir
+                }
             })
         {
-            return Some(candidate.to_string_lossy().into_owned());
+            continue;
         }
-        let candidate = dir.join(name);
-        candidate
-            .is_file()
-            .then(|| candidate.to_string_lossy().into_owned())
+        dirs.push(dir);
+    }
+    std::env::join_paths(dirs)
+        .map(|value| value.to_string_lossy().into_owned())
+        .unwrap_or_else(|_| path.to_owned())
+}
+
+fn tool_search_path(path: &str) -> String {
+    let mut dirs = Vec::new();
+    for key in ["PNPM_HOME", "NVM_BIN", "NVM_SYMLINK", "PI_MANAGED_BIN_DIR"] {
+        if let Some(dir) = std::env::var_os(key).filter(|value| !value.is_empty()) {
+            let dir = PathBuf::from(dir);
+            if key == "PNPM_HOME" {
+                dirs.push(dir.join("bin"));
+            }
+            dirs.push(dir);
+        }
+    }
+    for key in ["BUN_INSTALL", "VOLTA_HOME", "PI_CODING_AGENT_DIR"] {
+        if let Some(dir) = std::env::var_os(key).filter(|value| !value.is_empty()) {
+            dirs.push(PathBuf::from(dir).join("bin"));
+        }
+    }
+    for key in [
+        "npm_config_prefix",
+        "NPM_CONFIG_PREFIX",
+        "PI_NPM_INSTALL_PREFIX",
+    ] {
+        if let Some(dir) = std::env::var_os(key).filter(|value| !value.is_empty()) {
+            let dir = PathBuf::from(dir);
+            dirs.push(if cfg!(windows) { dir } else { dir.join("bin") });
+        }
+    }
+    if let Some(root) = std::env::var_os("PI_MANAGED_INSTALL_ROOT")
+        && let Some(parent) = Path::new(&root).parent()
+    {
+        dirs.push(parent.join("bin"));
+    }
+    if let Some(home) = std::env::home_dir() {
+        for dir in [
+            ".pi/agent/bin",
+            ".local/bin",
+            "bin",
+            ".bin",
+            "local/bin",
+            ".bun/bin",
+            ".volta/bin",
+        ] {
+            dirs.push(home.join(dir));
+        }
+        if cfg!(windows) {
+            for (key, suffix) in [
+                ("APPDATA", "npm"),
+                ("LOCALAPPDATA", "pnpm"),
+                ("LOCALAPPDATA", "pnpm/bin"),
+                ("LOCALAPPDATA", "pi-node/current"),
+                ("ProgramFiles", "nodejs"),
+            ] {
+                if let Some(base) = std::env::var_os(key) {
+                    dirs.push(PathBuf::from(base).join(suffix));
+                }
+            }
+        } else {
+            let data = std::env::var_os("XDG_DATA_HOME")
+                .filter(|value| !value.is_empty())
+                .map(PathBuf::from)
+                .unwrap_or_else(|| home.join(".local/share"));
+            dirs.extend([
+                data.join("pnpm"),
+                data.join("pnpm/bin"),
+                data.join("pi-node/current/bin"),
+            ]);
+            dirs.push(home.join(".npm-global/bin"));
+            #[cfg(target_os = "macos")]
+            dirs.extend([
+                home.join("Library/pnpm"),
+                home.join("Library/pnpm/bin"),
+                PathBuf::from("/opt/homebrew/bin"),
+            ]);
+            dirs.push(PathBuf::from("/usr/local/bin"));
+        }
+    }
+    // Keep absent directories too: they may be created by a later install.
+    append_search_paths(path, dirs.into_iter().filter(|dir| dir.is_absolute()))
+}
+
+fn find_command(path: &str, name: &str) -> Option<String> {
+    let has_extension = Path::new(name)
+        .extension()
+        .and_then(|value| value.to_str())
+        .is_some_and(|value| {
+            matches!(
+                value.to_ascii_lowercase().as_str(),
+                "exe" | "com" | "cmd" | "bat"
+            )
+        });
+    let extensions = if cfg!(windows) && !has_extension {
+        let mut extensions = std::env::var("PATHEXT")
+            .unwrap_or_default()
+            .split(';')
+            .map(|value| value.trim().to_ascii_lowercase())
+            .filter(|value| matches!(value.as_str(), ".exe" | ".com" | ".cmd" | ".bat"))
+            .collect::<Vec<_>>();
+        for extension in [".com", ".exe", ".bat", ".cmd"] {
+            if !extensions.iter().any(|value| value == extension) {
+                extensions.push(extension.to_owned());
+            }
+        }
+        extensions
+    } else {
+        vec![String::new()]
+    };
+    std::env::split_paths(path).find_map(|dir| {
+        extensions.iter().find_map(|extension| {
+            let candidate = dir.join(format!("{name}{extension}"));
+            let metadata = std::fs::metadata(&candidate).ok()?;
+            if !metadata.is_file() {
+                return None;
+            }
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                if metadata.permissions().mode() & 0o111 == 0 {
+                    return None;
+                }
+            }
+            Some(candidate.to_string_lossy().into_owned())
+        })
     })
 }
 
@@ -311,6 +500,8 @@ pub(crate) fn resolve_program(path: &str, program: &str) -> String {
 pub(crate) fn process_command(program: &str, args: &[String], path: &str) -> Command {
     let mut command = Command::new(program);
     command.args(args).env("PATH", path);
+    #[cfg(windows)]
+    command.creation_flags(0x0800_0000);
     command
 }
 
@@ -329,10 +520,15 @@ async fn command_text(
     let cwd = cwd.map(Path::to_path_buf);
     let path = path.to_owned();
     tokio::task::spawn_blocking(move || {
+        use std::os::windows::process::CommandExt;
+
         let mut command = std::process::Command::new(&program);
+        command.creation_flags(0x0800_0000);
         command
             .args(&args)
             .env("PATH", path)
+            .env("COREPACK_ENABLE_NETWORK", "0")
+            .env("COREPACK_ENABLE_DOWNLOAD_PROMPT", "0")
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
@@ -385,6 +581,11 @@ async fn command_text(
         .map(|value| (*value).to_owned())
         .collect::<Vec<_>>();
     let mut command = process_command(program, &args, path);
+    command
+        .env("COREPACK_ENABLE_NETWORK", "0")
+        .env("COREPACK_ENABLE_DOWNLOAD_PROMPT", "0")
+        .stdin(std::process::Stdio::null())
+        .kill_on_drop(true);
     if let Some(cwd) = cwd {
         command.current_dir(cwd);
     }

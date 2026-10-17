@@ -21,7 +21,7 @@ use tower_http::timeout::TimeoutLayer;
 
 use crate::{
     domain::{Project, RemoteDevice},
-    runtime::{host_paths::HostPaths, storage},
+    runtime::{connection_diagnostics::request_failure_reason, host_paths::HostPaths, storage},
 };
 
 use super::pairing::PairingSession;
@@ -164,6 +164,14 @@ pub(crate) fn router(
         .route("/api/v1/chat/mcp-approve", post(handlers::chat_mcp_approve))
         .route("/api/v1/files/search", get(handlers::files_search))
         .route("/api/v1/files/image", get(handlers::project_image))
+        .route(
+            "/api/v1/chat/files",
+            post(handlers::chat_file_upload)
+                .delete(handlers::chat_file_remove)
+                .layer(DefaultBodyLimit::max(
+                    crate::runtime::remote_fs::MAX_CHAT_FILE_BYTES,
+                )),
+        )
         .route("/api/v1/events", get(ws::events))
         .route_layer(from_fn_with_state(state.clone(), middleware::require_auth));
 
@@ -182,6 +190,7 @@ pub(crate) fn router(
             StatusCode::REQUEST_TIMEOUT,
             Duration::from_secs(45),
         ))
+        .layer(from_fn(middleware::log_request_failure))
         .with_state(state)
 }
 
@@ -250,8 +259,17 @@ async fn asset(State(state): State<RemoteHttpState>, uri: Uri) -> Response {
         })
 }
 
+#[derive(Clone, Copy)]
+struct ApiFailureDiagnostic {
+    reason: Option<&'static str>,
+}
+
 fn api_error(status: StatusCode, message: &str) -> Response {
-    (status, Json(json!({ "error": message }))).into_response()
+    let mut response = (status, Json(json!({ "error": message }))).into_response();
+    response.extensions_mut().insert(ApiFailureDiagnostic {
+        reason: request_failure_reason("http", message),
+    });
+    response
 }
 
 #[cfg(test)]

@@ -1,3 +1,4 @@
+mod chat_files;
 mod command;
 mod environment;
 mod extensions;
@@ -86,7 +87,7 @@ struct ServerState {
     pi_output_tasks: Arc<StdMutex<PiOutputTasks>>,
     session_watchers: Arc<Mutex<HashMap<String, JoinHandle<()>>>>,
     terminals: Arc<StdMutex<HashMap<String, TerminalSession>>>,
-    login_path: Arc<OnceCell<String>>,
+    login_path: Arc<OnceCell<Mutex<String>>>,
     toolchain: Arc<OnceCell<ToolchainInfo>>,
     extensions_dir: Arc<std::path::PathBuf>,
 }
@@ -333,7 +334,11 @@ async fn dispatch(
     params: Value,
     binary: Vec<Vec<u8>>,
 ) -> Result<ServerReply, String> {
-    if !matches!(method, "command.run" | "fs.write_file" | "terminal.write") && !binary.is_empty() {
+    if !matches!(
+        method,
+        "command.run" | "fs.write_file" | "chat.file_upload" | "terminal.write"
+    ) && !binary.is_empty()
+    {
         return Err(format!(
             "pilo-server method '{method}' does not accept binary attachments"
         ));
@@ -375,6 +380,15 @@ async fn dispatch(
                 .await
                 .map(ServerReply::json)
         }
+        "chat.file_upload" => {
+            let data = one_binary(binary, method)?;
+            blocking(move || chat_files::upload(from_params(params)?, data))
+                .await
+                .map(ServerReply::json)
+        }
+        "chat.file_remove" => blocking(move || chat_files::remove(from_params(params)?))
+            .await
+            .map(ServerReply::json),
         "fs.stat" => blocking(move || fs_stat(from_params(params)?))
             .await
             .map(ServerReply::json),

@@ -72,6 +72,29 @@ const enUS = {
 		pinWindow: "Always on top",
 		unpinWindow: "Disable always on top",
 	},
+	desktop: {
+		globalShortcut: "Global shortcut",
+		shortcutHint: "Show Pilo from any app, including when hidden in the tray.",
+		shortcutLoadFailed: "Could not load the global shortcut. Try again.",
+		shortcutSaveFailed:
+			"Could not save the shortcut. It may be in use by another app or unavailable on this system.",
+		shortcutUnavailable:
+			"Shortcut is not active. Choose another combination or retry.",
+		startupAndTray: "Startup & system tray",
+		autostart: "Launch at login",
+		autostartDisabled: "Do not launch",
+		autostartWindow: "Show main window",
+		autostartTray: "Run in system tray",
+		exitOnClose: "Quit when the main window closes",
+		closeLoadFailed: "Could not load close behavior settings. Try again.",
+		closeSaveFailed: "Could not save close behavior settings. Try again.",
+		saveFailed:
+			"Could not save launch-at-login settings. Check your system permissions and try again.",
+		loadFailed: "Could not load launch-at-login settings. Try again.",
+		show: "Show Pilo",
+		hide: "Hide to tray",
+		quit: "Quit Pilo",
+	},
 	settings: {
 		themeLoadFailed: "Failed to load theme",
 		themeSaveFailed: "Failed to save theme",
@@ -88,7 +111,7 @@ const enUS = {
 		cacheKeepAliveEnabled: "Enable keep-alive",
 		cacheKeepAliveEnabledHint: "Starts with your next conversation turn.",
 		cacheKeepAliveDescription:
-			"Refreshes before the cache expires, even when you switch sessions.",
+			"Refreshes before the cache expires, even when you switch sessions; refreshes incur API charges and stop on failure, timeout or a cache miss.",
 		cacheKeepAliveModel: "Model",
 		cacheKeepAliveModels: "Configured models",
 		cacheKeepAliveAddModel: "Add model",
@@ -111,8 +134,6 @@ const enUS = {
 		cacheKeepAliveDurationHint:
 			"Starts when a turn ends. Refreshes do not extend it.",
 		cacheKeepAliveNoModels: "Refresh the model list in a project first.",
-		cacheKeepAliveCostHint:
-			"Refreshes incur API charges. Failure, timeout or a cache miss stops keep-alive.",
 		cacheKeepAliveScheduled: "Next cache keep-alive: {{time}}",
 		cacheKeepAliveWindowEnding:
 			"The current cache covers the remaining idle window. No further refresh is needed.",
@@ -491,6 +512,15 @@ const enUS = {
 		todoStatusInProgress: "In progress",
 		todoStatusCompleted: "Completed",
 		todoStatusCancelled: "Cancelled",
+		dropFiles: "Drop files to add to your message",
+		preparingAttachments: "Preparing attachments…",
+		maxFiles: "Add up to {{count}} files at a time",
+		fileTooLarge: "{{name}} exceeds the {{size}} file limit",
+		filesTooLarge: "Files exceed the {{size}} total limit",
+		fileProjectRequired: "Choose a project before adding files",
+		uploadFileFailed: "Could not attach {{name}}",
+		foldersUnsupported:
+			"Folders are not supported. Drop individual files instead.",
 		removeAttachment: "Remove {{name}}",
 		stop: "Stop",
 		send: "Send",

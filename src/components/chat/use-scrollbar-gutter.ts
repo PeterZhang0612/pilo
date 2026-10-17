@@ -7,6 +7,7 @@ export function useScrollbarGutterWidth(
 	enabled = true,
 ): number {
 	const [gutterWidth, setGutterWidth] = useState(0);
+	// 草稿/会话切换会替换滚动区，但 ref 对象不变，需在每次提交后重新绑定。
 	useLayoutEffect(() => {
 		if (!enabled) return;
 		const viewport = ref.current;
@@ -30,6 +31,6 @@ export function useScrollbarGutterWidth(
 			observer.disconnect();
 			if (frame !== null) cancelAnimationFrame(frame);
 		};
-	}, [enabled, ref]);
+	});
 	return gutterWidth;
 }

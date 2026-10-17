@@ -71,7 +71,7 @@ Authenticated (`require_auth` middleware):
 GET  /api/v1/bootstrap       -> { projects, chatSessions, latestSequence }
 GET  /api/v1/theme           -> ThemeSettings (Host SQLite)
 POST /api/v1/theme           -> ThemeSettingsUpdate body -> committed ThemeSettings
-GET  /api/v1/sessions?projectId=...
+GET  /api/v1/sessions?projectId=...&cached=true // optional; default reconciles JSONL
 GET  /api/v1/history?projectId=&sessionPath=&startMessage=&messageLimit=&includeMessageIndex=
 GET  /api/v1/models?projectId=... -> ProjectModelCache | null  (Host-cached model and command catalog)
 POST /api/v1/models          -> ProjectModelCache        body: ProjectModelCache (Host assigns timestamp)
@@ -80,6 +80,7 @@ GET  /api/v1/chat/state?sessionKey=...
 POST /api/v1/chat/rpc        -> 204                      body: { sessionKey, command }
 GET  /api/v1/files/search?projectId=&query= -> string[]  (read-only @ mention search)
 GET  /api/v1/files/image?projectId=&path= -> binary image bytes (project-relative, image-only)
+POST /api/v1/chat/files?projectId=&name= -> JSON server-side absolute path (raw file bytes, max 10 MB)
 GET  /api/v1/events          -> WebSocket upgrade
 ```
 
@@ -95,6 +96,10 @@ GET  /api/v1/events          -> WebSocket upgrade
 - Transport-only heartbeat: client `{ type: "ping" }`, server `{ type: "pong" }`.
   The Web adapter consumes pong; it is not a sequenced runtime event or a resync.
 - `SequencedRuntimeEvent` = `{ sequence, ...RuntimeEventEnvelope }` (flattened).
+- Background index events are global, without Pi generation/session keys:
+  `sessions_indexed { projectId }` once after the background worker finishes and
+  `session_index_error { projectId, message }` on worker failure. They bypass
+  conversation reducers; indexed notifications read `cached=true`, not rescan.
 - Token is read from `Authorization: Bearer` **or** the `pilo-token.` subprotocol
   — never from the URL query.
 
@@ -125,11 +130,29 @@ remote_devices(id, name, pair_ip, token_hash, created_at_ms, last_seen_at_ms, ex
   `lan` address when one exists and no longer exposes entry or name editing;
   legacy `name` values stay in storage but are neither edited nor shown. The
   legacy command edits only the `public` entry.
+  The saved-address editor and WebUI pairing choices share
+  `sortRemoteAddresses` from `src/lib/remote-addresses.ts`: RFC1918 IPv4 origins
+  appear before public/custom origins, preserving order within each group.
+  This is display ordering, not default-entry selection or a persistence migration.
+  Sort saved editor rows, not the live draft, so typing does not move the focused
+  row. Compare `sortRemoteAddresses(config.addresses)` against the sorted saved
+  projection, not an unsorted draft against a sorted list. Enter can preserve
+  `[public, LAN, empty]` after a save; unchanged blur must not write again just
+  because the saved display projection is `[LAN, public]`.
+- **Remote settings surface**: the desktop-only dialog in `sidebar-footer.tsx`
+  uses the shared Radix `ScrollArea`, not an `overflow-y-auto` dialog. Keep the
+  heading/close control outside the scroll viewport and use a `minmax(0, 1fr)`
+  content row, `min-h-0`, and `overscroll-contain`. Reuse theme scrollbar tokens;
+  do not add a Host-management dialog or native APIs to WebUI.
 - **LAN discovery**: desktop-only, on picker open, never part of the 3-second
   state poll or an HTTP route. `remote/lan.rs` reads Up interfaces through Windows
   PowerShell/.NET, macOS `ifconfig -u`, or Linux `ip -o -4 addr show up`, with a
-  5-second timeout and child cleanup. Return numerically sorted, deduplicated IPv4
-  literals; exclude loopback, unspecified, link-local, multicast and broadcast.
+  5-second timeout and child cleanup. Return deduplicated IPv4 literals, preferring
+  Windows physical adapters identified by `Get-NetAdapter -Physical`, then RFC1918
+  addresses, then numeric IP order. If adapter classification is unavailable,
+  retain all candidates and fall back to RFC1918-first sorting; other platforms
+  also use this fallback. Keep virtual/VPN addresses selectable. Exclude loopback,
+  unspecified, link-local, multicast and broadcast.
   The listener is IPv4-only. The address-header icon picker combines each IP with
   the saved listener port, disables already-configured origins, and reuses the existing
   draft/save flow (including empty rows and the 32-address limit). Disable picks
@@ -231,8 +254,9 @@ remote_devices(id, name, pair_ip, token_hash, created_at_ms, last_seen_at_ms, ex
   are rejected. This path calls `chat_service::prepare`, not `start`, to avoid
   creating an empty persisted session. Normal chats retain their existing path.
   See [Project Model Scope](./project-model-scope.md#project-catalog-and-slash-commands).
-- **Attachments**: images only (`png/jpeg/webp/gif`), ≤ 10 MB each, ≤ 20 MB total,
-  ≤ `MAX_CHAT_IMAGES`. Reuses the existing chat image contract.
+- **Attachments**: images (`png/jpeg/webp/gif`) reuse the inline chat image contract,
+  ≤ 10 MB each, ≤ 20 MB total, ≤ `MAX_CHAT_IMAGES`. Other files use the scoped
+  server-runtime upload/cleanup described in "External Files in the Composer".
 - **Replay gap semantics**: `replay_after(seq)` returns `None` (gap → client must
   resync from snapshot) **iff** the oldest buffered sequence is greater than
   `seq + 1`. `seq == 0` always replays the whole buffer.
@@ -270,6 +294,27 @@ remote_devices(id, name, pair_ip, token_hash, created_at_ms, last_seen_at_ms, ex
   Ordinary reconnects consume sequence replay and refresh bootstrap/session
   metadata; only an explicit `resyncRequired` frame may trigger full history
   resync.
+- **Cached session-list recovery**: `cached=true` reads the Host SQLite index
+  through `session_list`, without requiring a live server. WebUI loads it before
+  normal reconciliation and retains it on scan failure. Normal requests reuse
+  `session_reconcile`, including deferred background indexing. Initial imports
+  synchronously summarize the latest 10 files; ordinary refreshes use the same
+  10-summary budget so fork/rename flows can immediately observe new metadata.
+  Remaining files are indexed in background batches of 64, with one desktop/WebUI
+  notification after the worker finishes, not after each batch, to avoid repeated
+  sidebar reordering. Cached event reads wait for queued reconciles to settle;
+  WebUI discards superseded event reads and disposed effects. Foreground cache
+  reads and scan attempts advance a shared per-project session revision; removing
+  an indexed session advances it too. Every list response checks its captured
+  revision before replacing that project's rows, so a late response cannot undo
+  a newer refresh or deletion. Background reads capture the revision after waiting.
+  Refreshes for one project are serialized and overlapping requests queue a rerun,
+  even when the current scan fails. Authentication expiry stops the queue;
+  otherwise report a scan failure only when no rerun is pending. Per-project
+  refresh errors stay visible independently of successful bootstrap responses;
+  success clears only that project's error. Server capability mismatches remain
+  fatal: rebuild the matching dev runtime in the checkout running Pilo and restart,
+  or update the release bundle; never remove required capabilities as a workaround.
 - **Remote session-list refresh**: stable project IDs prevent activity-only
   bootstrap updates from restarting every project scan or external-activity
   poll. `scheduleRuntimeActivityRefresh(projectId?: string)` batches affected
@@ -308,6 +353,7 @@ remote_devices(id, name, pair_ip, token_hash, created_at_ms, last_seen_at_ms, ex
 | RPC `type` not in allowlist                 | `400 chat command '<type>' is not available…`   |
 | Non-image attachment / wrong mime / too big | `400 …` (see `validate_remote_images`)          |
 | Unknown project/session                     | `404`                                           |
+| Session scan fails (including stale server)  | `500`; WebUI retains the Host index and displays the error |
 | Handler `Result::Err(String)`               | `400` for chat start/rpc, `500` for internal    |
 | Request body over `MAX_REQUEST_BYTES`       | rejected by `DefaultBodyLimit`                  |
 | Handler over 45 s                           | `408` (Tower timeout)                           |
@@ -334,6 +380,8 @@ remote_devices(id, name, pair_ip, token_hash, created_at_ms, last_seen_at_ms, ex
 - **Good foreground**: hide a WebUI with a pending/completed suggestion for more
   than 1.5 seconds, return with its socket intact, and retain the suggestion
   without a new prediction call. A stale socket still reconnects after probe failure.
+- **Good session recovery**: reloading WebUI with an unavailable/stale server
+  still displays previously indexed sessions and reports the scan error.
 - **Base**: Remote disabled → no listener, no port, Desktop path unchanged.
 - **Bad pairing**: an unreachable target is not authenticated. Retry before TTL
   or obtain a fresh scan after expiry. Another proof cannot retrieve an issued
@@ -346,6 +394,19 @@ remote_devices(id, name, pair_ip, token_hash, created_at_ms, last_seen_at_ms, ex
 
 ## 6. Tests Required
 
+Session recovery assertions, pending explicit authorization (no tests added or
+run): cached reads do not contact the server; unknown projects remain 404;
+scan failures retain cached sessions; bootstrap success cannot clear scan errors;
+successful retry clears only its project's error; overlapping refreshes rerun
+serially after either success or failure, but stop on authentication expiry;
+late background-cache and foreground-scan responses cannot overwrite a newer
+refresh or restore a removed session; initial import returns the latest 10
+summaries and defers the rest.
+Verify one desktop/WebSocket update after background work finishes (no per-batch
+sidebar reordering), cached-only notification reads, visible background errors,
+and a late reconcile response not overwriting the completed index. Fork navigation must still observe
+its new indexed session before switching.
+
 Foreground recovery assertions, pending explicit authorization (not run): healthy
 socket ping/pong or intervening events preserves input assistance; silent socket
 closes after 5 seconds; repeated hide/resume and disposal leave no probe timers or
@@ -356,7 +417,10 @@ LAN picker assertions, pending explicit authorization (no tests added or run):
 multiple/duplicate interfaces, excluded IP classes, timeout/failed command, empty
 result, already-added origins (including default ports/trailing slash), empty-row
 reuse, save overlap/failure, 32-origin cap, Windows PowerShell enumeration and
-narrow-screen keyboard/touch menu behavior.
+narrow-screen keyboard/touch menu behavior. Saved-editor and pairing-list order
+must put RFC1918 hosts above public/custom origins regardless of address IDs,
+retain same-group order, keep live draft rows fixed, and avoid writes on unchanged
+blur. No tests were added or run for saved-list sorting.
 
 Assertion points (inline `#[cfg(test)] mod tests`):
 
@@ -415,6 +479,11 @@ Additional multi-address assertion points, pending explicit test authorization
 ---
 
 ## 7. Wrong vs Correct
+
+Session recovery: wrong — block cached session access on a successful remote scan
+or swallow scan errors into console-only output. Correct — read the Host index
+first, reconcile separately, and keep the refresh error visible until retry or
+dismissal. Cached rows do not imply a working server connection.
 
 #### Wrong
 
@@ -570,3 +639,144 @@ security boundary. This uses plain Pi reply text; it does not extend Pi RPC.
   URL, use unauthenticated file URLs, or serve arbitrary project bytes to WebUI.
 - Correct: preserve and validate the original source, use the image-only scoped
   host read, and display Blob URLs through the shared preview component.
+
+## External Files in the Composer
+
+### 1. Scope / Trigger
+
+External file drops and attachment picking share `ChatComposer` on desktop and
+WebUI. This adds scoped attachment upload/cleanup, not generic Web filesystem
+access.
+
+### 2. Signatures
+
+- `project_chat_file_upload(id, name, data: Vec<u8>) -> Result<String, String>`
+- Authenticated `POST /api/v1/chat/files?projectId=&name=`: octet-stream body;
+  returns a JSON string containing the absolute path in the selected environment.
+- `project_chat_file_remove(id, path) -> Result<(), String>` and authenticated
+  `DELETE /api/v1/chat/files?projectId=&path=` (204 on success) remove one
+  attachment directory, subject to server-side validation.
+- Server transport: `chat.file_upload({ id, name }, binary: [bytes]) -> string`
+  and `chat.file_remove({ path }) -> null`. The Host generates the canonical
+  16-byte base64url ID; only the server resolves its runtime root. Both methods
+  are required server capabilities. `MAX_CHAT_FILE_BYTES` lives in `pilo-protocol`.
+- Shared `ChatComposer.onUploadFile(file: File) -> Promise<string>` is supplied
+  by the desktop files adapter or `WebPiloClient.uploadChatFile`.
+- `chat-file-lifecycle.ts` registers an upload's transport-bound cleanup callback,
+  discards removed/late uploads and retains submitted references.
+
+### 3. Contracts
+
+- PNG/JPEG/WebP/GIF remain inline Pi image attachments. Other files are copied
+  into `<server-runtime>/attachments/<host-generated-random-id>/<name>` in the
+  selected project's Local/WSL/SSH environment. The existing `runtime_directory()`
+  resolves `PILO_SERVER_RUNTIME_DIR`, or the platform's `pilo[-dev]/server` cache.
+  Do not write new uploads into the project or migrate/delete old `.pilo/` files.
+- The caller never chooses a destination. Names are trimmed, nonempty, at most
+  240 UTF-8 bytes, and reject dot/parent names, separators, control characters,
+  Windows-invalid punctuation and trailing dots. The server validates names,
+  canonical 16-byte base64url IDs and the 10 MB cap; an `attachments` symlink is
+  rejected. Create each random directory exclusively, never overwrite/reuse it.
+- Append ordinary quoted absolute file mentions only after successful writes.
+  Return paths usable by Pi in that same environment, with Windows forward
+  slashes and no verbatim `//?/` prefix. The shared mention parser recognizes
+  absolute `attachments/<canonical-id>/<name>` references; unrelated absolute
+  session paths stay literal. Existing project-relative mentions remain valid.
+  File-only messages work without new Pi RPC fields or a duplicate conversation store.
+- One batch is limited to eight files / 20 MB, each at most 10 MB; existing image
+  count/total limits still apply. HTTP and shared backend enforce the per-file cap.
+- Pending reads/uploads block sending and further attachment additions, not text
+  editing. Merge paths into the latest draft. Scope identity changes on session,
+  project or disabled-state transitions; late results cannot modify another draft.
+  Show preparation with a same-size spinner in the existing attachment button and
+  a screen-reader status, not an extra in-flow notice row. Pass `submitBlocked`
+  to the input hook rather than toggling `disabled`: upload completion must not
+  invoke its disabled-to-enabled autofocus or move the composer before attachment
+  contents themselves change.
+- Set `dragDropEnabled: false` for the main and session windows: Windows HTML5
+  file drops otherwise conflict with Tauri's native handler. Visible composers
+  accept drops only inside their closest `[data-chat-panel]` (including new-chat
+  landing pages), falling back to the composer itself. Leaving that panel clears
+  the hint; sidebars, headers and settings cannot add attachments. Window-level
+  handlers still prevent file navigation everywhere and ignore modal/disabled
+  targets.
+- Failed writes trigger server-side best-effort directory cleanup, preserving the
+  original upload error. A directory-creation failure must not delete an existing
+  directory. Late successful uploads that cannot enter their original composer
+  are cleaned up too.
+- Only newly uploaded files are registered for frontend cleanup. Removing their
+  file mention through composer edits deletes their generated directory. Cleanup
+  accepts only `<this-server-runtime>/attachments/<canonical-id>/<valid-name>`;
+  validate the exact server-side root, ID and filename before deleting the one
+  generated directory. Reject traversal, alternate roots and nested paths; never
+  broaden the project filesystem APIs to permit arbitrary absolute writes/deletes.
+- Protect referenced files before invoking any submit/steer/follow-up/send-now
+  callback, not after RPC success: async commands, queues and failure recovery may
+  already own them. This deliberately retains attempted submissions even if a
+  downstream guard/command consumes them without sending a normal prompt.
+- Drafts survive project/session switches and composer remounts, so switching or
+  unmounting alone must not delete their uploaded files. The in-memory ownership
+  registry survives remounts; it does not adopt history/existing filesystem files.
+  Folder uploads, crash/restart garbage collection and sweeping old attachments
+  are not provided. Submitted files are retained to keep history/retries usable.
+
+### 4. Validation & Error Matrix
+
+- Invalid/revoked token: existing 401 handling; unknown project: HTTP 404.
+- Oversized HTTP body: 413; invalid filename/backend size check/write failure:
+  command error / HTTP 400, no draft reference for the failed file.
+- Folder drop: localized notice. Successful files in a mixed batch are retained.
+- Scope change/unmount: ignore late UI results and clean up their successful uploads.
+- Cleanup failure (including disconnected transport/revoked token): log the failure;
+  do not break drafting, sending or hide the original upload error. Cleanup is
+  best-effort and may leave files behind; no automatic retry/sweep is scheduled.
+- Invalid cleanup path: command error / HTTP 400; no generic project deletion.
+
+### 5. Good / Base / Bad Cases
+
+- Good: a Windows file is copied into the SSH server's runtime attachments folder
+  and Pi receives its SSH-side absolute path. Duplicate basenames use separate
+  directories; the Git working tree remains unchanged.
+- Base: image thumbnails, clipboard images, ordinary text and session drags work.
+- Bad: send a Windows path to WSL/SSH, expose arbitrary write/delete destinations,
+  insert a completed upload into a newly selected session, or delete an attachment
+  just because its composer unmounted or its submitted draft was cleared.
+
+### 6. Tests Required
+
+No permanent attachment regression test files were added. Verification in WSL
+passed 211 Node unit tests, 19 Node integration tests, 174 Rust workspace tests,
+frontend format/lint and the frontend build. `cargo fmt --all --check`,
+`cargo check` and `cargo clippy --all-targets --all-features -- -D warnings` also
+passed. An ad-hoc source check passed
+POSIX/Windows/UNC and legacy mention round-trips, invalid references, cleanup and
+submitted-file retention. Against the rebuilt Linux server, 33 real stdio RPC
+checks passed runtime storage, exact bytes, Unicode names, duplicate isolation,
+exclusive directory creation, the 10 MB boundary, empty files, invalid names/IDs,
+cleanup path rejection, symlink safety and scoped deletion. Fixtures and runtime
+files stayed under the ignored `target/attachment-verification/` directory.
+Windows native behavior, real WSL/SSH connections, browser interaction and
+write-failure cleanup remain unverified. Dedicated attachment coverage should also assert
+filename/traversal/size rejection, duplicate names, auth/body limits, failed and
+mixed batches, file-only sends, pending-send blocking, edits during upload,
+A → B → A switching, hidden composers, modal drops and navigation prevention.
+Verify drops on messages, conversation whitespace and the composer succeed; drops
+on sidebars/headers/settings do not upload or highlight, and leaving the panel
+clears its hint, on desktop, new-chat landing pages and WebUI. During preparation,
+assert unchanged composer height/focus/viewport position, blocked normal and
+follow-up sends, editable draft text and an accessible same-size spinner.
+Cleanup-specific regression tests were not added. When authorized, assert failed
+writes/late results are removed, removing an owned unsent mention cleans up,
+remounting/switching preserves cached draft files, all submission modes retain
+files before clearing the draft, and history references are never adopted for
+cleanup. Check cleanup prefix/id/filename rejection and disconnected cleanup
+failure without disturbing drafting or recovery.
+Verify actual Windows main/session windows and wide/mobile WebUI, with Local,
+WSL and SSH projects; lint/source review does not establish native drag behavior.
+
+### 7. Wrong vs Correct
+
+Wrong: store uploads in the Git working tree, insert a Host-side Windows path
+into an SSH prompt, or forward a client-selected filesystem destination.
+Correct: upload bytes into the selected environment's server-runtime attachment
+folder and insert the returned absolute file mention.

@@ -342,6 +342,29 @@ pub async fn project_fs_read_image(
 }
 
 #[tauri::command]
+pub async fn project_chat_file_upload(
+    app: AppHandle,
+    runtime: State<'_, PiloRuntime>,
+    id: String,
+    name: String,
+    data: Vec<u8>,
+) -> Result<String, String> {
+    let project = project::get(&app, &id)?;
+    remote_fs::upload_chat_file(&runtime.servers, &project, &name, &data).await
+}
+
+#[tauri::command]
+pub async fn project_chat_file_remove(
+    app: AppHandle,
+    runtime: State<'_, PiloRuntime>,
+    id: String,
+    path: String,
+) -> Result<(), String> {
+    let project = project::get(&app, &id)?;
+    remote_fs::remove_chat_file(&runtime.servers, &project, &path).await
+}
+
+#[tauri::command]
 pub async fn project_fs_write_file(
     app: AppHandle,
     runtime: State<'_, PiloRuntime>,

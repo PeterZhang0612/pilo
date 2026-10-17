@@ -51,6 +51,12 @@ chat status notices. Owners: `runtime/cache_keep_alive.rs`,
   skip dispatch after 95%. Each request has zero retries and a 15-second deadline,
   further bounded by idle-window expiry. Successful requests do not extend that
   window. Cache miss, timeout or failure stops until another normal request.
+  Manually stopping normal output does not invalidate its captured provider input:
+  an `aborted` assistant message passes the same payload/model checks as a completed
+  one and can warm only after `agent_settled`. Stopping during tools may reuse the
+  last valid snapshot. An error, or an interruption before a reusable capture,
+  returns to `waiting_request`, not `unsupported_request`. Ignore settlement after
+  lifecycle invalidation has already cleared `normalRun`; never revive that run.
 - Stop/abort on a new normal run, model/thinking changes, Session switch/fork/tree,
   compaction or shutdown. Session name and auxiliary usage entries do not change
   context identity. Reject late results after snapshot/branch/config invalidation.
@@ -86,6 +92,9 @@ chat status notices. Owners: `runtime/cache_keep_alive.rs`,
 | Missing/unsupported extension readiness | No private prompt sent |
 | Custom `openai-responses-ws` full captured request | Replay via registered adapter with `max_output_tokens: 1` |
 | Unsupported captured request | Unavailable status; no replay |
+| Manual stop with a safely replayable captured request | Schedule only after settlement; preserve TTL/deadline/cache-miss guards |
+| Manual stop before reusable capture, or normal request error | Wait for another request; no compatibility warning |
+| Settlement after model/session/compaction invalidation | Keep the invalidated state; no replay or compatibility warning |
 | Expired cache/window | Stop without issuing another request |
 | Cache read tokens absent/zero, error or timeout | Stop; no retry/rebuild loop |
 
@@ -103,8 +112,11 @@ Only add/run tests when authorized. Cover independent Connection/model policies,
 revision races, private-command readiness, exact observed-prefix replay/output cap
 (including custom WS normalization followed by `onPayload`, preserved instructions,
 input/tools/reasoning, unchanged source payload and rejected response references),
-expiry and missed-deadline skips, late aborted responses, cache-miss stop, model
-and branch invalidation, metadata-only renames, idle eviction exemption/release,
+expiry and missed-deadline skips, late aborted warming responses, normal-output
+abort during streaming/tools with a valid capture, abort before capture without a
+compatibility warning, normal request errors without replay, unsupported aborted
+payloads without replay, settlement after lifecycle invalidation, cache-miss stop,
+model and branch invalidation, metadata-only renames, idle eviction exemption/release,
 and identical quiet notice behavior across desktop/WebUI reconnects.
 
 ## 7. Wrong vs Correct
@@ -114,3 +126,8 @@ Correct: Pi owns bounded warming timers; browsers only render Host status.
 
 Wrong: failed or aborted calls add zero to a supposedly known bill.
 Correct: preserve available usage counters and mark uncertain cost as unknown.
+
+Wrong: discard every captured request when normal output is aborted, or label an
+interruption before capture as a Pi/model compatibility failure.
+Correct: reuse only a validated observed input after settlement; otherwise wait
+for the next normal request. Do not rebuild input from the partial assistant output.

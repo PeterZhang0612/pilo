@@ -1,8 +1,12 @@
-use std::net::{IpAddr, SocketAddr};
+use std::{
+    net::{IpAddr, SocketAddr},
+    sync::atomic::{AtomicU64, Ordering},
+    time::Instant,
+};
 
 use axum::{
     Json,
-    extract::{ConnectInfo, Request, State},
+    extract::{ConnectInfo, MatchedPath, Request, State},
     http::{HeaderMap, StatusCode, header},
     middleware::Next,
     response::{IntoResponse, Response},
@@ -14,7 +18,59 @@ use crate::{
     runtime::remote::{auth, pairing::PairingError},
 };
 
-use super::{AuthSession, RemoteHttpState, api_error};
+use super::{ApiFailureDiagnostic, AuthSession, RemoteHttpState, api_error};
+
+pub(super) async fn log_request_failure(request: Request, next: Next) -> Response {
+    static NEXT_REQUEST: AtomicU64 = AtomicU64::new(1);
+    let request_id = NEXT_REQUEST.fetch_add(1, Ordering::Relaxed);
+    let started = Instant::now();
+    // Only declared route templates and known HTTP verbs, never URI/query/header data.
+    let route = request
+        .extensions()
+        .get::<MatchedPath>()
+        .map(|path| path.as_str().to_owned())
+        .unwrap_or_else(|| "unmatched".to_owned());
+    let method = match request.method().as_str() {
+        "GET" => "GET",
+        "POST" => "POST",
+        "PUT" => "PUT",
+        "PATCH" => "PATCH",
+        "DELETE" => "DELETE",
+        "HEAD" => "HEAD",
+        "OPTIONS" => "OPTIONS",
+        _ => "OTHER",
+    };
+    let response = next.run(request).await;
+    let status = response.status();
+    let diagnostic = response.extensions().get::<ApiFailureDiagnostic>();
+    if status.is_server_error()
+        || status == StatusCode::REQUEST_TIMEOUT
+        || (status == StatusCode::BAD_REQUEST && diagnostic.is_some())
+    {
+        let reason = diagnostic.map_or_else(
+            || {
+                Some(if status == StatusCode::REQUEST_TIMEOUT {
+                    "timeout"
+                } else {
+                    "http_server_error"
+                })
+            },
+            |diagnostic| diagnostic.reason,
+        );
+        if let Some(reason) = reason {
+            let level = if status.is_server_error()
+                || status == StatusCode::REQUEST_TIMEOUT
+                || !matches!(reason, "unclassified" | "invalid_request")
+            {
+                log::Level::Warn
+            } else {
+                log::Level::Info
+            };
+            log::log!(target: "remote-http", level, "request end pid={} httpRequestId={request_id} method={method} route={route:?} status={} elapsedMs={} reason={reason}", std::process::id(), status.as_u16(), started.elapsed().as_millis());
+        }
+    }
+    response
+}
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]

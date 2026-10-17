@@ -15,6 +15,7 @@ mod wire {
 pub const PROTOCOL_VERSION: u32 = 3;
 pub const MAX_FRAME_BYTES: usize = 64 * 1024 * 1024;
 pub const MAX_BINARY_PAYLOAD_BYTES: usize = 32 * 1024 * 1024;
+pub const MAX_CHAT_FILE_BYTES: usize = 10 * 1024 * 1024;
 pub const SERVER_CAPABILITIES: &[&str] = &[
     "server.ping",
     "server.status",
@@ -29,6 +30,8 @@ pub const SERVER_CAPABILITIES: &[&str] = &[
     "fs.rename",
     "fs.remove",
     "fs.search",
+    "chat.file_upload",
+    "chat.file_remove",
     "session.scan",
     "session.activity",
     "session.search",

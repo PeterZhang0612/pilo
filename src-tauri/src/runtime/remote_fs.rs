@@ -1,3 +1,4 @@
+use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 pub use pilo_protocol::FsEntry;
 use pilo_protocol::{FsEntryKind, MAX_BINARY_PAYLOAD_BYTES};
 use serde_json::json;
@@ -55,6 +56,53 @@ pub async fn read_file(
         ));
     }
     Ok(binary.into_iter().next().expect("binary length checked"))
+}
+
+pub(crate) use pilo_protocol::MAX_CHAT_FILE_BYTES;
+
+/// The selected environment's server owns the destination, never WebUI.
+pub(crate) async fn upload_chat_file(
+    servers: &ServerManager,
+    project: &Project,
+    name: &str,
+    data: &[u8],
+) -> Result<String, String> {
+    if data.len() > MAX_CHAT_FILE_BYTES {
+        return Err("chat attachment exceeds the 10 MB limit".to_owned());
+    }
+    let mut random = [0_u8; 16];
+    getrandom::fill(&mut random)
+        .map_err(|error| format!("failed to generate attachment directory: {error}"))?;
+    let id = URL_SAFE_NO_PAD.encode(random);
+    let (value, binary) = servers
+        .request_with_binary(
+            &project.connection,
+            "chat.file_upload",
+            json!({ "id": id, "name": name }),
+            vec![data.to_vec()],
+        )
+        .await?;
+    if !binary.is_empty() {
+        return Err("chat.file_upload returned unexpected binary attachments".to_owned());
+    }
+    serde_json::from_value(value)
+        .map_err(|error| format!("invalid chat.file_upload response: {error}"))
+}
+
+/// The server restricts cleanup to its own generated attachment directories.
+pub(crate) async fn remove_chat_file(
+    servers: &ServerManager,
+    project: &Project,
+    path: &str,
+) -> Result<(), String> {
+    servers
+        .request(
+            &project.connection,
+            "chat.file_remove",
+            json!({ "path": path }),
+        )
+        .await
+        .map(|_| ())
 }
 
 const MAX_PROJECT_IMAGE_BYTES: usize = 10 * 1024 * 1024;

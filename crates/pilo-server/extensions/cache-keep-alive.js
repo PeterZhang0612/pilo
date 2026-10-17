@@ -40,6 +40,7 @@ export default function (pi) {
 	let expiryTimer;
 	let controller;
 	let normalRun = false;
+	let lastStopReason;
 	let requestCount = 0;
 	let inputTokens = 0;
 	let cacheReadTokens = 0;
@@ -290,6 +291,7 @@ export default function (pi) {
 	pi.on("before_agent_start", (_event, ctx) => {
 		context = ctx;
 		normalRun = true;
+		lastStopReason = undefined;
 		stop(policy()?.enabled ? "running" : "disabled");
 	});
 	pi.on("context_with_system", (event, ctx) => {
@@ -322,7 +324,9 @@ export default function (pi) {
 		const message = event.message;
 		if (!normalRun || message?.role !== "assistant" || !policy()?.enabled)
 			return;
-		if (message.stopReason === "error" || message.stopReason === "aborted") {
+		lastStopReason = message.stopReason;
+		// Aborting output does not invalidate the already captured provider input.
+		if (message.stopReason === "error") {
 			snapshot = undefined;
 			candidate = undefined;
 			return;
@@ -344,13 +348,28 @@ export default function (pi) {
 		// Older Pi versions may accept unknown hook names without emitting them.
 		// Report missing capture support, but never schedule from agent_end.
 		context = ctx;
-		if (normalRun && policy()?.enabled && !candidate && !snapshot)
+		if (
+			normalRun &&
+			policy()?.enabled &&
+			lastStopReason &&
+			!["error", "aborted"].includes(lastStopReason) &&
+			!candidate &&
+			!snapshot
+		)
 			stop("unsupported_request", true);
 	});
-	pi.on("agent_settled", (_event, ctx) => {
+	pi.on("agent_settled", (event, ctx) => {
+		if (!normalRun) return;
 		context = ctx;
 		normalRun = false;
 		if (!policy()?.enabled) return stop("disabled");
+		// Stop can arrive before capture or after a reusable request (including during tools).
+		if (
+			lastStopReason === "error" ||
+			(!snapshot &&
+				(event.aborted || !lastStopReason || lastStopReason === "aborted"))
+		)
+			return stop("waiting_request");
 		if (!snapshot || typeof ctx.modelRegistry.streamSimple !== "function")
 			return stop("unsupported_request", true);
 		settled = {

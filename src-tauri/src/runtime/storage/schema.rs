@@ -54,6 +54,10 @@ pub(super) fn initialize_schema(db: &SqliteConnection) -> Result<(), String> {
     migrate_legacy_workspaces_schema(db)?;
     db.execute_batch(
         "PRAGMA journal_mode = WAL;
+         CREATE TABLE IF NOT EXISTS desktop_settings (
+           id INTEGER PRIMARY KEY CHECK(id = 1),
+           autostart_mode TEXT NOT NULL
+         );
          CREATE TABLE IF NOT EXISTS theme_settings (
            id INTEGER PRIMARY KEY CHECK(id = 1),
            settings_json TEXT NOT NULL
@@ -184,6 +188,16 @@ pub(super) fn initialize_schema(db: &SqliteConnection) -> Result<(), String> {
     ensure_project_model_cache_columns(db)?;
     ensure_remote_device_columns(db)?;
     ensure_remote_host_config_columns(db)?;
+    if !column_exists(db, "desktop_settings", "show_shortcut")? {
+        db.execute_batch("ALTER TABLE desktop_settings ADD COLUMN show_shortcut TEXT;")
+            .map_err(|error| error.to_string())?;
+    }
+    if !column_exists(db, "desktop_settings", "exit_on_close")? {
+        db.execute_batch(
+            "ALTER TABLE desktop_settings ADD COLUMN exit_on_close INTEGER NOT NULL DEFAULT 0;",
+        )
+        .map_err(|error| error.to_string())?;
+    }
     Ok(())
 }
 

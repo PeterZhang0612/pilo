@@ -32,7 +32,7 @@ export function SwitchSkeletonOverlay({ covering }: { covering: boolean }) {
 	return (
 		<div
 			className={cn(
-				"chat-scrollbar absolute inset-0 z-10 overflow-x-hidden overflow-y-auto bg-background transition-opacity ease-out",
+				"chat-scrollbar absolute inset-0 z-10 overflow-x-hidden overflow-y-auto bg-background transition-opacity ease-out motion-reduce:transition-none",
 				fading ? "pointer-events-none opacity-0 duration-200" : "duration-0",
 			)}
 		>
