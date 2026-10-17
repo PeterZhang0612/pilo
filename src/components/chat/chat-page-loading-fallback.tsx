@@ -6,6 +6,7 @@ import type {
 	ChatUiStatePatch,
 } from "@/components/app/chat-ui-state-cache";
 import { ChatComposer } from "@/components/chat/chat-composer";
+import { uploadChatFile } from "@/lib/api/files";
 import { SessionMentionScope } from "@/components/chat/session-mention-context";
 import { ChatEmptyHero } from "@/components/chat/chat-empty-hero";
 import { ChatHistorySkeleton } from "@/components/chat/chat-history-skeleton";
@@ -75,6 +76,8 @@ function LoadingComposer({
 					value={draft}
 					canEditScope={false}
 					historyKey={projectId}
+					attachmentScopeKey={uiStateKey}
+					onUploadFile={(file) => uploadChatFile(projectId, file)}
 					onChange={updateDraft}
 					onSubmit={deferSubmission}
 				/>

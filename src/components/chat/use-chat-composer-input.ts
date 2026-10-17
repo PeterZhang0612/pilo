@@ -29,6 +29,7 @@ import {
 	type ChatSubmission,
 } from "@/lib/chat/chat-submission";
 import { fileMentionPath } from "@/lib/chat/chat-mentions";
+import { retainChatFiles } from "@/lib/chat/chat-file-lifecycle";
 import { isImeComposingKeyboardEvent } from "@/lib/ime";
 import { type PiModel, runtimeErrorMessage } from "@/lib/api/pi-runtime";
 import { usePreferences } from "@/lib/preferences-provider";
@@ -58,6 +59,7 @@ export type ChatComposerInputOptions = {
 	attachments: readonly ChatImageAttachment[];
 	selectedModel?: PiModel | null;
 	disabled?: boolean;
+	submitBlocked?: boolean;
 	compacting?: boolean;
 	running?: boolean;
 	onSubmit?: (submission: ChatSubmission) => void;
@@ -80,6 +82,7 @@ export function useChatComposerInput({
 	attachments,
 	selectedModel = null,
 	disabled = false,
+	submitBlocked = false,
 	compacting = false,
 	running = false,
 	onSubmit,
@@ -335,6 +338,7 @@ export function useChatComposerInput({
 		createChatSubmission(submissionText, attachments);
 
 	const rememberSubmission = (submission: ChatSubmission) => {
+		retainChatFiles(submission.text);
 		if (submission.text) appendChatInputHistory(historyKey, submission.text);
 		resetHistoryNavigation();
 	};
@@ -359,6 +363,7 @@ export function useChatComposerInput({
 		if (
 			!chatSubmissionHasContent(submission) ||
 			disabled ||
+			submitBlocked ||
 			compacting ||
 			sendingNowRef.current ||
 			!canSendImages()
@@ -395,6 +400,7 @@ export function useChatComposerInput({
 		if (
 			!chatSubmissionHasContent(submission) ||
 			disabled ||
+			submitBlocked ||
 			compacting ||
 			sendingNowRef.current ||
 			!running ||

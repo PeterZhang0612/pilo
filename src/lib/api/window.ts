@@ -128,6 +128,8 @@ export function openSessionInNewWindow(
 				// 保持窄长，但限制在当前窗口所在屏幕的工作区内。
 				...bounds,
 				visible: false,
+				// Use the same HTML file-drop flow as the main window and WebUI.
+				dragDropEnabled: false,
 				// 与主窗口（tauri.conf.json）保持一致：
 				// macOS 保留原生红绿灯并用 Overlay 让内容延伸至顶栏；
 				// Windows 移除原生装饰，交给前端自绘标题栏。

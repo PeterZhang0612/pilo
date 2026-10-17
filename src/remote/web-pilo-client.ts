@@ -45,6 +45,7 @@ import {
 	loadRemoteHistory,
 	loadRemoteHistoryImage,
 	loadRemoteProjectImage,
+	uploadRemoteChatFile,
 	loadRemoteExternalActivity,
 	loadRemoteModels,
 	saveRemoteModels,
@@ -146,6 +147,10 @@ export class WebPiloClient implements PiloClient {
 		path: string,
 	): Promise<Uint8Array<ArrayBuffer>> {
 		return loadRemoteProjectImage(this.token, projectId, path);
+	}
+
+	uploadChatFile(projectId: string, file: File): Promise<string> {
+		return uploadRemoteChatFile(this.token, projectId, file);
 	}
 
 	generateSessionTitle(

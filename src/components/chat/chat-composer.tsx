@@ -10,7 +10,7 @@ import {
 	isImeComposingNativeKeyboardEvent,
 } from "@/lib/ime";
 import { useTranslation } from "react-i18next";
-import { Plus, X } from "lucide-react";
+import { LoaderCircle, Plus, X } from "lucide-react";
 
 import { SessionMentionBadge } from "@/components/chat/session-mention-badge";
 import { FileMentionBadge } from "@/components/chat/path-mention-badge";
@@ -28,6 +28,7 @@ import {
 	type SessionMention,
 } from "@/lib/chat/session-mentions";
 import { ChatImageThumbnail } from "@/components/chat/chat-image-viewer";
+import { discardRemovedChatFiles } from "@/lib/chat/chat-file-lifecycle";
 
 import { formatKeyboardShortcut } from "@/lib/keyboard-shortcuts";
 import type { PiModel, PiThinkingLevel } from "@/lib/api/pi-runtime";
@@ -36,7 +37,6 @@ import { cn } from "@/lib/utils";
 import { getPageFontFamilyStack } from "@/lib/font-settings";
 import { usePreferences } from "@/lib/preferences-provider";
 import {
-	CHAT_IMAGE_ACCEPT,
 	type ChatImageAttachment,
 	type ChatSubmission,
 } from "@/lib/chat/chat-submission";
@@ -59,7 +59,7 @@ import {
 	ChatComposerSurface,
 } from "@/components/chat/chat-composer-frame";
 import { ComposerRunConfig } from "@/components/chat/chat-composer-run-config";
-import { useChatComposerImages } from "@/components/chat/use-chat-composer-images";
+import { useChatComposerAttachments } from "@/components/chat/use-chat-composer-attachments";
 import { useChatComposerInput } from "@/components/chat/use-chat-composer-input";
 import {
 	ComposerSuggestionMenu,
@@ -77,6 +77,8 @@ type ChatComposerProps = {
 	onChange: (value: string) => void;
 	images?: readonly ChatImageAttachment[];
 	onImagesChange?: (images: ChatImageAttachment[]) => void;
+	onUploadFile?: (file: File) => Promise<string>;
+	attachmentScopeKey?: string | null;
 	onSubmit?: (submission: ChatSubmission) => void;
 	onSteer?: (submission: ChatSubmission) => void;
 	onFollowUp?: (submission: ChatSubmission) => void;
@@ -127,6 +129,8 @@ export function ChatComposer({
 	onChange,
 	images,
 	onImagesChange,
+	onUploadFile,
+	attachmentScopeKey,
 	onSubmit,
 	onSteer,
 	onFollowUp,
@@ -176,6 +180,13 @@ export function ChatComposer({
 		() => readChatMentionDraft(value, byValue),
 		[value, byValue],
 	);
+	const changeDraft = useCallback(
+		(next: string) => {
+			onChange(next);
+			discardRemovedChatFiles(value, next);
+		},
+		[onChange, value],
+	);
 	const allSuggestions = useMemo(
 		() => [
 			...suggestions,
@@ -200,7 +211,7 @@ export function ChatComposer({
 			)
 				return;
 			onNextPromptDismiss?.();
-			onChange(
+			changeDraft(
 				writeChatMentionDraft(
 					[
 						...mentionDraft.references,
@@ -210,7 +221,7 @@ export function ChatComposer({
 				),
 			);
 		},
-		[mentionDraft, connectionId, byValue, onChange, onNextPromptDismiss],
+		[mentionDraft, connectionId, byValue, changeDraft, onNextPromptDismiss],
 	);
 
 	const {
@@ -219,8 +230,34 @@ export function ChatComposer({
 		readingFontSize,
 		readingFontFamily,
 	} = usePreferences();
-	const { fileInputRef, attachments, updateImages, handleFiles, handlePaste } =
-		useChatComposerImages({ images, onImagesChange });
+	const {
+		fileInputRef,
+		attachments,
+		updateImages,
+		handleFiles,
+		handlePaste,
+		processing,
+		dragging,
+	} = useChatComposerAttachments({
+		images,
+		onImagesChange,
+		onUploadFile,
+		scopeKey: attachmentScopeKey ?? historyKey,
+		disabled,
+		rootRef,
+		onFilesAdded: (paths) => {
+			onNextPromptDismiss?.();
+			changeDraft(
+				writeChatMentionDraft(
+					[
+						...mentionDraft.references,
+						...paths.map((path) => ({ kind: "file" as const, path })),
+					],
+					mentionDraft.text,
+				),
+			);
+		},
+	});
 	const {
 		sendMode,
 		setSendMode,
@@ -247,9 +284,9 @@ export function ChatComposer({
 	} = useChatComposerInput({
 		value: mentionDraft.text,
 		submissionText: value,
-		onHistoryValue: onChange,
+		onHistoryValue: changeDraft,
 		onChange: (text) =>
-			onChange(writeChatMentionDraft(mentionDraft.references, text)),
+			changeDraft(writeChatMentionDraft(mentionDraft.references, text)),
 		onMentionSelect: (suggestion, text) => {
 			if (suggestion.kind === "session") {
 				const mention = byValue.get(suggestion.value);
@@ -259,7 +296,7 @@ export function ChatComposer({
 			const path = fileMentionPath(suggestion.value);
 			if (!path) return;
 			onNextPromptDismiss?.();
-			onChange(
+			changeDraft(
 				writeChatMentionDraft(
 					[...mentionDraft.references, { kind: "file", path }],
 					text,
@@ -269,6 +306,7 @@ export function ChatComposer({
 		attachments,
 		selectedModel,
 		disabled,
+		submitBlocked: processing,
 		compacting,
 		running,
 		onSubmit,
@@ -292,7 +330,7 @@ export function ChatComposer({
 			)
 				return false;
 			onNextPromptDismiss?.();
-			onChange(
+			changeDraft(
 				writeChatMentionDraft(
 					mentionDraft.references.slice(0, -1),
 					mentionDraft.text,
@@ -300,7 +338,7 @@ export function ChatComposer({
 			);
 			return true;
 		},
-		[disabled, sendingNow, mentionDraft, onChange, onNextPromptDismiss],
+		[disabled, sendingNow, mentionDraft, changeDraft, onNextPromptDismiss],
 	);
 
 	useEffect(() => {
@@ -318,7 +356,14 @@ export function ChatComposer({
 
 	useEffect(() => {
 		const element = rootRef.current;
-		if (!element || !mentionDrag || !connectionId || disabled || sendingNow)
+		if (
+			!element ||
+			!mentionDrag ||
+			!connectionId ||
+			disabled ||
+			sendingNow ||
+			processing
+		)
 			return;
 		return mentionDrag.register(element, {
 			connectionId,
@@ -332,6 +377,7 @@ export function ChatComposer({
 		connectionId,
 		disabled,
 		sendingNow,
+		processing,
 		addSessionMention,
 		textareaRef,
 	]);
@@ -339,6 +385,7 @@ export function ChatComposer({
 	const ghostText =
 		!value &&
 		!attachments.length &&
+		!processing &&
 		!disabled &&
 		!running &&
 		!compacting &&
@@ -348,9 +395,9 @@ export function ChatComposer({
 	const adoptNextPrompt = useCallback(() => {
 		if (!ghostText) return;
 		onNextPromptDismiss?.();
-		onChange(ghostText);
+		changeDraft(ghostText);
 		textareaRef.current?.focus();
-	}, [ghostText, onNextPromptDismiss, onChange, textareaRef]);
+	}, [ghostText, onNextPromptDismiss, changeDraft, textareaRef]);
 
 	useEffect(() => {
 		if (!ghostText || suggestionMenuOpen) return;
@@ -383,7 +430,15 @@ export function ChatComposer({
 	}, [ghostText, suggestionMenuOpen, adoptNextPrompt]);
 
 	return (
-		<ChatComposerRoot className={className} elementRef={rootRef}>
+		<ChatComposerRoot
+			className={cn(className, dragging && "ring-2 ring-ring")}
+			elementRef={rootRef}
+		>
+			{dragging ? (
+				<output className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-composer bg-background/90 px-3 text-sm text-foreground">
+					{t("chat.dropFiles")}
+				</output>
+			) : null}
 			{suggestionMenuOpen && activeQuery && queryMeta ? (
 				<ComposerSuggestionMenu
 					menuId={suggestionMenuId}
@@ -447,7 +502,7 @@ export function ChatComposer({
 								/>
 								<button
 									type="button"
-									disabled={disabled || sendingNow}
+									disabled={disabled || sendingNow || processing}
 									aria-label={t("chat.removeAttachment", {
 										name: attachment.name,
 									})}
@@ -455,7 +510,7 @@ export function ChatComposer({
 										"absolute -right-1.5 -top-1.5 z-10 inline-flex size-5 items-center justify-center rounded-full",
 										"border border-border/70 bg-background text-muted-foreground shadow-sm transition-colors",
 										"hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
-										(disabled || sendingNow) && "opacity-60",
+										(disabled || sendingNow || processing) && "opacity-60",
 									)}
 									onClick={() =>
 										updateImages(
@@ -634,11 +689,13 @@ export function ChatComposer({
 					data-chat-composer-toolbar=""
 					className={CHAT_COMPOSER_TOOLBAR_CLASS_NAME}
 				>
+					<output className="sr-only" aria-live="polite">
+						{processing ? t("chat.preparingAttachments") : ""}
+					</output>
 					<input
 						ref={fileInputRef}
 						type="file"
-						disabled={disabled || sendingNow}
-						accept={CHAT_IMAGE_ACCEPT}
+						disabled={disabled || sendingNow || processing}
 						multiple
 						className="hidden"
 						onChange={handleFiles}
@@ -647,22 +704,38 @@ export function ChatComposer({
 						<TooltipTrigger asChild>
 							<Button
 								type="button"
-								disabled={disabled || sendingNow}
+								disabled={disabled || sendingNow || processing}
 								variant="ghost"
 								size="icon"
 								className={CHAT_COMPOSER_ATTACHMENT_BUTTON_CLASS_NAME}
 								data-chat-composer-attachment=""
-								aria-label={t("chat.addAttachment")}
+								aria-label={
+									processing
+										? t("chat.preparingAttachments")
+										: t("chat.addAttachment")
+								}
+								aria-busy={processing}
 								onClick={() => {
 									onNextPromptDismiss?.();
 									textareaRef.current?.blur();
 									fileInputRef.current?.click();
 								}}
 							>
-								<Plus className="size-4" />
+								{processing ? (
+									<LoaderCircle
+										className="size-4 animate-spin motion-reduce:animate-none"
+										aria-hidden="true"
+									/>
+								) : (
+									<Plus className="size-4" />
+								)}
 							</Button>
 						</TooltipTrigger>
-						<TooltipContent>{t("chat.addAttachment")}</TooltipContent>
+						<TooltipContent>
+							{processing
+								? t("chat.preparingAttachments")
+								: t("chat.addAttachment")}
+						</TooltipContent>
 					</Tooltip>
 
 					<ComposerRunConfig
@@ -715,7 +788,7 @@ export function ChatComposer({
 						canSubmit={canSubmit}
 						sendMode={sendMode}
 						onSendModeChange={setSendMode}
-						submitBlocked={compacting || sendingNow}
+						submitBlocked={compacting || sendingNow || processing}
 						onPrimary={() => {
 							onNextPromptDismiss?.();
 							submit();

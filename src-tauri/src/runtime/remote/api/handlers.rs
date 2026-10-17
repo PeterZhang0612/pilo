@@ -1,6 +1,6 @@
 use axum::{
     Json,
-    body::Body,
+    body::{Body, Bytes},
     extract::{Query, State},
     http::{StatusCode, header},
     response::{IntoResponse, Response},
@@ -326,6 +326,51 @@ pub(super) async fn project_image(
             .unwrap_or_else(|error| {
                 api_error(StatusCode::INTERNAL_SERVER_ERROR, &error.to_string())
             }),
+        Err(error) => api_error(StatusCode::BAD_REQUEST, &error),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct ChatFileUploadQuery {
+    project_id: String,
+    name: String,
+}
+
+pub(super) async fn chat_file_upload(
+    State(state): State<RemoteHttpState>,
+    Query(query): Query<ChatFileUploadQuery>,
+    data: Bytes,
+) -> Response {
+    let project = match get_project(&state.paths, &query.project_id) {
+        Ok(project) => project,
+        Err(error) => return api_error(StatusCode::NOT_FOUND, &error),
+    };
+    let runtime = state.app.state::<PiloRuntime>();
+    match remote_fs::upload_chat_file(&runtime.servers, &project, &query.name, &data).await {
+        Ok(path) => Json(path).into_response(),
+        Err(error) => api_error(StatusCode::BAD_REQUEST, &error),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct ChatFileRemoveQuery {
+    project_id: String,
+    path: String,
+}
+
+pub(super) async fn chat_file_remove(
+    State(state): State<RemoteHttpState>,
+    Query(query): Query<ChatFileRemoveQuery>,
+) -> Response {
+    let project = match get_project(&state.paths, &query.project_id) {
+        Ok(project) => project,
+        Err(error) => return api_error(StatusCode::NOT_FOUND, &error),
+    };
+    let runtime = state.app.state::<PiloRuntime>();
+    match remote_fs::remove_chat_file(&runtime.servers, &project, &query.path).await {
+        Ok(()) => StatusCode::NO_CONTENT.into_response(),
         Err(error) => api_error(StatusCode::BAD_REQUEST, &error),
     }
 }

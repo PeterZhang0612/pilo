@@ -536,6 +536,22 @@ function RemoteWorkspace() {
 											}
 											desktopShortcuts={false}
 											historyKey={chat.activeProjectId || null}
+											attachmentScopeKey={chat.activeSessionKey}
+											onUploadFile={
+												client && chat.activeProjectId
+													? async (file) => {
+															try {
+																return await client.uploadChatFile(
+																	chat.activeProjectId,
+																	file,
+																);
+															} catch (error) {
+																handleExpiredAuth(error);
+																throw error;
+															}
+														}
+													: undefined
+											}
 											suggestions={chat.composerSuggestions}
 											onSuggestionTrigger={chat.handleSuggestionTrigger}
 											images={chat.images}

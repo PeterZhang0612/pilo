@@ -25,9 +25,10 @@ pub use connections::{
 pub use projects::{
     connection_fs_read_dir, local_pick_project_directory, parallel_agent_create,
     parallel_agent_list, parallel_agent_remove, parallel_agent_send, parallel_agent_stop,
-    project_add, project_discover, project_fs_mkdir, project_fs_read_dir, project_fs_read_file,
-    project_fs_read_image, project_fs_remove, project_fs_rename, project_fs_search,
-    project_fs_stat, project_fs_write_file, project_git_diff, project_git_status, project_list,
+    project_add, project_chat_file_remove, project_chat_file_upload, project_discover,
+    project_fs_mkdir, project_fs_read_dir, project_fs_read_file, project_fs_read_image,
+    project_fs_remove, project_fs_rename, project_fs_search, project_fs_stat,
+    project_fs_write_file, project_git_diff, project_git_status, project_list,
     project_model_cache_list, project_model_cache_set, project_model_scope_get,
     project_model_scope_set, project_open_in_zed_wsl, project_preview_close, project_preview_open,
     project_preview_ports, project_refresh, project_remove, project_reorder, project_terminal_open,

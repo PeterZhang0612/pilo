@@ -80,6 +80,7 @@ GET  /api/v1/chat/state?sessionKey=...
 POST /api/v1/chat/rpc        -> 204                      body: { sessionKey, command }
 GET  /api/v1/files/search?projectId=&query= -> string[]  (read-only @ mention search)
 GET  /api/v1/files/image?projectId=&path= -> binary image bytes (project-relative, image-only)
+POST /api/v1/chat/files?projectId=&name= -> JSON relative path (raw file bytes, max 10 MB)
 GET  /api/v1/events          -> WebSocket upgrade
 ```
 
@@ -570,3 +571,120 @@ security boundary. This uses plain Pi reply text; it does not extend Pi RPC.
   URL, use unauthenticated file URLs, or serve arbitrary project bytes to WebUI.
 - Correct: preserve and validate the original source, use the image-only scoped
   host read, and display Blob URLs through the shared preview component.
+
+## External Files in the Composer
+
+### 1. Scope / Trigger
+
+External file drops and attachment picking share `ChatComposer` on desktop and
+WebUI. This adds scoped attachment upload/cleanup, not generic Web filesystem
+access.
+
+### 2. Signatures
+
+- `project_chat_file_upload(id, name, data: Vec<u8>) -> Result<String, String>`
+- Authenticated `POST /api/v1/chat/files?projectId=&name=`: octet-stream body;
+  returns a JSON string containing the project-relative path.
+- `project_chat_file_remove(id, path) -> Result<(), String>` and authenticated
+  `DELETE /api/v1/chat/files?projectId=&path=` (204 on success) remove one
+  attachment directory, subject to shared runtime validation.
+- Shared `ChatComposer.onUploadFile(file: File) -> Promise<string>` is supplied
+  by the desktop files adapter or `WebPiloClient.uploadChatFile`.
+- `chat-file-lifecycle.ts` registers an upload's transport-bound cleanup callback,
+  discards removed/late uploads and retains submitted references.
+
+### 3. Contracts
+
+- PNG/JPEG/WebP/GIF remain inline Pi image attachments. Other files are copied
+  into `.pilo/attachments/<host-generated-random-id>/<name>` in the project's
+  Local/WSL/SSH environment using the existing server filesystem transport.
+- The caller never chooses a destination. Names are trimmed, nonempty, at most
+  240 UTF-8 bytes, and reject dot/parent names, separators, control characters,
+  Windows-invalid punctuation and trailing dots. Server filesystem checks still
+  reject project/symlink escapes. Random directories isolate duplicate names.
+- Append ordinary quoted file mentions only after successful writes. File-only
+  messages work without new Pi RPC fields or a duplicate conversation store.
+- One batch is limited to eight files / 20 MB, each at most 10 MB; existing image
+  count/total limits still apply. HTTP and shared backend enforce the per-file cap.
+- Pending reads/uploads block sending and further attachment additions, not text
+  editing. Merge paths into the latest draft. Scope identity changes on session,
+  project or disabled-state transitions; late results cannot modify another draft.
+  Show preparation with a same-size spinner in the existing attachment button and
+  a screen-reader status, not an extra in-flow notice row. Pass `submitBlocked`
+  to the input hook rather than toggling `disabled`: upload completion must not
+  invoke its disabled-to-enabled autofocus or move the composer before attachment
+  contents themselves change.
+- Set `dragDropEnabled: false` for the main and session windows: Windows HTML5
+  file drops otherwise conflict with Tauri's native handler. Visible composers
+  accept drops only inside their closest `[data-chat-panel]` (including new-chat
+  landing pages), falling back to the composer itself. Leaving that panel clears
+  the hint; sidebars, headers and settings cannot add attachments. Window-level
+  handlers still prevent file navigation everywhere and ignore modal/disabled
+  targets.
+- Failed directory creation/write attempts trigger best-effort directory cleanup,
+  preserving the original upload error. Late successful uploads that cannot enter
+  their original composer are cleaned up too.
+- Only newly uploaded files are registered for frontend cleanup. Removing their
+  file mention through composer edits deletes their generated directory. Cleanup
+  accepts only `.pilo/attachments/<canonical-16-byte-base64url-id>/<valid-name>`;
+  reject traversal, alternate prefixes and nested paths before filesystem calls.
+- Protect referenced files before invoking any submit/steer/follow-up/send-now
+  callback, not after RPC success: async commands, queues and failure recovery may
+  already own them. This deliberately retains attempted submissions even if a
+  downstream guard/command consumes them without sending a normal prompt.
+- Drafts survive project/session switches and composer remounts, so switching or
+  unmounting alone must not delete their uploaded files. The in-memory ownership
+  registry survives remounts; it does not adopt history/existing filesystem files.
+  Folder uploads, crash/restart garbage collection and sweeping old attachments
+  are not provided. Submitted files are retained to keep history/retries usable.
+
+### 4. Validation & Error Matrix
+
+- Invalid/revoked token: existing 401 handling; unknown project: HTTP 404.
+- Oversized HTTP body: 413; invalid filename/backend size check/write failure:
+  command error / HTTP 400, no draft reference for the failed file.
+- Folder drop: localized notice. Successful files in a mixed batch are retained.
+- Scope change/unmount: ignore late UI results and clean up their successful uploads.
+- Cleanup failure (including disconnected transport/revoked token): log the failure;
+  do not break drafting, sending or hide the original upload error. Cleanup is
+  best-effort and may leave files behind; no automatic retry/sweep is scheduled.
+- Invalid cleanup path: command error / HTTP 400; no generic project deletion.
+
+### 5. Good / Base / Bad Cases
+
+- Good: a Windows file is copied into an SSH project and Pi receives its SSH-side
+  relative path. Duplicate basenames use separate directories.
+- Base: image thumbnails, clipboard images, ordinary text and session drags work.
+- Bad: send a Windows path to WSL/SSH, expose arbitrary write/delete destinations,
+  insert a completed upload into a newly selected session, or delete an attachment
+  just because its composer unmounted or its submitted draft was cleared.
+
+### 6. Tests Required
+
+No dedicated attachment regression tests were added. Existing Node suites
+(211 unit + 19 integration tests) passed, as did 174 Rust workspace tests,
+workspace build and clippy; shared frontend build/check also passed in WSL.
+Native drag/layout behavior still requires Windows verification; WebUI browser
+verification was explicitly skipped. Dedicated coverage should assert
+filename/traversal/size rejection, duplicate names, auth/body limits, failed and
+mixed batches, file-only sends, pending-send blocking, edits during upload,
+A → B → A switching, hidden composers, modal drops and navigation prevention.
+Verify drops on messages, conversation whitespace and the composer succeed; drops
+on sidebars/headers/settings do not upload or highlight, and leaving the panel
+clears its hint, on desktop, new-chat landing pages and WebUI. During preparation,
+assert unchanged composer height/focus/viewport position, blocked normal and
+follow-up sends, editable draft text and an accessible same-size spinner.
+Cleanup-specific regression tests were not added. When authorized, assert failed
+writes/late results are removed, removing an owned unsent mention cleans up,
+remounting/switching preserves cached draft files, all submission modes retain
+files before clearing the draft, and history references are never adopted for
+cleanup. Check cleanup prefix/id/filename rejection and disconnected cleanup
+failure without disturbing drafting or recovery.
+Verify actual Windows main/session windows and wide/mobile WebUI, with Local,
+WSL and SSH projects; lint/source review does not establish native drag behavior.
+
+### 7. Wrong vs Correct
+
+Wrong: insert `C:\\Users\\...` into a remote prompt or forward a client-selected
+filesystem destination. Correct: upload bytes to the selected project's unique
+attachment directory and insert the returned relative file mention.
