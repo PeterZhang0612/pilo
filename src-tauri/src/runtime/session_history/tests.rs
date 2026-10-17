@@ -271,6 +271,24 @@ fn history_stats_restore_token_breakdown_and_context_usage() {
     assert_eq!(history.stats.tokens.total, 97);
     assert!((history.stats.cost - 0.032).abs() < f64::EPSILON);
     assert_eq!(history.stats.context_tokens, Some(50));
+
+    // 轮次用量取该轮最后一条 assistant 消息（a2），与实时路径的 agent_settled 口径一致。
+    let turn_usages = history
+        .events
+        .iter()
+        .filter_map(|event| match event {
+            ConversationEventDto::AssistantTurnEnd { usage, .. } => usage.as_ref(),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(turn_usages.len(), 1);
+    let usage = turn_usages[0];
+    assert_eq!(usage.input, 3);
+    assert_eq!(usage.output, 7);
+    assert_eq!(usage.cache_read, 40);
+    assert_eq!(usage.cache_write, 0);
+    assert_eq!(usage.total, 50);
+    assert_eq!(usage.cost, Some(0.02));
 }
 
 #[test]

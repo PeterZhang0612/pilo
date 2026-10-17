@@ -13,6 +13,7 @@ import type {
 	ConversationReducerContext,
 	ConversationState,
 } from "./conversation-types.ts";
+import type { TokenUsage } from "../api/token-usage.ts";
 
 import { i18n } from "../../i18n/index.ts";
 
@@ -108,6 +109,7 @@ function endTurn(
 	errorMessage: string | null | undefined,
 	timestampMs: number,
 	completion: "complete" | "interrupted" | "continued" = "complete",
+	usage: TokenUsage | null | undefined = undefined,
 ): ConversationState {
 	if (!state.active?.assistantMessageId) return { ...state, active: null };
 	const index = state.messages.findIndex(
@@ -158,6 +160,8 @@ function endTurn(
 		stopReason: stopReason ?? undefined,
 		errorMessage: visibleError,
 		completion,
+		// 同一轮可能有多个 segment；保留已有用量，只有新上报才覆盖。
+		usage: usage ?? current.usage,
 	};
 	return { ...state, messages, active: null };
 }
@@ -614,6 +618,7 @@ function reduceConversationAction(
 				action.errorMessage,
 				action.timestampMs ?? context.now(),
 				action.completion,
+				action.usage,
 			);
 	}
 }

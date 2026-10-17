@@ -662,6 +662,8 @@ const enUS = {
 		contextSection: "Context",
 		tokensSection: "Token usage",
 		tokensTotal: "Total",
+		turnTokens: "Turn tokens",
+		turnCost: "Turn cost",
 		totalCost: "Total cost",
 		input: "Input",
 		output: "Output",
@@ -687,6 +689,7 @@ const enUS = {
 		read: "Read",
 		skill: "Skill",
 		write: "Write",
+		openFile: "Open file {{path}}",
 		edit: "Edit",
 		search: "Search",
 		run: "Run",
@@ -978,4 +981,3 @@ const enUS = {
 } as const;
 
 export default enUS;
-		openFile: "Open file {{path}}",

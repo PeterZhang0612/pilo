@@ -1,5 +1,6 @@
 use serde_json::Value;
 
+use super::super::token_usage::TokenUsage;
 use super::parser_fields::{
     entry_id, entry_timestamp_ms, fallback_text, normalize_thinking, tool_result_payload,
     user_images, user_text,
@@ -11,6 +12,7 @@ struct TurnMeta {
     has_assistant: bool,
     stop_reason: Option<String>,
     error_message: Option<String>,
+    usage: Option<TokenUsage>,
     updated_at_ms: Option<i64>,
 }
 
@@ -134,6 +136,9 @@ fn project_message(
                 .get("errorMessage")
                 .and_then(Value::as_str)
                 .map(str::to_owned);
+            // 同一条轮次内多段 assistant 消息里，取最后一段的用量，
+            // 与实时事件路径（agent_settled 上报的最后一条消息）保持一致。
+            turn.usage = TokenUsage::from_json(message.get("usage"));
             turn.updated_at_ms = timestamp_ms.or(turn.updated_at_ms);
         }
         Some("toolResult") => {
@@ -349,6 +354,7 @@ fn finish_turn(events: &mut Vec<ConversationEventDto>, turn: &mut TurnMeta, eof:
         error_message: turn.error_message.take(),
         completion,
         timestamp_ms: turn.updated_at_ms,
+        usage: turn.usage.take(),
     });
     *turn = TurnMeta::default();
 }

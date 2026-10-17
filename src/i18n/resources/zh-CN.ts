@@ -643,6 +643,8 @@ const zhCN = {
 		contextSection: "上下文",
 		tokensSection: "Token 用量",
 		tokensTotal: "总计",
+		turnTokens: "本轮 Token",
+		turnCost: "本轮费用",
 		totalCost: "总费用",
 		input: "输入",
 		output: "输出",
@@ -668,6 +670,7 @@ const zhCN = {
 		read: "读取",
 		skill: "Skill",
 		write: "写入",
+		openFile: "打开文件 {{path}}",
 		edit: "编辑",
 		search: "搜索",
 		run: "运行",
@@ -956,4 +959,3 @@ const zhCN = {
 } as const satisfies TranslationShape<typeof enUS>;
 
 export default zhCN;
-		openFile: "打开文件 {{path}}",

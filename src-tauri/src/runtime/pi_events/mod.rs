@@ -8,12 +8,14 @@ use super::pi_event_adapters::{
     adapt_tool_execution_end, adapt_tool_execution_start, adapt_tool_execution_update,
     assistant_text, is_pilo_correlated_response, message_text,
 };
+use super::token_usage::TokenUsage;
 
 #[derive(Default)]
 pub struct PiEventAdapter {
     finalized_text: String,
     stop_reason: Option<String>,
     error_message: Option<String>,
+    usage: Option<TokenUsage>,
 }
 
 impl PiEventAdapter {
@@ -128,6 +130,8 @@ impl PiEventAdapter {
             .get("errorMessage")
             .and_then(Value::as_str)
             .map(str::to_owned);
+        // 每轮可能有多条 assistant 消息；最后一条覆盖前一条，与历史解析保持一致。
+        self.usage = TokenUsage::from_json(message.get("usage"));
     }
 
     fn adapt_agent_settled(&mut self, generation: u64) -> Vec<RuntimeEvent> {
@@ -135,6 +139,7 @@ impl PiEventAdapter {
             generation,
             stop_reason: self.stop_reason.take(),
             error_message: self.error_message.take(),
+            usage: self.usage.take(),
         };
         self.finalized_text.clear();
         vec![event]
