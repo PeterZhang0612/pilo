@@ -90,27 +90,33 @@ pub(crate) async fn environment_inspect(
     .await
     .map_err(|error| format!("project probe task failed: {error}"))??;
     let toolchain = cached_toolchain(state).await?;
-    let pi = if params.pi_runtime.as_deref() == Some("local") {
-        PiExecutableInfo {
-            executable: String::new(),
-            version: String::new(),
+    let pi_probe = async {
+        if params.pi_runtime.as_deref() == Some("local") {
+            Ok(PiExecutableInfo {
+                executable: String::new(),
+                version: String::new(),
+            })
+        } else {
+            probe_pi_executable(state, params.pi_executable.as_deref()).await
         }
-    } else {
-        probe_pi_executable(state, params.pi_executable.as_deref()).await?
     };
-    let git_branch = if toolchain.git_executable.is_empty() {
-        None
-    } else {
-        let value = command_text(
-            &toolchain.git_executable,
-            &["symbolic-ref", "--quiet", "--short", "HEAD"],
-            Some(&cwd),
-            &toolchain.path,
-        )
-        .await
-        .unwrap_or_default();
-        (!value.is_empty()).then_some(value)
+    let git_probe = async {
+        if toolchain.git_executable.is_empty() {
+            None
+        } else {
+            let value = command_text(
+                &toolchain.git_executable,
+                &["symbolic-ref", "--quiet", "--short", "HEAD"],
+                Some(&cwd),
+                &toolchain.path,
+            )
+            .await
+            .unwrap_or_default();
+            (!value.is_empty()).then_some(value)
+        }
     };
+    let (pi, git_branch) = tokio::join!(pi_probe, git_probe);
+    let pi = pi?;
     to_value(EnvironmentInfo {
         cwd: cwd.to_string_lossy().into_owned(),
         path: toolchain.path.clone(),
