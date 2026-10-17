@@ -60,6 +60,32 @@ them (`#[allow(...)]` only with a comment explaining why).
 - `pnpm tauri dev` and desktop-window/installer verification must run on Windows.
   WSL is for code, `cargo check`, and static validation only.
 
+### Linux Wayland window decorations
+
+- Keep the desktop Tauri dependency at `2.12` or newer and commit `Cargo.lock`.
+  `cargo tree --locked -i tao` must resolve Tao >= 0.36.0; older Tao forces GTK
+  client-side decorations even when KWin supports server-side decorations.
+- When upgrading the Rust `tauri` minor version, update the direct
+  `@tauri-apps/api` dependency and `pnpm-lock.yaml` to the same major/minor.
+  `pnpm build` does not run the Tauri packaging version check; verify the
+  installed API version against `Cargo.lock` before packaging.
+- Keep `app.windows[].decorations: true` in `src-tauri/tauri.conf.json`.
+  The Windows-only builder override in `desktop_window.rs` intentionally disables
+  decorations for its custom title bar; do not extend that override to Linux.
+- Do not use `GTK_CSD=0`, force X11, or install a custom GTK HeaderBar as a fix.
+  The upstream fix is https://tauri.app/release/tao/v0.36.0/.
+- After rebuilding, manually verify KDE title bar buttons and native Wayland
+  scaling on KWin. Static compilation cannot verify compositor behavior.
+- On Linux, initialize GLib's program name from the configured product name
+  before creating the Tauri runtime. GDK uses it as the Wayland `app_id` when
+  GTK application registration is disabled; it must match the case-sensitive
+  desktop entry basename (`Pilo` for `Pilo.desktop`), not `Icon=pilo` or the
+  executable name. This also covers secondary windows.
+- Keep `enableGTKAppId` disabled: enabling it registers on D-Bus and changes
+  multi-instance behavior. Do not change AppImage finalization just to fix the
+  installed deb/rpm window icon. Development builds use `Pilo Dev` and need a
+  matching desktop entry for compositor-provided icons.
+
 ### Bundled server resource paths
 
 - Initialize the server resource directory from `app.path().resource_dir()` in
@@ -80,10 +106,26 @@ them (`#[allow(...)]` only with a comment explaining why).
 
 ### Linux AppImage finalization
 
+- Desktop metadata lives in `bundle.category`, `shortDescription`,
+  `longDescription`, and `homepage`. deb and rpm share
+  `src-tauri/linux/pilo.desktop`; AppImage inherits the deb desktop template.
+  Use a `.desktop` extension: oxfmt treats `.hbs` as HTML and destroys the
+  required line-based desktop entry syntax.
+  Keep `Exec`, `Icon`, `Name`, and categories as Tauri template variables, retain
+  optional MIME associations, and validate the rendered desktop entry with
+  `desktop-file-validate`. Localized comments and search keywords belong in the
+  shared template, not in separate package-specific copies.
+- Align package and desktop descriptions with the English/Chinese README
+  introduction. Application versions inherit `[workspace.package].version`;
+  the optional desktop entry `Version` describes the file format, not Pilo's
+  release version, and must not be bumped with app releases.
+
 - Run `scripts/finalize-linux-appimage.sh <AppImage> <AppDir> <runtime-dir>
   <AppImage-output-plugin>` after Tauri bundling and before collecting assets.
-  It restores all four original server binaries into the prepared AppDir and
-  removes `libwayland-client.so*`, which conflicts with host Mesa/EGL.
+  It restores all four original server binaries into the prepared AppDir,
+  removes `libwayland-client.so*` that conflicts with host Mesa/EGL, and removes
+  linuxdeploy's forced `GDK_BACKEND=x11` so GTK can use native Wayland
+  per-monitor scaling while retaining its automatic X11 fallback.
 - Never run linuxdeploy over restored server resources: its ELF patching makes
   the static PIE Linux runtimes segfault even for `--fingerprint`. Repack with
   the AppImage output plugin alone, using the copy cached by Tauri.
