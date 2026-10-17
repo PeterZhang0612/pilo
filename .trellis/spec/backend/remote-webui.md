@@ -129,8 +129,12 @@ remote_devices(id, name, pair_ip, token_hash, created_at_ms, last_seen_at_ms, ex
 - **LAN discovery**: desktop-only, on picker open, never part of the 3-second
   state poll or an HTTP route. `remote/lan.rs` reads Up interfaces through Windows
   PowerShell/.NET, macOS `ifconfig -u`, or Linux `ip -o -4 addr show up`, with a
-  5-second timeout and child cleanup. Return numerically sorted, deduplicated IPv4
-  literals; exclude loopback, unspecified, link-local, multicast and broadcast.
+  5-second timeout and child cleanup. Return deduplicated IPv4 literals, preferring
+  Windows physical adapters identified by `Get-NetAdapter -Physical`, then RFC1918
+  addresses, then numeric IP order. If adapter classification is unavailable,
+  retain all candidates and fall back to RFC1918-first sorting; other platforms
+  also use this fallback. Keep virtual/VPN addresses selectable. Exclude loopback,
+  unspecified, link-local, multicast and broadcast.
   The listener is IPv4-only. The address-header icon picker combines each IP with
   the saved listener port, disables already-configured origins, and reuses the existing
   draft/save flow (including empty rows and the 32-address limit). Disable picks
