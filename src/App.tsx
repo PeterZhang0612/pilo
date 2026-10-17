@@ -32,6 +32,7 @@ import { ChatImageLightbox } from "@/components/chat/chat-image-viewer";
 import { ChatPageLoadingFallback } from "@/components/chat/chat-page-loading-fallback";
 import { NewChatLanding } from "@/components/new-chat-landing";
 import { SidebarFooter } from "@/components/sidebar-footer";
+import { BootShellRemover } from "@/components/boot-shell-remover";
 import { CUSTOM_TITLEBAR, IS_MACOS, TitleBar } from "@/components/title-bar";
 import type { ViewerOpenRequest } from "@/components/project-viewer";
 import { recordChatSessionSwitchStart } from "@/lib/chat/chat-performance";
@@ -278,6 +279,7 @@ function App() {
 
 	return (
 		<TooltipProvider>
+			<BootShellRemover ready={projectsReady && connectionsReady} />
 			<SessionMentionProvider
 				projects={projects}
 				sessions={sidebarSessions}

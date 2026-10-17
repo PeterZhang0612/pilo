@@ -25,6 +25,7 @@ import { PiExtensionUiDialog } from "@/components/chat/pi-extension-ui-dialog";
 import { ChatPendingQueue } from "@/components/chat/chat-pending-queue";
 import { useScrollbarGutterWidth } from "@/components/chat/use-scrollbar-gutter";
 import { DraftProjectPicker } from "@/components/chat/draft-project-picker";
+import { BootShellRemover } from "@/components/boot-shell-remover";
 import { SessionHeader } from "@/components/chat/chat-session-header";
 import {
 	ChatImageLightbox,
@@ -51,7 +52,10 @@ import { useRemoteTheme } from "./use-remote-theme";
 
 export function RemoteApp() {
 	return isRemotePairingLocation() ? (
-		<RemotePairingPage />
+		<>
+			<BootShellRemover />
+			<RemotePairingPage />
+		</>
 	) : (
 		<RemoteWorkspace />
 	);
@@ -314,6 +318,7 @@ function RemoteWorkspace() {
 	if (!token) {
 		return (
 			<div className="flex min-h-[var(--remote-viewport-height,100dvh)] items-center justify-center bg-background p-6">
+				<BootShellRemover />
 				<div className="w-full max-w-sm rounded-2xl border bg-card p-6 text-center shadow-sm">
 					<WifiOff className="mx-auto size-6 text-muted-foreground" />
 					<h1 className="mt-4 text-base font-semibold">Pilo Remote</h1>
@@ -362,6 +367,11 @@ function RemoteWorkspace() {
 
 	return (
 		<TooltipProvider>
+			<BootShellRemover
+				ready={
+					sessions.bootstrapSettled || !browserOnline || Boolean(fatalError)
+				}
+			/>
 			<SessionMentionProvider projects={projects} sessions={sidebarSessions}>
 				<SessionMentionScope
 					connectionId={chat.activeProject?.connection.id ?? ""}

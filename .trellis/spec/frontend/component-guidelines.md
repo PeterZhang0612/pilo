@@ -145,6 +145,22 @@ spacing, type sizes, or control heights.
   in VitePWA's CSS precache pattern. Declare
   `@layer theme, base, components, utilities` before injecting cached custom CSS
   so that user CSS cannot accidentally establish the wrong layer order.
+  Boot geometry must also match the mounted layout: read cached `uiFontSize`
+  with the same 15 default, 12–18 range and `/ 14` scale as PreferencesProvider;
+  mobile WebUI stays at 100%. Use sidebar row height/padding/gap tokens, not
+  pixel snapshots. Reserve the landing project-picker row (`pilo.boot.hasProjects`
+  is only a last-observed visibility hint written by DraftProjectPicker), otherwise
+  the centered hero moves when the composer dock grows. Hero logo/gap use rem;
+  heading size follows the conversation column's 40rem container breakpoint,
+  not viewport width. Wide WebUI retains its sidebar; <=1023px hides it.
+  `BootShellRemover` belongs to the ready screen, not the unconditional root
+  bootstrap: desktop waits for `projectsReady && connectionsReady`; WebUI waits
+  for the first bootstrap attempt to settle, while offline/auth/pairing/error
+  screens must still be revealed. Wait for `document.fonts.ready` before the
+  removal frame. A first React commit can have no projects yet; revealing it
+  moves the hero down, then back up when the picker arrives (~18px observed on
+  Windows). Verify the last boot frame against the first uncovered frame and
+  later frames through the desktop WebDriver, not just steady-state rectangles.
 - `--pilo-conversation-max-width` is the shared desktop/session/WebUI measure;
   omitting it uses device defaults, and narrow WebUI stays full-width.
   Android `theme-color` follows computed `--background` after family/mode/CSS

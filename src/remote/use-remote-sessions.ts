@@ -32,6 +32,7 @@ export function useRemoteSessions({
 	snapshotRefreshKey,
 }: UseRemoteSessionsOptions) {
 	const [projects, setProjects] = useState<Project[]>([]);
+	const [bootstrapSettled, setBootstrapSettled] = useState(false);
 	const [chatSessions, setChatSessions] = useState<
 		PiloClientBootstrap["chatSessions"]
 	>([]);
@@ -73,6 +74,8 @@ export function useRemoteSessions({
 			if (!handleExpiredAuth(error)) {
 				setFatalError(error instanceof Error ? error.message : String(error));
 			}
+		} finally {
+			setBootstrapSettled(true);
 		}
 	}, [client, handleExpiredAuth, setFatalError]);
 
@@ -362,6 +365,7 @@ export function useRemoteSessions({
 
 	return {
 		projects,
+		bootstrapSettled,
 		chatSessions,
 		rawSessions,
 		removeIndexedSession,

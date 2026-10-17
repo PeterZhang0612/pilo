@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -23,7 +24,15 @@ export function DraftProjectPicker({
 	onSwitchProject?: (projectId: string) => void;
 }) {
 	const { t } = useTranslation();
-	if (projects.length === 0) return null;
+	const hasProjects = projects.length > 0;
+	useEffect(() => {
+		try {
+			localStorage.setItem("pilo.boot.hasProjects", hasProjects ? "1" : "0");
+		} catch {
+			// This is only a startup geometry hint, never project state.
+		}
+	}, [hasProjects]);
+	if (!hasProjects) return null;
 	return (
 		<div className="flex pb-1.5 pl-1">
 			<DropdownMenu>

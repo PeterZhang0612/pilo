@@ -1,16 +1,19 @@
-import React, { useEffect } from "react";
+import React from "react";
 import { createRoot } from "react-dom/client";
 
 import {
 	initializeI18n,
 	readStoredLocale,
 	resolveInitialLocale,
+	resources,
 	i18n,
 } from "@/i18n";
+import { primeRuntimeEventChannel } from "@/lib/api/pi-runtime";
 import { tightenTripleClickSelection } from "@/lib/dom-text-selection";
 import { PreferencesProvider } from "@/lib/preferences-provider";
+import { BootShellRemover } from "@/components/boot-shell-remover";
 import { ThemeProvider } from "@/lib/theme-provider";
-import { Toaster } from "@/ui";
+import { Button, Toaster } from "@/ui";
 
 import "./index.css";
 
@@ -101,16 +104,6 @@ function disableBrowserContextMenu() {
 	);
 }
 
-function BootShellRemover() {
-	useEffect(() => {
-		const frame = window.requestAnimationFrame(() => {
-			document.getElementById("pilo-boot-shell")?.remove();
-		});
-		return () => window.cancelAnimationFrame(frame);
-	}, []);
-	return null;
-}
-
 /** 全局兜底：渲染期崩溃时给出可恢复的错误页，而不是白屏。 */
 class RootErrorBoundary extends React.Component<
 	{ children: React.ReactNode },
@@ -131,6 +124,7 @@ class RootErrorBoundary extends React.Component<
 		if (error) {
 			return (
 				<div className="flex h-screen flex-col items-center justify-center gap-4 bg-background p-8 text-center">
+					<BootShellRemover />
 					<p className="text-lg font-medium text-foreground">
 						{i18n.t("app.interfaceError")}
 					</p>
@@ -160,6 +154,35 @@ class RootErrorBoundary extends React.Component<
 	}
 }
 
+function BootstrapErrorFallback() {
+	const locale = resolveInitialLocale(readStoredLocale(), navigator.language);
+	// Startup can fail before i18n initializes; bundled copy is always available.
+	const { app, common } = resources[locale].translation;
+	React.useLayoutEffect(() => {
+		// Error recovery must not wait for fonts or the normal app readiness signal.
+		document.getElementById("pilo-boot-shell")?.remove();
+	}, []);
+	return (
+		<div
+			role="alert"
+			className="flex h-dvh flex-col items-center justify-center gap-4 overflow-y-auto bg-background p-8 text-center"
+		>
+			<p className="text-lg font-medium text-foreground">{common.loadFailed}</p>
+			<p className="max-w-md text-sm text-muted-foreground">
+				{app.unexpectedError}
+			</p>
+			<Button
+				type="button"
+				variant="outline"
+				className="min-h-11"
+				onClick={() => window.location.reload()}
+			>
+				{app.reload}
+			</Button>
+		</div>
+	);
+}
+
 async function bootstrap() {
 	if (DESKTOP_RUNTIME) {
 		await installDesktopLogging();
@@ -181,12 +204,10 @@ async function bootstrap() {
 		const [
 			{ installChatPerformanceDebugApi },
 			{ installChatRuntimeTraceDebugApi },
-			{ primeRuntimeEventChannel },
 			{ installDesktopTrayLabels },
 		] = await Promise.all([
 			import("@/lib/chat/chat-performance-debug"),
 			import("@/lib/chat/chat-runtime-trace-debug"),
-			import("@/lib/api/pi-runtime"),
 			import("@/lib/desktop-integration"),
 		]);
 		installChatRuntimeTraceDebugApi();
@@ -198,7 +219,7 @@ async function bootstrap() {
 		RootApp = (await import("@/remote/remote-app")).RemoteApp;
 	}
 
-	createRoot(document.getElementById("root") as HTMLElement).render(
+	root.render(
 		<React.StrictMode>
 			<RootErrorBoundary>
 				<ThemeProvider>
@@ -212,7 +233,6 @@ async function bootstrap() {
 								bottom: "calc(16px + env(safe-area-inset-bottom))",
 							}}
 						/>
-						<BootShellRemover />
 					</PreferencesProvider>
 				</ThemeProvider>
 			</RootErrorBoundary>
@@ -220,7 +240,10 @@ async function bootstrap() {
 	);
 }
 
+const root = createRoot(document.getElementById("root") as HTMLElement);
+
 installGlobalErrorLogging();
 void bootstrap().catch((error: unknown) => {
 	console.error("Failed to bootstrap frontend", error);
+	root.render(<BootstrapErrorFallback />);
 });

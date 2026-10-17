@@ -50,17 +50,17 @@ export function ChatRuntimeRecoveryNotice({
 		<NoticeCard
 			announce={state.status === "failed" ? "alert" : "status"}
 			ariaLive="polite"
-			className="px-3 py-2"
+			className="@container/recovery px-3 py-2"
 		>
-			<div className="flex min-w-0 items-start gap-2.5">
+			<div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2.5 gap-y-2 @min-[28rem]/recovery:grid-cols-[auto_minmax(0,1fr)_auto]">
 				{recovering ? (
-					<NoticeIcon icon={Spinner} />
+					<NoticeIcon icon={Spinner} className="mt-0" />
 				) : recovered ? (
-					<NoticeIcon icon={CircleCheck} tone="success" />
+					<NoticeIcon icon={CircleCheck} tone="success" className="mt-0" />
 				) : (
-					<NoticeIcon icon={TriangleAlert} tone="warning" />
+					<NoticeIcon icon={TriangleAlert} tone="warning" className="mt-0" />
 				)}
-				<div className="min-w-0 flex-1">
+				<div className="min-w-0">
 					<div className="font-medium text-foreground/85">
 						{recovering
 							? t("chat.reconnectingTitle")
@@ -79,7 +79,7 @@ export function ChatRuntimeRecoveryNotice({
 						type="button"
 						variant="ghost"
 						size="sm"
-						className="h-7 shrink-0 gap-1.5 px-2 text-2xs text-muted-foreground"
+						className="col-start-2 h-7 max-w-full shrink-0 justify-self-start gap-1.5 whitespace-normal px-2 text-2xs text-muted-foreground @min-[28rem]/recovery:col-start-3 @min-[28rem]/recovery:row-start-1 pointer-coarse:min-h-11"
 						onClick={action.onClick}
 					>
 						<RefreshCw className="size-3" />
