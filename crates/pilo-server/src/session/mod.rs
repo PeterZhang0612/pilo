@@ -21,7 +21,12 @@ pub(crate) use index::{
 pub(crate) use watch::{collect_session_change_paths, is_session_change};
 
 fn session_dir_key(project: &str) -> String {
-    let normalized = project.trim().trim_start_matches(['/', '\\']);
+    let project = project.trim();
+    // Pi removes one leading separator, including for UNC paths.
+    let normalized = project
+        .strip_prefix('/')
+        .or_else(|| project.strip_prefix('\\'))
+        .unwrap_or(project);
     format!("--{}--", normalized.replace(['/', '\\', ':'], "-"))
 }
 
@@ -32,4 +37,24 @@ fn agent_dir() -> Option<PathBuf> {
         .or_else(|| {
             std::env::var_os("USERPROFILE").map(|home| PathBuf::from(home).join(".pi/agent"))
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::session_dir_key;
+
+    #[test]
+    fn session_directory_keys_match_pi_for_drive_unc_and_posix_paths() {
+        for (project, expected) in [
+            (r"D:\work", "--D--work--"),
+            ("D:/work", "--D--work--"),
+            (r"\\host\share\work", "---host-share-work--"),
+            ("//host/share/work", "---host-share-work--"),
+            ("/home/user/work", "--home-user-work--"),
+            (" /home/user/work ", "--home-user-work--"),
+            ("/", "----"),
+        ] {
+            assert_eq!(session_dir_key(project), expected, "project={project:?}");
+        }
+    }
 }

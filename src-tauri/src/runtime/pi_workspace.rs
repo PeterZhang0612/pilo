@@ -28,7 +28,7 @@ pub(crate) fn resolve_session_project_with_paths(
     project: &Project,
 ) -> Result<Project, String> {
     match project.connection.pi_runtime {
-        PiRuntime::Workspace => Ok(project.clone()),
+        PiRuntime::Workspace => Ok(normalize_local_pi_project(project.clone())),
         PiRuntime::Local => local_runtime_project(paths, project),
     }
 }
@@ -48,7 +48,7 @@ pub(crate) fn resolve_pi_runtime_with_paths(
 ) -> Result<PiRuntimeProfile, String> {
     match project.connection.pi_runtime {
         PiRuntime::Workspace => Ok(PiRuntimeProfile {
-            project: project.clone(),
+            project: normalize_local_pi_project(project.clone()),
             extensions,
             builtin_extensions: Vec::new(),
             disable_builtin_tools: false,
@@ -96,7 +96,24 @@ fn local_runtime_project(paths: &HostPaths, project: &Project) -> Result<Project
     runtime_project.connection = local_connection;
     runtime_project.metadata.cwd = runtime_project.path.clone();
     runtime_project.metadata.git_branch = None;
-    Ok(runtime_project)
+    Ok(normalize_local_pi_project(runtime_project))
+}
+
+fn normalize_local_pi_project(mut project: Project) -> Project {
+    if cfg!(windows) && matches!(project.connection.kind, ConnectionKind::Local) {
+        // Pi encodes cwd as a directory name; a verbatim prefix leaves an illegal '?'.
+        project.path = if let Some(path) = project.path.strip_prefix(r"\\?\UNC\") {
+            format!(r"\\{path}")
+        } else {
+            project
+                .path
+                .strip_prefix(r"\\?\")
+                .unwrap_or(&project.path)
+                .to_owned()
+        };
+        project.metadata.cwd = project.path.clone();
+    }
+    project
 }
 
 fn local_session_anchor(paths: &HostPaths, project_id: &str) -> Result<std::path::PathBuf, String> {
@@ -117,5 +134,89 @@ pub(crate) fn remove_session_anchor(app: &AppHandle, project_id: &str) -> Result
         Err(error) => Err(format!(
             "failed to remove local Pi workspace anchor: {error}"
         )),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::{Connection, ProjectMetadata, SshAuthMethod, SshTarget};
+
+    fn test_project(kind: ConnectionKind, path: &str) -> Project {
+        Project {
+            id: Project::stable_id("test-connection", path),
+            name: "work".to_owned(),
+            path: path.to_owned(),
+            connection: Connection {
+                id: "test-connection".to_owned(),
+                name: "Test".to_owned(),
+                pi_executable: None,
+                pi_runtime: PiRuntime::Workspace,
+                kind,
+                shown_in_home: true,
+            },
+            metadata: ProjectMetadata {
+                cwd: path.to_owned(),
+                git_branch: Some("main".to_owned()),
+                pi_version: "1.0.0".to_owned(),
+                refreshed_at_ms: 1,
+            },
+            created_at_ms: 1,
+            last_opened_at_ms: 2,
+        }
+    }
+
+    fn assert_workspace_adapters(project: &Project, expected_path: &str) {
+        // Workspace adapters must not need a database or touch this directory.
+        let paths = HostPaths::for_test("unused-pi-workspace-test".into());
+        let mut expected = project.clone();
+        expected.path = expected_path.to_owned();
+        expected.metadata.cwd = expected_path.to_owned();
+
+        assert_eq!(
+            resolve_session_project_with_paths(&paths, project).unwrap(),
+            expected
+        );
+        assert_eq!(
+            resolve_pi_runtime_with_paths(&paths, project, Vec::new())
+                .unwrap()
+                .project,
+            expected
+        );
+    }
+
+    #[test]
+    fn local_workspace_adapters_agree_on_pi_cwd_without_changing_identity() {
+        for (path, windows_path) in [
+            (r"D:\work", r"D:\work"),
+            (r"\\?\D:\work", r"D:\work"),
+            (r"\\host\share\work", r"\\host\share\work"),
+            (r"\\?\UNC\host\share\work", r"\\host\share\work"),
+            ("/home/user/work", "/home/user/work"),
+        ] {
+            let project = test_project(ConnectionKind::Local, path);
+            let expected_path = if cfg!(windows) { windows_path } else { path };
+            assert_workspace_adapters(&project, expected_path);
+        }
+    }
+
+    #[test]
+    fn remote_workspace_adapters_leave_paths_unchanged() {
+        for kind in [
+            ConnectionKind::Wsl {
+                distro: "Debian".to_owned(),
+            },
+            ConnectionKind::Ssh {
+                target: SshTarget::ConfigHost {
+                    host: "devbox".to_owned(),
+                    auth_method: SshAuthMethod::Agent,
+                },
+            },
+        ] {
+            for path in ["/srv/work", r"\\?\D:\work", r"\\?\UNC\host\share\work"] {
+                let project = test_project(kind.clone(), path);
+                assert_workspace_adapters(&project, path);
+            }
+        }
     }
 }

@@ -10,6 +10,11 @@ pub(crate) struct HostPaths {
 }
 
 impl HostPaths {
+    #[cfg(test)]
+    pub(crate) fn for_test(app_data_dir: PathBuf) -> Self {
+        Self { app_data_dir }
+    }
+
     pub(crate) fn from_app(app: &AppHandle) -> Result<Self, String> {
         let app_data_dir = app
             .path()
