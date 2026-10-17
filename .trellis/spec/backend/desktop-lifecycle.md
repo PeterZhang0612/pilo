@@ -52,10 +52,13 @@ a browser tab does not hide or terminate the desktop Host.
   launch activation policy during setup, and uses Regular for visible windows /
   Accessory when none remain. Do not remove the Dock icon while another session
   window is visible. Windows hidden windows skip the taskbar; restore clears it.
-- Use the transparent cloud mark in `assets/branding/tray*.svg`. The 44px RGBA
-  template PNG is monochrome for macOS; the 32px RGBA colored PNG is for other
-  platforms. `include_image!` embeds pixels at compile time, without requiring
-  Tauri's runtime `image-png` feature. macOS left-click opens the menu; Windows
+- Keep transparent tray marks in `assets/branding/tray*.svg` and regenerate the
+  corresponding PNG when editing an SVG. Both variants share the ghost silhouette
+  and eye positions. The 44px RGBA template PNG is monochrome with transparent
+  eyes for macOS system tinting; the 32px RGBA colored PNG uses blue with white
+  eyes for Windows/Linux, remaining distinct on light and dark trays.
+  `include_image!` embeds pixels at compile time, without requiring Tauri's
+  runtime `image-png` feature. macOS left-click opens the menu; Windows
   left-click restores main and right-click opens the menu.
 - Register the saved combination through the official global-shortcut plugin
   during native setup, before tray creation. The default `mod+alt+p` resolves to
