@@ -7,6 +7,7 @@ import {
 	CircleAlert,
 	CodeXml,
 	FileText,
+	ListTodo,
 	PencilLine,
 	Plug,
 	Puzzle,
@@ -17,6 +18,7 @@ import {
 } from "lucide-react";
 
 import { ChatMarkdown } from "@/components/chat/chat-markdown";
+import { ChatTodoList } from "@/components/chat/chat-todo-capsule";
 import { toggleChatExpansionWithAnchor } from "@/components/chat/chat-expansion-anchor";
 import { useChatExpansionState } from "@/components/chat/chat-expansion-state";
 import {
@@ -36,6 +38,12 @@ import {
 	toolFilePath,
 	toolPreview,
 } from "@/lib/chat/chat-tool-result";
+import {
+	countChatTodos,
+	isChatTodoTool,
+	parseChatTodos,
+	type ChatTodoItem,
+} from "@/lib/chat/chat-todos";
 import { formatWorkDuration } from "@/lib/format-duration";
 import { usePreferences } from "@/lib/preferences-provider";
 import { cn } from "@/lib/utils";
@@ -106,6 +114,7 @@ function ToolIcon({
 }) {
 	if (isSkill) return <Puzzle className={className} />;
 	if (toolName.startsWith("mcp__")) return <Plug className={className} />;
+	if (isChatTodoTool(toolName)) return <ListTodo className={className} />;
 
 	switch (toolName.toLowerCase()) {
 		case "codemode":
@@ -135,6 +144,7 @@ function ToolIcon({
 function toolLabel(t: TFunction, toolName: string) {
 	const mcpTool = toolName.match(/^mcp__(.+?)__(.+)$/);
 	if (mcpTool) return `${mcpTool[1]}/${mcpTool[2]}`;
+	if (isChatTodoTool(toolName)) return t("chat.todos");
 
 	switch (toolName.toLowerCase()) {
 		case "tool_search":
@@ -242,9 +252,11 @@ function ThinkingActivityView({
 function ToolDetail({
 	activity,
 	writeContent,
+	todos,
 }: {
 	activity: ToolCallActivity;
 	writeContent: string | null;
+	todos: ChatTodoItem[] | null;
 }) {
 	const { t, i18n } = useTranslation();
 	const hasArgs = activity.args !== undefined && activity.args !== null;
@@ -271,6 +283,15 @@ function ToolDetail({
 	const wallTimeSeconds = flattenedResult?.wallTimeSeconds;
 	const hasExecutionSummary =
 		exitCode != null || wallTimeSeconds != null || flattenedResult?.truncated;
+
+	// 待办清单自带结构化展示，不再回落到参数/结果的 JSON 文本。
+	if (todos) {
+		return (
+			<div className="w-full pb-1 pt-0.5 font-normal text-muted-foreground">
+				<ChatTodoList items={todos} className="py-1" />
+			</div>
+		);
+	}
 
 	if (
 		writeContent === null &&
@@ -343,12 +364,19 @@ function ToolCallActivityView({
 	const [open, setOpen] = useChatExpansionState(expansionKey, false);
 	const preview = toolPreview(activity);
 	const filePath = toolFilePath(activity);
+	const todos = isChatTodoTool(activity.toolName)
+		? parseChatTodos(activity.args, activity.result)
+		: null;
 	const skillName =
 		activity.toolName.toLowerCase() === "read"
 			? filePath?.replace(/\\/g, "/").match(/(?:^|\/)([^/]+)\/SKILL\.md$/)?.[1]
 			: null;
-	const previewLabel =
-		skillName ?? (filePath ? fileBasename(filePath) : preview);
+	const previewLabel = todos
+		? t("chat.todoProgress", {
+				done: countChatTodos(todos).completed,
+				total: todos.length,
+			})
+		: (skillName ?? (filePath ? fileBasename(filePath) : preview));
 	const writeContent =
 		activity.toolName.toLowerCase() === "write" &&
 		isRecord(activity.args) &&
@@ -356,6 +384,7 @@ function ToolCallActivityView({
 			? activity.args.content
 			: null;
 	const hasDetails =
+		todos !== null ||
 		writeContent !== null ||
 		(activity.args !== undefined &&
 			activity.args !== null &&
@@ -410,7 +439,11 @@ function ToolCallActivityView({
 				) : null}
 			</button>
 			{hasDetails && open ? (
-				<ToolDetail activity={activity} writeContent={writeContent} />
+				<ToolDetail
+					activity={activity}
+					writeContent={writeContent}
+					todos={todos}
+				/>
 			) : null}
 		</div>
 	);
