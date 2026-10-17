@@ -956,3 +956,4 @@ const zhCN = {
 } as const satisfies TranslationShape<typeof enUS>;
 
 export default zhCN;
+		openFile: "打开文件 {{path}}",

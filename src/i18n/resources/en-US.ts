@@ -978,3 +978,4 @@ const enUS = {
 } as const;
 
 export default enUS;
+		openFile: "Open file {{path}}",
