@@ -13,7 +13,7 @@ use tauri::Manager;
 use crate::runtime::{
     PiloRuntime, RuntimeEventBus,
     chat_service::{self, ChatSessionRequest},
-    pi_workspace, remote_fs, session_history, session_index, storage,
+    pi_workspace, remote_fs, session_history, storage,
 };
 
 use super::{RemoteHttpState, api_error, get_project};
@@ -108,6 +108,8 @@ pub(super) async fn session_mark_read(
 #[serde(rename_all = "camelCase")]
 pub(super) struct SessionsQuery {
     project_id: String,
+    #[serde(default)]
+    cached: bool,
 }
 
 pub(super) async fn sessions(
@@ -118,9 +120,20 @@ pub(super) async fn sessions(
         Ok(project) => project,
         Err(error) => return api_error(StatusCode::NOT_FOUND, &error),
     };
-    let runtime = state.app.state::<PiloRuntime>();
-    match session_index::reconcile(&state.app, &runtime.servers, &project).await {
-        Ok(work) => Json(work.result.sessions).into_response(),
+    if query.cached {
+        return match crate::runtime::commands::session_list(state.app.clone(), project.id) {
+            Ok(sessions) => Json(sessions).into_response(),
+            Err(error) => api_error(StatusCode::INTERNAL_SERVER_ERROR, &error),
+        };
+    }
+    match crate::runtime::commands::session_reconcile(
+        state.app.clone(),
+        state.app.state::<PiloRuntime>(),
+        project.id,
+    )
+    .await
+    {
+        Ok(result) => Json(result.sessions).into_response(),
         Err(error) => api_error(StatusCode::INTERNAL_SERVER_ERROR, &error),
     }
 }

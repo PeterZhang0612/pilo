@@ -141,6 +141,7 @@ function RemoteWorkspace() {
 		setFatalError,
 		token,
 	} = connection;
+	const visibleError = fatalError ?? sessions.refreshError;
 	const active = chat.conversationUi.active;
 	const updateBlocked =
 		active || chat.sending || chat.compacting || chat.retryState !== null;
@@ -289,7 +290,7 @@ function RemoteWorkspace() {
 
 	// 移动端侧栏长按删除：删除后从本地索引移除，避免整个侧栏重刷。
 	const { client, handleExpiredAuth } = connection;
-	const { setRawSessions } = sessions;
+	const { removeIndexedSession } = sessions;
 	const handleDeleteMobileSession = useCallback(
 		(sessionId: string, projectId: string) => {
 			const session = sidebarSessions.find(
@@ -299,13 +300,7 @@ function RemoteWorkspace() {
 			void client
 				.deleteSession(session.projectId, session.sessionPath)
 				.then(() => {
-					setRawSessions((current) =>
-						current.filter(
-							(item) =>
-								item.projectId !== projectId ||
-								item.sessionPath !== session.sessionPath,
-						),
-					);
+					removeIndexedSession(projectId, session.sessionPath);
 				})
 				.catch((error) => {
 					if (!handleExpiredAuth(error)) {
@@ -313,7 +308,7 @@ function RemoteWorkspace() {
 					}
 				});
 		},
-		[client, handleExpiredAuth, setRawSessions, sidebarSessions],
+		[client, handleExpiredAuth, removeIndexedSession, sidebarSessions],
 	);
 
 	if (!token) {
@@ -645,13 +640,24 @@ function RemoteWorkspace() {
 
 						<ChatImageLightbox />
 
-						{fatalError ? (
-							<div className="fixed inset-x-3 bottom-24 z-50 mx-auto max-w-lg rounded-xl border border-destructive/30 bg-background px-3 py-2 text-xs shadow-lg">
+						{visibleError ? (
+							<div
+								role="alert"
+								className="fixed inset-x-3 bottom-24 z-50 mx-auto max-w-lg rounded-xl border border-destructive/30 bg-background px-3 py-2 text-xs shadow-lg"
+							>
 								<div className="flex items-start gap-2">
-									<p className="min-w-0 flex-1 text-destructive">
-										{fatalError}
+									<p className="min-w-0 flex-1 break-words text-destructive">
+										{visibleError}
 									</p>
-									<button type="button" onClick={() => setFatalError(null)}>
+									<button
+										type="button"
+										aria-label={t("common.close")}
+										className="flex size-11 shrink-0 items-center justify-center rounded-md"
+										onClick={() => {
+											setFatalError(null);
+											sessions.clearRefreshErrors();
+										}}
+									>
 										<X className="size-3.5" />
 									</button>
 								</div>

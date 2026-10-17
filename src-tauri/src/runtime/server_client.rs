@@ -158,8 +158,13 @@ impl ServerClient {
                 .collect::<Vec<_>>();
             if !missing_capabilities.is_empty() {
                 client.stop().await;
+                let recovery = if cfg!(debug_assertions) {
+                    "rebuild the development runtime with pnpm server:build for the connection's platform in the checkout running Pilo, then restart Pilo"
+                } else {
+                    "update or reinstall Pilo so the bundled runtime matches the app"
+                };
                 return handshake.finish(Err(format!(
-                    "pilo-server is missing required capabilities: {}",
+                    "pilo-server is missing required capabilities: {}; {recovery}. Also check PILO_SERVER_PATH and PILO_SERVER_LINUX_PATH overrides",
                     missing_capabilities.join(", ")
                 )));
             }

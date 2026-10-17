@@ -9,7 +9,7 @@ use crate::domain::{Project, SessionIndexEntry, SessionReconcileResult};
 
 use super::{pi_workspace, server_client::ServerManager, storage};
 
-const INITIAL_SESSION_INDEX_LIMIT: usize = 20;
+const INITIAL_SESSION_INDEX_LIMIT: usize = 10;
 pub const BACKGROUND_SESSION_INDEX_BATCH: usize = 64;
 
 #[derive(Default)]

@@ -91,6 +91,10 @@ export class WebPiloClient implements PiloClient {
 		return saveRemoteThemeSettings(this.token, update);
 	}
 
+	listCachedSessions(projectId: string): Promise<SessionIndexEntry[]> {
+		return loadRemoteSessions(this.token, projectId, true);
+	}
+
 	listSessions(projectId: string): Promise<SessionIndexEntry[]> {
 		return loadRemoteSessions(this.token, projectId);
 	}

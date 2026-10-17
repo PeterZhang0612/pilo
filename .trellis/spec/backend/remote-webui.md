@@ -71,7 +71,7 @@ Authenticated (`require_auth` middleware):
 GET  /api/v1/bootstrap       -> { projects, chatSessions, latestSequence }
 GET  /api/v1/theme           -> ThemeSettings (Host SQLite)
 POST /api/v1/theme           -> ThemeSettingsUpdate body -> committed ThemeSettings
-GET  /api/v1/sessions?projectId=...
+GET  /api/v1/sessions?projectId=...&cached=true // optional; default reconciles JSONL
 GET  /api/v1/history?projectId=&sessionPath=&startMessage=&messageLimit=&includeMessageIndex=
 GET  /api/v1/models?projectId=... -> ProjectModelCache | null  (Host-cached model and command catalog)
 POST /api/v1/models          -> ProjectModelCache        body: ProjectModelCache (Host assigns timestamp)
@@ -96,6 +96,10 @@ GET  /api/v1/events          -> WebSocket upgrade
 - Transport-only heartbeat: client `{ type: "ping" }`, server `{ type: "pong" }`.
   The Web adapter consumes pong; it is not a sequenced runtime event or a resync.
 - `SequencedRuntimeEvent` = `{ sequence, ...RuntimeEventEnvelope }` (flattened).
+- Background index events are global, without Pi generation/session keys:
+  `sessions_indexed { projectId }` once after the background worker finishes and
+  `session_index_error { projectId, message }` on worker failure. They bypass
+  conversation reducers; indexed notifications read `cached=true`, not rescan.
 - Token is read from `Authorization: Bearer` **or** the `pilo-token.` subprotocol
   — never from the URL query.
 
@@ -276,6 +280,27 @@ remote_devices(id, name, pair_ip, token_hash, created_at_ms, last_seen_at_ms, ex
   Ordinary reconnects consume sequence replay and refresh bootstrap/session
   metadata; only an explicit `resyncRequired` frame may trigger full history
   resync.
+- **Cached session-list recovery**: `cached=true` reads the Host SQLite index
+  through `session_list`, without requiring a live server. WebUI loads it before
+  normal reconciliation and retains it on scan failure. Normal requests reuse
+  `session_reconcile`, including deferred background indexing. Initial imports
+  synchronously summarize the latest 10 files; ordinary refreshes use the same
+  10-summary budget so fork/rename flows can immediately observe new metadata.
+  Remaining files are indexed in background batches of 64, with one desktop/WebUI
+  notification after the worker finishes, not after each batch, to avoid repeated
+  sidebar reordering. Cached event reads wait for queued reconciles to settle;
+  WebUI discards superseded event reads and disposed effects. Foreground cache
+  reads and scan attempts advance a shared per-project session revision; removing
+  an indexed session advances it too. Every list response checks its captured
+  revision before replacing that project's rows, so a late response cannot undo
+  a newer refresh or deletion. Background reads capture the revision after waiting.
+  Refreshes for one project are serialized and overlapping requests queue a rerun,
+  even when the current scan fails. Authentication expiry stops the queue;
+  otherwise report a scan failure only when no rerun is pending. Per-project
+  refresh errors stay visible independently of successful bootstrap responses;
+  success clears only that project's error. Server capability mismatches remain
+  fatal: rebuild the matching dev runtime in the checkout running Pilo and restart,
+  or update the release bundle; never remove required capabilities as a workaround.
 - **Remote session-list refresh**: stable project IDs prevent activity-only
   bootstrap updates from restarting every project scan or external-activity
   poll. `scheduleRuntimeActivityRefresh(projectId?: string)` batches affected
@@ -314,6 +339,7 @@ remote_devices(id, name, pair_ip, token_hash, created_at_ms, last_seen_at_ms, ex
 | RPC `type` not in allowlist                 | `400 chat command '<type>' is not available…`   |
 | Non-image attachment / wrong mime / too big | `400 …` (see `validate_remote_images`)          |
 | Unknown project/session                     | `404`                                           |
+| Session scan fails (including stale server)  | `500`; WebUI retains the Host index and displays the error |
 | Handler `Result::Err(String)`               | `400` for chat start/rpc, `500` for internal    |
 | Request body over `MAX_REQUEST_BYTES`       | rejected by `DefaultBodyLimit`                  |
 | Handler over 45 s                           | `408` (Tower timeout)                           |
@@ -340,6 +366,8 @@ remote_devices(id, name, pair_ip, token_hash, created_at_ms, last_seen_at_ms, ex
 - **Good foreground**: hide a WebUI with a pending/completed suggestion for more
   than 1.5 seconds, return with its socket intact, and retain the suggestion
   without a new prediction call. A stale socket still reconnects after probe failure.
+- **Good session recovery**: reloading WebUI with an unavailable/stale server
+  still displays previously indexed sessions and reports the scan error.
 - **Base**: Remote disabled → no listener, no port, Desktop path unchanged.
 - **Bad pairing**: an unreachable target is not authenticated. Retry before TTL
   or obtain a fresh scan after expiry. Another proof cannot retrieve an issued
@@ -351,6 +379,19 @@ remote_devices(id, name, pair_ip, token_hash, created_at_ms, last_seen_at_ms, ex
 ---
 
 ## 6. Tests Required
+
+Session recovery assertions, pending explicit authorization (no tests added or
+run): cached reads do not contact the server; unknown projects remain 404;
+scan failures retain cached sessions; bootstrap success cannot clear scan errors;
+successful retry clears only its project's error; overlapping refreshes rerun
+serially after either success or failure, but stop on authentication expiry;
+late background-cache and foreground-scan responses cannot overwrite a newer
+refresh or restore a removed session; initial import returns the latest 10
+summaries and defers the rest.
+Verify one desktop/WebSocket update after background work finishes (no per-batch
+sidebar reordering), cached-only notification reads, visible background errors,
+and a late reconcile response not overwriting the completed index. Fork navigation must still observe
+its new indexed session before switching.
 
 Foreground recovery assertions, pending explicit authorization (not run): healthy
 socket ping/pong or intervening events preserves input assistance; silent socket
@@ -421,6 +462,11 @@ Additional multi-address assertion points, pending explicit test authorization
 ---
 
 ## 7. Wrong vs Correct
+
+Session recovery: wrong — block cached session access on a successful remote scan
+or swallow scan errors into console-only output. Correct — read the Host index
+first, reconcile separately, and keep the refresh error visible until retry or
+dismissal. Cached rows do not imply a working server connection.
 
 #### Wrong
 

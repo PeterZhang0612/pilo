@@ -214,11 +214,17 @@ export function loadRemoteBootstrap(token: string) {
 	return remoteFetch<PiloClientBootstrap>(token, "/api/v1/bootstrap");
 }
 
-export function loadRemoteSessions(token: string, projectId: string) {
+export function loadRemoteSessions(
+	token: string,
+	projectId: string,
+	cached = false,
+) {
 	const query = new URLSearchParams({ projectId });
+	if (cached) query.set("cached", "true");
 	return remoteFetch<SessionIndexEntry[]>(
 		token,
 		`/api/v1/sessions?${query.toString()}`,
+		{ cache: "no-store" },
 	);
 }
 

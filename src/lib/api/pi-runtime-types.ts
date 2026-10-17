@@ -163,6 +163,8 @@ export type PiloRuntimeEvent = {
 } & (
 	| { type: "theme_settings_changed"; settings: ThemeSettings }
 	| { type: "project_model_scope_changed"; scope: ProjectModelScope }
+	| { type: "sessions_indexed"; projectId: string }
+	| { type: "session_index_error"; projectId: string; message: string }
 	| {
 			type: "cache_keep_alive_settings_changed";
 			settings: CacheKeepAliveSettings;
