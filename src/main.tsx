@@ -73,6 +73,17 @@ async function installDesktopLogging() {
 	};
 }
 
+function installGlobalErrorLogging() {
+	window.addEventListener("error", (event) => {
+		const error: unknown = event.error;
+		console.error("Uncaught frontend error", error ?? event.message);
+	});
+	window.addEventListener("unhandledrejection", (event) => {
+		const reason: unknown = event.reason;
+		console.error("Unhandled promise rejection", reason);
+	});
+}
+
 function disableBrowserContextMenu() {
 	if (import.meta.env.DEV) return;
 	window.addEventListener(
@@ -150,6 +161,9 @@ class RootErrorBoundary extends React.Component<
 }
 
 async function bootstrap() {
+	if (DESKTOP_RUNTIME) {
+		await installDesktopLogging();
+	}
 	if (!DESKTOP_RUNTIME) {
 		document.documentElement.setAttribute("data-remote-webui", "");
 	}
@@ -163,7 +177,6 @@ async function bootstrap() {
 
 	let RootApp: React.ComponentType;
 	if (DESKTOP_RUNTIME) {
-		await installDesktopLogging();
 		disableBrowserContextMenu();
 		const [
 			{ installChatPerformanceDebugApi },
@@ -207,4 +220,7 @@ async function bootstrap() {
 	);
 }
 
-void bootstrap();
+installGlobalErrorLogging();
+void bootstrap().catch((error: unknown) => {
+	console.error("Failed to bootstrap frontend", error);
+});
