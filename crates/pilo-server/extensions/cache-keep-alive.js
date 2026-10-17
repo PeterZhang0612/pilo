@@ -325,7 +325,8 @@ export default function (pi) {
 		if (!normalRun || message?.role !== "assistant" || !policy()?.enabled)
 			return;
 		lastStopReason = message.stopReason;
-		if (message.stopReason === "error" || message.stopReason === "aborted") {
+		// Aborting output does not invalidate the already captured provider input.
+		if (message.stopReason === "error") {
 			snapshot = undefined;
 			candidate = undefined;
 			return;
@@ -358,11 +359,16 @@ export default function (pi) {
 			stop("unsupported_request", true);
 	});
 	pi.on("agent_settled", (event, ctx) => {
+		if (!normalRun) return;
 		context = ctx;
 		normalRun = false;
 		if (!policy()?.enabled) return stop("disabled");
-		// An interrupted run has no reusable snapshot; it is not a compatibility failure.
-		if (event.aborted || ["error", "aborted"].includes(lastStopReason))
+		// Stop can arrive before capture or after a reusable request (including during tools).
+		if (
+			lastStopReason === "error" ||
+			(!snapshot &&
+				(event.aborted || !lastStopReason || lastStopReason === "aborted"))
+		)
 			return stop("waiting_request");
 		if (!snapshot || typeof ctx.modelRegistry.streamSimple !== "function")
 			return stop("unsupported_request", true);
