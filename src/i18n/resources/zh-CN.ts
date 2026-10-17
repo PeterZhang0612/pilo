@@ -237,7 +237,7 @@ const zhCN = {
 		collapseLongMessages: "长文收起",
 		collapseWork: "收起过程",
 		pluginNotifications: "显示插件通知",
-		pluginNotificationsHint: "Pi 扩展通过 ctx.ui.notify 发出的消息。",
+		pluginNotificationsHint: "显示 Pi 扩展发出的消息通知。",
 		language: "界面语言",
 		languageChinese: "简体中文",
 		languageEnglish: "English",
