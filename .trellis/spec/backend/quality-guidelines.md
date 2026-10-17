@@ -17,6 +17,17 @@ cargo clippy --all-targets --all-features -- -D warnings
 `clippy -D warnings` means a warning fails the check. Fix warnings, don't silence
 them (`#[allow(...)]` only with a comment explaining why).
 
+Enable the versioned `.githooks/pre-commit` hook once per clone with
+`pnpm hooks:install`. It checks Rust formatting, then runs workspace check and
+Clippy with `--workspace --all-targets --all-features`, matching CI. Any nonzero
+exit blocks the commit. The hook checks the working tree without formatting or
+staging files; keep its executable bit and LF line endings for Git on Windows.
+Use only POSIX `sh` syntax: Windows uses Git for Windows' bundled shell, while
+macOS/Linux use the system shell. Cargo must be on the committing process's
+`PATH`. Hook configuration is local to each checkout, not copied by source sync.
+These checks cover the current host only; WSL cannot validate native Windows
+or macOS code paths.
+
 ## Code Standards
 
 - **Edition 2024**, `resolver = "2"` workspace.

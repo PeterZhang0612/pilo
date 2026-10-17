@@ -16,6 +16,7 @@
 		"format": "oxfmt --write .",
 		"format:check": "oxfmt --check .",
 		"check": "pnpm format:check && pnpm lint",
+		"hooks:install": "git config --local core.hooksPath .githooks",
 		"test": "pnpm test:unit && pnpm test:integration",
 		"test:unit": "node --experimental-strip-types --import ./tests/helpers/tsx-loader.mjs --test \"tests/unit/**/*.test.ts\" \"tests/unit/**/*.test.mjs\"",
 		"test:integration": "node --experimental-strip-types --import ./tests/helpers/tsx-loader.mjs --test \"tests/integration/**/*.test.ts\" \"tests/integration/**/*.test.mjs\"",

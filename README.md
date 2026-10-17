@@ -135,6 +135,19 @@ Images reference existing files, not immutable snapshots: deleting or overwritin
 
 ## Development
 
+Run `pnpm hooks:install` once per clone to enable pre-commit checks. Every
+commit runs Rust formatting checks, workspace checks and Clippy using the
+same commands as CI. Any failure blocks the commit; files are not auto-formatted.
+Rust and the platform-specific Tauri build dependencies must be installed.
+
+The hook uses Git for Windows' bundled `sh` on Windows and the system `sh`
+on macOS/Linux. Ensure `cargo` is on the committing process's `PATH` and install
+its check components with `rustup component add rustfmt clippy`. Windows needs
+the MSVC build tools and WebView2; macOS needs Xcode Command Line Tools; Linux
+needs the Tauri system libraries. Each checkout needs its own hook installation,
+including separate Windows and WSL checkouts. Checks target the current host;
+a WSL pass does not validate Windows or macOS code.
+
 | Command                                                                | Purpose                                                           |
 | ---------------------------------------------------------------------- | ----------------------------------------------------------------- |
 | `pnpm check`                                                           | Run oxfmt format checks and oxlint                                |
