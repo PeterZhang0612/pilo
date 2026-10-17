@@ -136,9 +136,13 @@ fn project_message(
                 .get("errorMessage")
                 .and_then(Value::as_str)
                 .map(str::to_owned);
-            // 同一条轮次内多段 assistant 消息里，取最后一段的用量，
-            // 与实时事件路径（agent_settled 上报的最后一条消息）保持一致。
-            turn.usage = TokenUsage::from_json(message.get("usage"));
+            // 累加该轮次所有 assistant 步骤的 token 与费用用量
+            if let Some(usage) = TokenUsage::from_json(message.get("usage")) {
+                match &mut turn.usage {
+                    Some(current) => current.accumulate(usage),
+                    None => turn.usage = Some(usage),
+                }
+            }
             turn.updated_at_ms = timestamp_ms.or(turn.updated_at_ms);
         }
         Some("toolResult") => {

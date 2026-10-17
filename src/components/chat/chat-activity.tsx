@@ -190,8 +190,12 @@ function ThinkingActivityView({
 		activity.startedAtMs !== undefined && activity.endedAtMs !== undefined
 			? Math.max(0, activity.endedAtMs - activity.startedAtMs)
 			: undefined;
+	// 只有耗时达到或超过 1 秒才展示持续时长；不足 1 秒或无跨度时间戳显示“思考”，避免出现“思考了0秒”
 	const durationLabel =
-		!running && showWorkDuration && durationMs !== undefined
+		!running &&
+		showWorkDuration &&
+		durationMs !== undefined &&
+		durationMs >= 1000
 			? formatWorkDuration(durationMs, {
 					hour: t("common.hour"),
 					minute: t("common.minute"),
@@ -203,6 +207,16 @@ function ThinkingActivityView({
 		: durationLabel
 			? t("chat.thoughtDuration", { duration: durationLabel })
 			: t("chat.thought");
+
+	// 提取思考正文的末尾有效行作为单行折叠时的摘要（类似 tool call 的 preview）
+	const previewText = useMemo(() => {
+		if (!activity.text) return "";
+		const lines = activity.text
+			.split("\n")
+			.map((line) => line.trim())
+			.filter(Boolean);
+		return lines[lines.length - 1] ?? "";
+	}, [activity.text]);
 
 	return (
 		<div className="w-full" data-chat-expansion-root>
@@ -230,7 +244,14 @@ function ThinkingActivityView({
 						running && "motion-safe:animate-pulse",
 					)}
 				/>
-				<span className="min-w-0 flex-1 truncate">{label}</span>
+				<span className="shrink-0 truncate">{label}</span>
+				{previewText && !open ? (
+					<span className="min-w-0 flex-1 truncate font-normal text-muted-foreground/75">
+						{previewText}
+					</span>
+				) : (
+					<span className="min-w-0 flex-1" aria-hidden="true" />
+				)}
 			</button>
 			{hasDetails && open ? (
 				<div className="pt-0.5">

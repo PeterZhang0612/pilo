@@ -65,6 +65,18 @@ impl TokenUsage {
         let usage = Self { total, ..usage };
         (!usage.is_empty()).then_some(usage)
     }
+    /// 累加同一轮次中多次模型调用（多步工具执行）的用量与费用。
+    pub fn accumulate(&mut self, other: Self) {
+        self.input = self.input.saturating_add(other.input);
+        self.output = self.output.saturating_add(other.output);
+        self.cache_read = self.cache_read.saturating_add(other.cache_read);
+        self.cache_write = self.cache_write.saturating_add(other.cache_write);
+        self.total = self.total.saturating_add(other.total);
+        if let Some(other_cost) = other.cost {
+            let current = self.cost.unwrap_or(0.0);
+            self.cost = Some(current + other_cost);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -108,5 +120,32 @@ mod tests {
         assert_eq!(TokenUsage::from_json(Some(&json!("usage"))), None);
         assert_eq!(TokenUsage::from_json(Some(&json!({}))), None);
         assert_eq!(TokenUsage::from_json(Some(&json!({ "input": 0 }))), None);
+    }
+
+    #[test]
+    fn accumulates_multiple_turns_usage_and_costs() {
+        let mut u1 = TokenUsage {
+            input: 100,
+            output: 20,
+            cache_read: 50,
+            cache_write: 10,
+            total: 180,
+            cost: Some(0.005),
+        };
+        let u2 = TokenUsage {
+            input: 200,
+            output: 40,
+            cache_read: 100,
+            cache_write: 0,
+            total: 340,
+            cost: Some(0.010),
+        };
+        u1.accumulate(u2);
+        assert_eq!(u1.input, 300);
+        assert_eq!(u1.output, 60);
+        assert_eq!(u1.cache_read, 150);
+        assert_eq!(u1.cache_write, 10);
+        assert_eq!(u1.total, 520);
+        assert!((u1.cost.unwrap() - 0.015).abs() < 1e-6);
     }
 }

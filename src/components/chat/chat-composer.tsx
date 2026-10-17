@@ -432,8 +432,14 @@ export function ChatComposer({
 				onChange(writeChatMentionDraft(references, enhanced));
 			}
 		} catch (error) {
+			const detail =
+				error instanceof Error
+					? error.message
+					: typeof error === "string"
+						? error
+						: runtimeErrorMessage(error);
 			toast.error(t("chat.enhancePromptFailed"), {
-				description: runtimeErrorMessage(error),
+				description: detail || runtimeErrorMessage(error),
 			});
 		} finally {
 			enhancingRef.current = false;

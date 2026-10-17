@@ -13,15 +13,7 @@ use crate::domain::PromptEnhanceModel;
 
 use super::{PiloRuntime, pi_oneshot, server_pi::PiLaunchOptions};
 
-const PROMPT_ENHANCEMENT_SYSTEM_PROMPT: &str = "\
-You rewrite a user's draft prompt into a clearer, more actionable prompt for a coding agent.
-Rules:
-- Keep the author's intent. Do NOT answer the request, add answers, or start doing the task.
-- Preserve file paths, code snippets, commands, and references verbatim.
-- Make implicit goals explicit: task, scope, constraints, and the expected result.
-- Remove filler; keep the prompt concise but complete.
-- Reply in the same language as the draft.
-- Output ONLY the rewritten prompt text — no preamble, no quotes, no markdown fences.";
+const PROMPT_ENHANCEMENT_SYSTEM_PROMPT: &str = "You rewrite a user's draft prompt into a clearer, more actionable prompt for a coding agent. Rules: Keep the author's intent; do NOT answer the request, add answers, or start doing the task. Preserve file paths, code snippets, commands, and references verbatim. Make implicit goals explicit: task, scope, constraints, and the expected result. Remove filler; keep the prompt concise but complete. Reply in the same language as the draft. Output ONLY the rewritten prompt text without preamble, quotes, or markdown fences.";
 
 const PROMPT_ENHANCEMENT_TIMEOUT: Duration = Duration::from_secs(60);
 

@@ -642,3 +642,40 @@ test("live assistant_message_end carries usage into the turn end action", () => 
 	assert.equal(action.usage?.total, 50);
 	assert.equal(action.usage?.cacheRead, 40);
 });
+
+test("streaming thinking start and end record distinct context timestamps", () => {
+	let currentTime = 1000;
+	const customCtx = {
+		...context(),
+		now: () => currentTime,
+	};
+	let state = reduceConversation(
+		createConversationState(),
+		{ type: "local_user_submit", clientMessageId: "u1", text: "hi" },
+		customCtx,
+	);
+	state = reduceConversation(
+		state,
+		{ type: "user_message_start", text: "hi" },
+		customCtx,
+	);
+	currentTime = 1500;
+	state = reduceConversation(
+		state,
+		{ type: "assistant_thinking_start" },
+		customCtx,
+	);
+	currentTime = 5500;
+	state = reduceConversation(
+		state,
+		{ type: "assistant_thinking_end" },
+		customCtx,
+	);
+
+	const assistant = state.messages[1];
+	if (assistant?.role !== "assistant") throw new Error("expected assistant");
+	const thinking = assistant.content?.find((item) => item.type === "thinking");
+	assert.ok(thinking);
+	assert.equal(thinking?.startedAtMs, 1500);
+	assert.equal(thinking?.endedAtMs, 5500);
+});
