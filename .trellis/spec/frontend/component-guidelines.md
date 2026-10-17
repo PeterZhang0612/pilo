@@ -368,11 +368,14 @@ actions go there and appear only for persisted sessions (`session && !session.te
   Session values still use `sessionMentionValue` and resolve against the scoped
   catalog. Do not read or inject conversation content, add a second conversation
   store, or serialize titles instead of paths.
-- Completed file picks always use quoted project-relative paths, e.g.
-  `@"src/index.ts"`, including paths without spaces. This distinguishes a chip
-  from a still-editable unquoted `@src` query without separate draft metadata.
-  Only complete quoted relative-path lines are file chips; empty/incomplete
-  quotes, absolute/Windows/tilde paths and old inline mentions remain text.
+- Completed project file picks use quoted project-relative paths, e.g.
+  `@"src/index.ts"`, including paths without spaces. Uploaded files instead use
+  the server-returned absolute `.../attachments/<canonical-16-byte-base64url-id>/<name>`
+  path in the project's environment, including Windows/UNC paths. The shared
+  `fileMentionPath` parser recognizes both forms so chips, input history, cleanup,
+  search and sent messages agree. This distinguishes a chip from a still-editable
+  unquoted `@src` query without separate draft metadata. Empty/incomplete quotes,
+  unrelated absolute paths, tilde paths and old inline mentions remain text.
   Resolve known sessions first so a quoted session path never becomes a file.
 - Keep the native textarea for body editing. `FileMentionBadge` and
   `SessionMentionBadge` share `PathMentionBadge`: compact icon + name chips in

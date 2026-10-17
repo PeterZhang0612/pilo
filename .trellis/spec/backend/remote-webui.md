@@ -80,7 +80,7 @@ GET  /api/v1/chat/state?sessionKey=...
 POST /api/v1/chat/rpc        -> 204                      body: { sessionKey, command }
 GET  /api/v1/files/search?projectId=&query= -> string[]  (read-only @ mention search)
 GET  /api/v1/files/image?projectId=&path= -> binary image bytes (project-relative, image-only)
-POST /api/v1/chat/files?projectId=&name= -> JSON relative path (raw file bytes, max 10 MB)
+POST /api/v1/chat/files?projectId=&name= -> JSON server-side absolute path (raw file bytes, max 10 MB)
 GET  /api/v1/events          -> WebSocket upgrade
 ```
 
@@ -232,8 +232,9 @@ remote_devices(id, name, pair_ip, token_hash, created_at_ms, last_seen_at_ms, ex
   are rejected. This path calls `chat_service::prepare`, not `start`, to avoid
   creating an empty persisted session. Normal chats retain their existing path.
   See [Project Model Scope](./project-model-scope.md#project-catalog-and-slash-commands).
-- **Attachments**: images only (`png/jpeg/webp/gif`), ≤ 10 MB each, ≤ 20 MB total,
-  ≤ `MAX_CHAT_IMAGES`. Reuses the existing chat image contract.
+- **Attachments**: images (`png/jpeg/webp/gif`) reuse the inline chat image contract,
+  ≤ 10 MB each, ≤ 20 MB total, ≤ `MAX_CHAT_IMAGES`. Other files use the scoped
+  server-runtime upload/cleanup described in "External Files in the Composer".
 - **Replay gap semantics**: `replay_after(seq)` returns `None` (gap → client must
   resync from snapshot) **iff** the oldest buffered sequence is greater than
   `seq + 1`. `seq == 0` always replays the whole buffer.
@@ -584,10 +585,14 @@ access.
 
 - `project_chat_file_upload(id, name, data: Vec<u8>) -> Result<String, String>`
 - Authenticated `POST /api/v1/chat/files?projectId=&name=`: octet-stream body;
-  returns a JSON string containing the project-relative path.
+  returns a JSON string containing the absolute path in the selected environment.
 - `project_chat_file_remove(id, path) -> Result<(), String>` and authenticated
   `DELETE /api/v1/chat/files?projectId=&path=` (204 on success) remove one
-  attachment directory, subject to shared runtime validation.
+  attachment directory, subject to server-side validation.
+- Server transport: `chat.file_upload({ id, name }, binary: [bytes]) -> string`
+  and `chat.file_remove({ path }) -> null`. The Host generates the canonical
+  16-byte base64url ID; only the server resolves its runtime root. Both methods
+  are required server capabilities. `MAX_CHAT_FILE_BYTES` lives in `pilo-protocol`.
 - Shared `ChatComposer.onUploadFile(file: File) -> Promise<string>` is supplied
   by the desktop files adapter or `WebPiloClient.uploadChatFile`.
 - `chat-file-lifecycle.ts` registers an upload's transport-bound cleanup callback,
@@ -596,14 +601,21 @@ access.
 ### 3. Contracts
 
 - PNG/JPEG/WebP/GIF remain inline Pi image attachments. Other files are copied
-  into `.pilo/attachments/<host-generated-random-id>/<name>` in the project's
-  Local/WSL/SSH environment using the existing server filesystem transport.
+  into `<server-runtime>/attachments/<host-generated-random-id>/<name>` in the
+  selected project's Local/WSL/SSH environment. The existing `runtime_directory()`
+  resolves `PILO_SERVER_RUNTIME_DIR`, or the platform's `pilo[-dev]/server` cache.
+  Do not write new uploads into the project or migrate/delete old `.pilo/` files.
 - The caller never chooses a destination. Names are trimmed, nonempty, at most
   240 UTF-8 bytes, and reject dot/parent names, separators, control characters,
-  Windows-invalid punctuation and trailing dots. Server filesystem checks still
-  reject project/symlink escapes. Random directories isolate duplicate names.
-- Append ordinary quoted file mentions only after successful writes. File-only
-  messages work without new Pi RPC fields or a duplicate conversation store.
+  Windows-invalid punctuation and trailing dots. The server validates names,
+  canonical 16-byte base64url IDs and the 10 MB cap; an `attachments` symlink is
+  rejected. Create each random directory exclusively, never overwrite/reuse it.
+- Append ordinary quoted absolute file mentions only after successful writes.
+  Return paths usable by Pi in that same environment, with Windows forward
+  slashes and no verbatim `//?/` prefix. The shared mention parser recognizes
+  absolute `attachments/<canonical-id>/<name>` references; unrelated absolute
+  session paths stay literal. Existing project-relative mentions remain valid.
+  File-only messages work without new Pi RPC fields or a duplicate conversation store.
 - One batch is limited to eight files / 20 MB, each at most 10 MB; existing image
   count/total limits still apply. HTTP and shared backend enforce the per-file cap.
 - Pending reads/uploads block sending and further attachment additions, not text
@@ -621,13 +633,16 @@ access.
   the hint; sidebars, headers and settings cannot add attachments. Window-level
   handlers still prevent file navigation everywhere and ignore modal/disabled
   targets.
-- Failed directory creation/write attempts trigger best-effort directory cleanup,
-  preserving the original upload error. Late successful uploads that cannot enter
-  their original composer are cleaned up too.
+- Failed writes trigger server-side best-effort directory cleanup, preserving the
+  original upload error. A directory-creation failure must not delete an existing
+  directory. Late successful uploads that cannot enter their original composer
+  are cleaned up too.
 - Only newly uploaded files are registered for frontend cleanup. Removing their
   file mention through composer edits deletes their generated directory. Cleanup
-  accepts only `.pilo/attachments/<canonical-16-byte-base64url-id>/<valid-name>`;
-  reject traversal, alternate prefixes and nested paths before filesystem calls.
+  accepts only `<this-server-runtime>/attachments/<canonical-id>/<valid-name>`;
+  validate the exact server-side root, ID and filename before deleting the one
+  generated directory. Reject traversal, alternate roots and nested paths; never
+  broaden the project filesystem APIs to permit arbitrary absolute writes/deletes.
 - Protect referenced files before invoking any submit/steer/follow-up/send-now
   callback, not after RPC success: async commands, queues and failure recovery may
   already own them. This deliberately retains attempted submissions even if a
@@ -652,8 +667,9 @@ access.
 
 ### 5. Good / Base / Bad Cases
 
-- Good: a Windows file is copied into an SSH project and Pi receives its SSH-side
-  relative path. Duplicate basenames use separate directories.
+- Good: a Windows file is copied into the SSH server's runtime attachments folder
+  and Pi receives its SSH-side absolute path. Duplicate basenames use separate
+  directories; the Git working tree remains unchanged.
 - Base: image thumbnails, clipboard images, ordinary text and session drags work.
 - Bad: send a Windows path to WSL/SSH, expose arbitrary write/delete destinations,
   insert a completed upload into a newly selected session, or delete an attachment
@@ -661,11 +677,19 @@ access.
 
 ### 6. Tests Required
 
-No dedicated attachment regression tests were added. Existing Node suites
-(211 unit + 19 integration tests) passed, as did 174 Rust workspace tests,
-workspace build and clippy; shared frontend build/check also passed in WSL.
-Native drag/layout behavior still requires Windows verification; WebUI browser
-verification was explicitly skipped. Dedicated coverage should assert
+No permanent attachment regression test files were added. Verification in WSL
+passed 211 Node unit tests, 19 Node integration tests, 174 Rust workspace tests,
+frontend format/lint and the frontend build. `cargo fmt --all --check`,
+`cargo check` and `cargo clippy --all-targets --all-features -- -D warnings` also
+passed. An ad-hoc source check passed
+POSIX/Windows/UNC and legacy mention round-trips, invalid references, cleanup and
+submitted-file retention. Against the rebuilt Linux server, 33 real stdio RPC
+checks passed runtime storage, exact bytes, Unicode names, duplicate isolation,
+exclusive directory creation, the 10 MB boundary, empty files, invalid names/IDs,
+cleanup path rejection, symlink safety and scoped deletion. Fixtures and runtime
+files stayed under the ignored `target/attachment-verification/` directory.
+Windows native behavior, real WSL/SSH connections, browser interaction and
+write-failure cleanup remain unverified. Dedicated attachment coverage should also assert
 filename/traversal/size rejection, duplicate names, auth/body limits, failed and
 mixed batches, file-only sends, pending-send blocking, edits during upload,
 A → B → A switching, hidden composers, modal drops and navigation prevention.
@@ -685,6 +709,7 @@ WSL and SSH projects; lint/source review does not establish native drag behavior
 
 ### 7. Wrong vs Correct
 
-Wrong: insert `C:\\Users\\...` into a remote prompt or forward a client-selected
-filesystem destination. Correct: upload bytes to the selected project's unique
-attachment directory and insert the returned relative file mention.
+Wrong: store uploads in the Git working tree, insert a Host-side Windows path
+into an SSH prompt, or forward a client-selected filesystem destination.
+Correct: upload bytes into the selected environment's server-runtime attachment
+folder and insert the returned absolute file mention.

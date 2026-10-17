@@ -58,19 +58,9 @@ pub async fn read_file(
     Ok(binary.into_iter().next().expect("binary length checked"))
 }
 
-pub(crate) const MAX_CHAT_FILE_BYTES: usize = 10 * 1024 * 1024;
+pub(crate) use pilo_protocol::MAX_CHAT_FILE_BYTES;
 
-fn valid_chat_file_name(name: &str) -> bool {
-    !(name.is_empty()
-        || name.len() > 240
-        || name == "."
-        || name == ".."
-        || name.ends_with(['.', ' '])
-        || name.contains(['/', '\\', ':', '"', '<', '>', '|', '?', '*'])
-        || name.chars().any(char::is_control))
-}
-
-/// Only create attachments at host-generated paths; never accept a destination from WebUI.
+/// The selected environment's server owns the destination, never WebUI.
 pub(crate) async fn upload_chat_file(
     servers: &ServerManager,
     project: &Project,
@@ -80,47 +70,39 @@ pub(crate) async fn upload_chat_file(
     if data.len() > MAX_CHAT_FILE_BYTES {
         return Err("chat attachment exceeds the 10 MB limit".to_owned());
     }
-    let name = name.trim();
-    if !valid_chat_file_name(name) {
-        return Err("invalid chat attachment filename".to_owned());
-    }
     let mut random = [0_u8; 16];
     getrandom::fill(&mut random)
         .map_err(|error| format!("failed to generate attachment directory: {error}"))?;
     let id = URL_SAFE_NO_PAD.encode(random);
-    let directory = format!(".pilo/attachments/{id}");
-    let result = async {
-        mkdir(servers, project, &directory).await?;
-        let path = format!("{directory}/{name}");
-        write_file(servers, project, &path, data).await?;
-        Ok(path)
+    let (value, binary) = servers
+        .request_with_binary(
+            &project.connection,
+            "chat.file_upload",
+            json!({ "id": id, "name": name }),
+            vec![data.to_vec()],
+        )
+        .await?;
+    if !binary.is_empty() {
+        return Err("chat.file_upload returned unexpected binary attachments".to_owned());
     }
-    .await;
-    if result.is_err()
-        && let Err(error) = remove(servers, project, &directory).await
-    {
-        log::warn!(target: "chat-attachments", "failed to clean up unsuccessful upload: {error}");
-    }
-    result
+    serde_json::from_value(value)
+        .map_err(|error| format!("invalid chat.file_upload response: {error}"))
 }
 
-/// Restrict cleanup to one generated attachment directory, never arbitrary project paths.
+/// The server restricts cleanup to its own generated attachment directories.
 pub(crate) async fn remove_chat_file(
     servers: &ServerManager,
     project: &Project,
     path: &str,
 ) -> Result<(), String> {
-    let (id, name) = path
-        .strip_prefix(".pilo/attachments/")
-        .and_then(|relative| relative.split_once('/'))
-        .ok_or_else(|| "invalid chat attachment path".to_owned())?;
-    let valid_id = URL_SAFE_NO_PAD
-        .decode(id)
-        .is_ok_and(|bytes| bytes.len() == 16 && URL_SAFE_NO_PAD.encode(&bytes) == id);
-    if !valid_id || !valid_chat_file_name(name) {
-        return Err("invalid chat attachment path".to_owned());
-    }
-    remove(servers, project, &format!(".pilo/attachments/{id}")).await
+    servers
+        .request(
+            &project.connection,
+            "chat.file_remove",
+            json!({ "path": path }),
+        )
+        .await
+        .map(|_| ())
 }
 
 const MAX_PROJECT_IMAGE_BYTES: usize = 10 * 1024 * 1024;

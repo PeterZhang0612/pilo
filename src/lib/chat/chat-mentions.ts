@@ -11,7 +11,7 @@ export function fileMentionName(path: string) {
 	return path.split(/[\\/]/).pop() || path;
 }
 
-/** Quoted relative paths distinguish completed file picks from an active @ query. */
+/** Quoted paths distinguish completed file picks from an active @ query. */
 export function fileMentionValue(path: string) {
 	return `@"${path}"`;
 }
@@ -19,7 +19,14 @@ export function fileMentionValue(path: string) {
 export function fileMentionPath(value: string): string | null {
 	if (!value.startsWith('@"') || !value.endsWith('"')) return null;
 	const path = value.slice(2, -1);
-	if (!path || /[\r\n"]/.test(path) || /^(?:[/\\~]|[a-z]:[/\\])/i.test(path))
+	if (!path || /[\r\n"]/.test(path) || path.startsWith("~")) return null;
+	const absolute = /^(?:[/\\]|[a-z]:[/\\])/i.test(path);
+	// Only server attachment paths extend the relative-file contract; unknown
+	// absolute session references must continue to render as ordinary text.
+	if (
+		absolute &&
+		!/[/\\]attachments[/\\][A-Za-z0-9_-]{21}[AQgw][/\\][^/\\]+$/.test(path)
+	)
 		return null;
 	return path;
 }
