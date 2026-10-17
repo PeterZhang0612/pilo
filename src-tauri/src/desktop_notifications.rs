@@ -60,7 +60,7 @@ mod windows_identity {
     pub fn registered_aumid() -> Option<&'static str> {
         let identity = IDENTITY.get()?;
         REGISTERED
-            .get_or_init(|| ensure_registered())
+            .get_or_init(ensure_registered)
             .then_some(identity.aumid.as_str())
     }
 

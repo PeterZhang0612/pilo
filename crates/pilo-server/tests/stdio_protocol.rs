@@ -41,6 +41,20 @@ async fn stdio_server_speaks_protobuf_and_preserves_binary_bytes() {
         Some(PROTOCOL_VERSION as u64)
     );
 
+    let (program, args) = if cfg!(windows) {
+        (
+            "powershell.exe",
+            vec![
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                // Avoid PowerShell's text pipeline so every byte is preserved.
+                "[Console]::OpenStandardInput().CopyTo([Console]::OpenStandardOutput())",
+            ],
+        )
+    } else {
+        ("/bin/cat", vec![])
+    };
     let input = vec![0, 1, 2, 3, 254, 255];
     write_frame(
         &mut stdin,
@@ -48,9 +62,9 @@ async fn stdio_server_speaks_protobuf_and_preserves_binary_bytes() {
             2,
             "command.run",
             json!({
-                "project": "/tmp",
-                "program": "/bin/cat",
-                "args": [],
+                "project": std::env::temp_dir(),
+                "program": program,
+                "args": args,
                 "timeoutMs": 5_000,
             }),
             vec![input.clone()],

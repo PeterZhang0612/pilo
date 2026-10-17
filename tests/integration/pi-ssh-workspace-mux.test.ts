@@ -59,6 +59,11 @@ const muxDirs = () => {
 };
 
 test("ssh workspace recreates its mux socket dir and fails closed", async (t) => {
+	if (process.platform === "win32") {
+		t.skip("Windows uses persistent SSH sessions, not POSIX ControlMaster");
+		return;
+	}
+
 	const root = mkdtempSync(path.join(tmpdir(), "pilo-mux-test-"));
 	const state = path.join(root, "state");
 	const temp = path.join(root, "tmp");
