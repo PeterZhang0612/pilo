@@ -147,7 +147,7 @@ jobs:
         with:
           workspaces: ". -> target"
           shared-key: pilo-release-${{ matrix.artifact }}
-          save-if: false
+          save-if: true
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
