@@ -107,6 +107,7 @@ export function useChatScrollController({
 		enabled: scrollEnabled,
 		vlistRef: virtualizerRef,
 		itemCount: messages.length,
+		activeAssistantMessageId,
 		contentRevision: virtualizerEnabled,
 		initialScrollTop,
 		initialSticky,

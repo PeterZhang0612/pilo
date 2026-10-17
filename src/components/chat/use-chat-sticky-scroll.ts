@@ -30,6 +30,7 @@ type UseChatStickyScrollOptions = {
 	enabled: boolean;
 	vlistRef: RefObject<VirtualizerHandle | null>;
 	itemCount: number;
+	activeAssistantMessageId: string | null;
 	contentRevision: boolean;
 	initialScrollTop: number;
 	initialSticky: boolean;
@@ -48,6 +49,7 @@ export function useChatStickyScroll({
 	enabled,
 	vlistRef,
 	itemCount,
+	activeAssistantMessageId,
 	contentRevision,
 	initialScrollTop,
 	initialSticky,
@@ -83,6 +85,7 @@ export function useChatStickyScroll({
 	const followFrameRef = useRef<number | null>(null);
 	const followVisibilityActiveRef = useRef(false);
 	const contentRevisionRef = useRef(contentRevision);
+	const resizeHeightsRef = useRef(new WeakMap<Element, number>());
 	const touchStartYRef = useRef<number | null>(null);
 
 	const commitOwnership = useCallback((nextOwnership: ScrollOwnership) => {
@@ -267,34 +270,29 @@ export function useChatStickyScroll({
 		const contentElement = scrollElement.firstElementChild;
 		if (!(contentElement instanceof HTMLElement)) return;
 		const observedContentRevision = contentRevision;
-		// ResizeObserver always delivers an initial measurement after observe().
-		// Use that asynchronous notification as the baseline instead of forcing
-		// synchronous geometry reads while a conversation is mounting/switching.
-		let viewportHeight: number | null = null;
-		let contentHeight: number | null = null;
+		const streamingContent = activeAssistantMessageId
+			? contentElement.querySelector(
+					`[data-message-id="${CSS.escape(activeAssistantMessageId)}"]`,
+				)?.firstElementChild
+			: null;
+		// Use each element's first asynchronous measurement as its baseline.
+		// Keep it across observer rebinds so turn-end growth is not discarded.
+		const heights = resizeHeightsRef.current;
 		const observer = new ResizeObserver((entries) => {
 			if (observedContentRevision !== contentRevisionRef.current) return;
 			let verticalLayoutChanged = false;
 			for (const entry of entries) {
-				if (entry.target === scrollElement) {
-					if (viewportHeight === null) {
-						viewportHeight = entry.contentRect.height;
-						continue;
-					}
-					if (Math.abs(entry.contentRect.height - viewportHeight) < 0.5)
-						continue;
-					viewportHeight = entry.contentRect.height;
-					recordStickyScrollMetric("viewport-resize");
-				} else {
-					if (contentHeight === null) {
-						contentHeight = entry.contentRect.height;
-						continue;
-					}
-					if (Math.abs(entry.contentRect.height - contentHeight) < 0.5)
-						continue;
-					contentHeight = entry.contentRect.height;
-					recordStickyScrollMetric("content-resize");
+				const previousHeight = heights.get(entry.target);
+				const height = entry.contentRect.height;
+				if (previousHeight === undefined) {
+					heights.set(entry.target, height);
+					continue;
 				}
+				if (Math.abs(height - previousHeight) < 0.5) continue;
+				heights.set(entry.target, height);
+				recordStickyScrollMetric(
+					entry.target === scrollElement ? "viewport-resize" : "content-resize",
+				);
 				verticalLayoutChanged = true;
 			}
 			if (verticalLayoutChanged) {
@@ -304,8 +302,12 @@ export function useChatStickyScroll({
 		});
 		observer.observe(scrollElement);
 		observer.observe(contentElement);
+		// Virtua's row observer updates an ancestor's height during delivery.
+		// Observe the streaming body too so following need not wait another frame.
+		if (streamingContent) observer.observe(streamingContent);
 		return () => observer.disconnect();
 	}, [
+		activeAssistantMessageId,
 		clampToBottom,
 		contentRevision,
 		enabled,

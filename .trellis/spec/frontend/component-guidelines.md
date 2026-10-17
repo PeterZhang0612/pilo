@@ -181,6 +181,51 @@ spacing, type sizes, or control heights.
 
 ## Shared Chat Interaction Contracts
 
+- `useChatStickyScroll` keeps per-element resize heights in a ref-backed
+  `WeakMap` across observer rebinds. Starting/ending an assistant message must
+  not reset the viewport/content baseline: a turn-end error can grow the DOM
+  in the same commit that changes `activeAssistantMessageId` to null. Only a
+  new element skips its first measurement. Preserve reading ownership; resize
+  correction clamps only while following. Observe the active assistant row's
+  real content box as well as the outer content and viewport; the message row
+  itself is `display: contents`. Virtua updates an ancestor height during its
+  row-resize delivery, so observing only that ancestor defers following until
+  another frame and visibly displaces the processing status. When verification
+  is authorized, sample the status position after resize delivery, not just
+  monotonic `scrollTop`, and cover a final multiline error in a plain short chat
+  on desktop and WebUI.
+- While following, the live assistant status uses a bottom-sticky constraint
+  with the assistant column's block-padding token plus 1 CSS px of rounding
+  headroom. Native scroll offsets round to device pixels while line boxes keep
+  fractional heights; monotonic scrolling can still move the whole status by
+  less than a pixel. Keep the status in document flow for short content and
+  remove the sticky constraint when reading. The scrollport's bottom padding
+  already contributes to the sticky view rectangle; adding it again displaces
+  the status by that padding. The live content wrapper supplies a small block
+  `::before` spacer balanced by an equal negative top margin. This preserves
+  layout while giving even an empty status room inside its sticky containing
+  block; padding or merely preventing margin collapse does not supply that
+  room. Otherwise the empty-to-first-output transition still moves by about 1px.
+  Verify constant frame/task status coordinates from the empty status through
+  the first output and during overflowing text/tool output, plus normal
+  short-chat flow and manual
+  upward scrolling on desktop and narrow WebUI.
+- User-bubble and composer outer right edges share `ConversationColumn` geometry.
+  The composer sits outside `.chat-scrollbar`, so desktop, WebUI and the loading
+  fallback use `useScrollbarGutterWidth` to compensate its actual gutter (zero
+  for overlay scrollbars). Rebind after every commit: conditional mounting and
+  keyed session switches replace `ref.current` without changing the ref object;
+  `[enabled, ref]` alone misses these changes. Disconnect the previous observer
+  and cancel pending measurements on cleanup. When verification is authorized,
+  compare the edges before/after draft/session switches with both overlay and
+  space-consuming scrollbars; an overlay-only check hides missing compensation.
+- `ChatConversationViewport` uses `contain: size layout style`, leaving painting
+  and clipping to its native overflow scroller rather than adding paint
+  containment with `strict`. Keep this shared across plain and virtualized
+  conversations. When verification is authorized, check partially covered user
+  bubbles and work-duration disclosures on a real Android WebView near the
+  composer edge; desktop Chrome's mobile emulation is not equivalent. The Via
+  disappearing-content report still needs real-device confirmation.
 - Keep the composer's original single-row toolbar, model label truncation,
   visible reasoning level and context percentage across theme families. Preserve
   WebUI's narrow-screen rules in `src/index.css`, including its compact attachment
@@ -443,11 +488,18 @@ actions go there and appear only for persisted sessions (`session && !session.te
   sizes and both pointer modes.
 - Textarea autosizing keeps a whole-pixel minimum from `rows × lineHeight` plus
   padding/borders for both empty and non-empty text. Computed `line-height: normal`
-  is not numeric: with `height: auto`, temporarily remove the CSS minimum and
-  measure the native row box, then restore the minimum before sizing. Do not
-  replace native leading with a multiplier just to make `parseFloat` work.
-  Integer `scrollHeight` must not shrink the minimum on the first character and
-  shift the inline chips.
+  is not numeric: measure the native row box with `height: auto` and no CSS
+  minimum on a hidden, absolutely positioned textarea clone in the same parent.
+  Never remove the live textarea's minimum to measure native leading: its
+  temporary shrink expands the adjacent chat viewport, and Chromium clamps
+  `scrollTop` before the size is restored, producing a few-pixel rebound on
+  streaming renders even though final DOM heights are unchanged. Keep the probe
+  out of layout and the accessibility tree, remove duplicate IDs/names, and
+  remove it immediately after measurement. Do not replace native leading with
+  a multiplier just to make `parseFloat` work. Integer `scrollHeight` must not
+  shrink the minimum on the first character and shift the inline chips. When
+  verification is authorized, replay overflowing text in plain and virtualized
+  chats at UI sizes 14/15 and check scroll offsets, not only settled heights.
 - With a collapsed caret at body offset 0, Backspace removes the last reference
   atomically; elsewhere, text deletion and selection stay native. Handle mobile
   `beforeinput` / `deleteContentBackward` as well as keyboard Backspace, without

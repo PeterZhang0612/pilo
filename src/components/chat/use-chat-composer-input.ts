@@ -182,13 +182,28 @@ export function useChatComposerInput({
 			Number.parseFloat(styles.borderTopWidth) +
 			Number.parseFloat(styles.borderBottomWidth);
 		if (!Number.isFinite(lineHeight)) {
-			// `normal` has no computed pixel value; measure the native rows without the CSS minimum.
-			const previousMinHeight = textarea.style.minHeight;
-			textarea.style.minHeight = "0";
+			// Measure native rows out of flow: shrinking the live textarea briefly
+			// expands the chat viewport and clamps its scrollTop before we restore it.
+			const probe = textarea.cloneNode(false) as HTMLTextAreaElement;
+			probe.removeAttribute("id");
+			probe.removeAttribute("name");
+			probe.setAttribute("aria-hidden", "true");
+			probe.tabIndex = -1;
+			Object.assign(probe.style, {
+				position: "absolute",
+				top: "0",
+				left: "0",
+				width: styles.width,
+				height: "auto",
+				minHeight: "0",
+				visibility: "hidden",
+				pointerEvents: "none",
+			});
+			textarea.parentElement?.append(probe);
 			lineHeight =
-				(textarea.getBoundingClientRect().height - padding - border) /
+				(probe.getBoundingClientRect().height - padding - border) /
 				textarea.rows;
-			textarea.style.minHeight = previousMinHeight;
+			probe.remove();
 		}
 		// Keep the empty row height after typing; scrollHeight rounds fractional line heights.
 		const minHeight = Math.max(

@@ -658,6 +658,14 @@
 	will-change: opacity, transform;
 }
 
+/* Keep the live status still when bottom-following: native scroll offsets round
+   to device pixels while streamed line boxes retain fractional heights. The
+   scroller already includes its bottom padding in the sticky view rectangle. */
+.chat-scrollbar[data-chat-following] [data-chat-streaming-status] {
+	position: sticky;
+	bottom: calc(var(--chat-assistant-block-padding) + 1px);
+}
+
 .chat-agent-activity-label {
 	color: hsl(var(--primary));
 }
