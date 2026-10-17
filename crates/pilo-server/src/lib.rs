@@ -87,7 +87,7 @@ struct ServerState {
     pi_output_tasks: Arc<StdMutex<PiOutputTasks>>,
     session_watchers: Arc<Mutex<HashMap<String, JoinHandle<()>>>>,
     terminals: Arc<StdMutex<HashMap<String, TerminalSession>>>,
-    login_path: Arc<OnceCell<String>>,
+    login_path: Arc<OnceCell<Mutex<String>>>,
     toolchain: Arc<OnceCell<ToolchainInfo>>,
     extensions_dir: Arc<std::path::PathBuf>,
 }

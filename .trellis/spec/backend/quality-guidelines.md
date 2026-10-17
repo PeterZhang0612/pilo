@@ -287,3 +287,83 @@ from workflow edits without a real Actions run.
 Wrong: download the most recent successful server build regardless of inputs.
 Correct: exact input-keyed set reuse, with normal builds on a miss and required
 file verification before handing the artifact to desktop packaging.
+
+### Pi executable discovery
+
+#### 1. Scope / Trigger
+
+`crates/pilo-server/src/environment.rs` owns Pi discovery for Local/WSL/SSH.
+Desktop and WebUI use the same server path; do not implement browser-side or
+Tauri-only executable discovery.
+
+#### 2. Signatures
+
+- `resolve_pi_executable(state, requested) -> Result<(String, String), String>`
+  returns the executable and its runtime `PATH`.
+- `environment.pi_probe { executable?: string }` validates that executable with
+  `--version`; `pi.start { piExecutable?: string, ... }` uses the same resolver.
+  Neither wire schema changes.
+
+#### 3. Contracts
+
+- Explicit executable overrides automatic discovery. A broken default Pi must
+  not prevent starting a valid explicit executable or inspecting a project whose
+  Pi runtime is local rather than in the connection environment.
+- Preserve shell/inherited `PATH` priority, then append environment-configured
+  and common global bin directories. Include npm prefixes, `PNPM_HOME` (root and
+  `bin` layouts), `BUN_INSTALL/bin`, and managed Pi's `.pi/agent/bin` or
+  `PI_CODING_AGENT_DIR/bin`. Keep the official installer's standalone Node path:
+  `XDG_DATA_HOME/pi-node/current/bin` (default `.local/share/pi-node/current/bin`)
+  or Windows `LOCALAPPDATA/pi-node/current`.
+- Windows supplements inherited `PATH` from persisted user/machine environment
+  using a hidden, noninteractive, profile-free PowerShell process. Resolve
+  percent-variable references in that child only; never write the registry or
+  mutate the server's process environment.
+- If no Pi is found, refresh the shell/persisted path and query available package
+  managers in parallel: `npm prefix -g`, `pnpm bin -g`, `bun pm bin -g`. Only npm
+  needs `/bin` appended on Unix. Probes run from the user's home when available,
+  disable Corepack downloads, and do not install Pi or a package manager.
+- Retain the full runtime `PATH` from successful fallback discovery in the shared
+  login-path cache, including refreshed shell paths and package-manager bins. A
+  later explicit-path probe/start must reuse it after settings save the detected
+  executable; adding only Pi's parent loses Node in a separate install directory.
+- Do not cache Pi selection, version, or a missing-Pi result in `ToolchainInfo`.
+  Keep absent fallback directories in `PATH` so a later install can be found.
+- Unix candidates must be files with execute bits. Windows discovery accepts
+  native/batch extensions, preserves supported `PATHEXT` order, and never
+  automatically selects an extensionless shell script or a `.ps1` shim.
+
+#### 4. Validation & Error Matrix
+
+- Shell/persisted-path probe: five-second timeout; preserve inherited path on
+  failure. Individual CLI probes: eight-second timeout.
+- Missing/broken package manager: ignore its optional directory query, allowing
+  the others to succeed. Missing Pi: preserve the `Pi executable` / `not found
+  in PATH` error signals and suggest an explicit executable path.
+- Found Pi with a failing `--version`: report that failure, not a fake version
+  or an automatic switch to a different installed Pi.
+
+#### 5. Good / Base / Bad Cases
+
+- Good: managed Pi outside inherited `PATH` starts with its standalone Node;
+  custom npm/pnpm/bun global bins are discovered without hardcoded package names.
+- Base: Pi already on the selected environment's `PATH` keeps priority.
+- Bad: the probe finds Pi in an augmented path but RPC starts with the old path.
+
+#### 6. Tests Required
+
+Pending explicit authorization: npm/pnpm/bun default and custom global bins;
+Windows `.cmd`/`.exe` versus extensionless shims, explicit `pi.cmd`, Unicode and
+space-containing paths, persisted `%PNPM_HOME%`, managed Pi plus standalone Node,
+Unix execute permissions, post-install retry, explicit override with a broken
+default, and probe/start path parity. Cover installing Node and Pi in separate
+custom directories after server startup, then auto-probing, saving the detected
+absolute executable, and starting RPC with the refreshed Node path still present.
+No automated or native-runtime validation is implied by source review or formatting.
+
+#### 7. Wrong vs Correct
+
+Wrong: cache a missing Pi forever, assume every global executable lives in
+npm's default directory, or invoke a guessed package-internal CLI file.
+Correct: resolve the public Pi executable in its own environment, carry its
+runtime path into RPC startup, and retain explicit-path configuration as fallback.
