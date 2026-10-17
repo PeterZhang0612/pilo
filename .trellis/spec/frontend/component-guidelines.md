@@ -57,9 +57,13 @@ re-styling them.
   an already-started project scan still finishes. The server allows at most two
   concurrent content scans per connection server, separate from its 64-request
   overall limit. This is admission control, not cancellation of blocking scans.
-- Mobile project sessions render 50 rows per page. Keep selection/deletion
-  available on every page, localized controls with 44px touch targets and
-  announced page changes. Recent sessions retain their existing 50-row limit.
+- Mobile project sessions initially reveal 50 rows, then append batches of 50
+  when a sentinel comes within 240px of the drawer scroll viewport's bottom.
+  Keep earlier rows mounted, reveal through the selected session's batch, and
+  disconnect observers on cleanup. This limits rendering, not fetched data.
+  Keep selection/deletion available with 44px touch targets and announce the
+  visible/total count. Recent sessions retain their existing 50-row limit;
+  desktop/wide WebUI navigation is unchanged.
 - Desktop project preview caches highlighting per open tab, including plain-text
   fallback. `highlightProjectFile` skips Shiki above 200,000 code units, 2,000
   lines or 2,000 characters on a line; avoid repeated synchronous tokenization

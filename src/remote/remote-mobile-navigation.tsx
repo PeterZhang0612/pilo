@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { useTranslation } from "react-i18next";
 import { Search, SquarePen, Wifi, WifiOff, X } from "lucide-react";
@@ -32,7 +32,36 @@ import {
 
 /** “最近会话”视图最多展示的会话数，与桌面侧栏保持一致。 */
 const RECENT_SESSION_LIMIT = 50;
-const PROJECT_SESSION_PAGE_SIZE = 50;
+const PROJECT_SESSION_BATCH_SIZE = 50;
+
+function MobileSessionLoadSentinel({ onLoadMore }: { onLoadMore: () => void }) {
+	const sentinelRef = useRef<HTMLDivElement>(null);
+
+	useEffect(() => {
+		const sentinel = sentinelRef.current;
+		if (!sentinel) return;
+		if (typeof IntersectionObserver === "undefined") {
+			const frame = requestAnimationFrame(onLoadMore);
+			return () => cancelAnimationFrame(frame);
+		}
+
+		const observer = new IntersectionObserver(
+			(entries) => {
+				if (!entries.some((entry) => entry.isIntersecting)) return;
+				observer.disconnect();
+				onLoadMore();
+			},
+			{
+				root: sentinel.closest("[data-mobile-session-scroll]"),
+				rootMargin: "0px 0px 240px 0px",
+			},
+		);
+		observer.observe(sentinel);
+		return () => observer.disconnect();
+	}, [onLoadMore]);
+
+	return <div ref={sentinelRef} className="h-px" aria-hidden="true" />;
+}
 
 export function RemoteMobileNavigation({
 	client,
@@ -68,8 +97,10 @@ export function RemoteMobileNavigation({
 	const { t } = useTranslation();
 	const [mode, setMode] = useState<SidebarEnvView>("projects");
 	const [paletteOpen, setPaletteOpen] = useState(false);
-	const [projectPages, setProjectPages] = useState<Record<string, number>>({});
-	const [pageSelection, setPageSelection] = useState({
+	const [projectSessionLimits, setProjectSessionLimits] = useState<
+		Record<string, number>
+	>({});
+	const [loadSelection, setLoadSelection] = useState({
 		activeProjectId,
 		selectedSessionId,
 	});
@@ -85,14 +116,14 @@ export function RemoteMobileNavigation({
 		setConfirmDeleteSessionId(null);
 	}
 
-	// Clear only the newly selected project's override before rendering its page.
+	// Reset only the newly selected project's limit before revealing its session.
 	if (
-		pageSelection.activeProjectId !== activeProjectId ||
-		pageSelection.selectedSessionId !== selectedSessionId
+		loadSelection.activeProjectId !== activeProjectId ||
+		loadSelection.selectedSessionId !== selectedSessionId
 	) {
-		setPageSelection({ activeProjectId, selectedSessionId });
+		setLoadSelection({ activeProjectId, selectedSessionId });
 		if (activeProjectId) {
-			setProjectPages((current) => {
+			setProjectSessionLimits((current) => {
 				const next = { ...current };
 				delete next[activeProjectId];
 				return next;
@@ -246,7 +277,10 @@ export function RemoteMobileNavigation({
 						))}
 					</div>
 
-					<div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-(--pilo-mobile-sidebar-content-padding) pb-4">
+					<div
+						data-mobile-session-scroll=""
+						className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-(--pilo-mobile-sidebar-content-padding) pb-4"
+					>
 						{mode === "recent" ? (
 							recentSessions.length === 0 ? (
 								<p className="px-3 py-10 text-center text-sm text-sidebar-foreground-muted">
@@ -297,26 +331,22 @@ export function RemoteMobileNavigation({
 														activeProjectId === project.id;
 													const projectSessions =
 														sessionsByProject.get(project.id) ?? [];
-													const pageCount = Math.max(
-														1,
-														Math.ceil(
-															projectSessions.length /
-																PROJECT_SESSION_PAGE_SIZE,
-														),
-													);
 													const selectedIndex =
 														project.id === activeProjectId
 															? projectSessions.findIndex(
 																	(session) => session.id === selectedSessionId,
 																)
 															: -1;
-													const page = Math.min(
-														projectPages[project.id] ??
-															Math.floor(
-																Math.max(0, selectedIndex) /
-																	PROJECT_SESSION_PAGE_SIZE,
-															),
-														pageCount - 1,
+													const visibleCount = Math.min(
+														projectSessions.length,
+														Math.max(
+															projectSessionLimits[project.id] ??
+																PROJECT_SESSION_BATCH_SIZE,
+															Math.ceil(
+																(selectedIndex + 1) /
+																	PROJECT_SESSION_BATCH_SIZE,
+															) * PROJECT_SESSION_BATCH_SIZE,
+														),
 													);
 													return (
 														<div key={project.id}>
@@ -347,10 +377,7 @@ export function RemoteMobileNavigation({
 																) : (
 																	<div className="mt-1 space-y-(--pilo-mobile-session-gap) pb-2">
 																		{projectSessions
-																			.slice(
-																				page * PROJECT_SESSION_PAGE_SIZE,
-																				(page + 1) * PROJECT_SESSION_PAGE_SIZE,
-																			)
+																			.slice(0, visibleCount)
 																			.map((session) => (
 																				<MobileSessionRow
 																					key={`${session.projectId}:${session.id}`}
@@ -380,41 +407,32 @@ export function RemoteMobileNavigation({
 																					}}
 																				/>
 																			))}
-																		{pageCount > 1 ? (
-																			<div className="flex items-center justify-between gap-2 px-2">
-																				<button
-																					type="button"
-																					className="min-h-11 rounded-md px-2 text-xs disabled:opacity-40"
-																					disabled={page === 0}
-																					onClick={() =>
-																						setProjectPages((current) => ({
+																		{projectSessions.length >
+																		PROJECT_SESSION_BATCH_SIZE ? (
+																			<p
+																				className="px-2 text-center text-xs text-sidebar-foreground-muted"
+																				aria-live="polite"
+																				aria-atomic="true"
+																			>
+																				{t("common.sessions")} {visibleCount} /{" "}
+																				{projectSessions.length}
+																			</p>
+																		) : null}
+																		{visibleCount < projectSessions.length ? (
+																			<MobileSessionLoadSentinel
+																				onLoadMore={() =>
+																					setProjectSessionLimits(
+																						(current) => ({
 																							...current,
-																							[project.id]: page - 1,
-																						}))
-																					}
-																				>
-																					{t("common.previousPage")}
-																				</button>
-																				<span
-																					className="text-xs text-sidebar-foreground-muted"
-																					aria-live="polite"
-																				>
-																					{page + 1} / {pageCount}
-																				</span>
-																				<button
-																					type="button"
-																					className="min-h-11 rounded-md px-2 text-xs disabled:opacity-40"
-																					disabled={page + 1 >= pageCount}
-																					onClick={() =>
-																						setProjectPages((current) => ({
-																							...current,
-																							[project.id]: page + 1,
-																						}))
-																					}
-																				>
-																					{t("common.nextPage")}
-																				</button>
-																			</div>
+																							[project.id]: Math.max(
+																								current[project.id] ?? 0,
+																								visibleCount +
+																									PROJECT_SESSION_BATCH_SIZE,
+																							),
+																						}),
+																					)
+																				}
+																			/>
 																		) : null}
 																	</div>
 																)
