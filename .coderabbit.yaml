@@ -1,0 +1,142 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# Pilo - CodeRabbit configuration
+# https://docs.coderabbit.ai/reference/configuration
+
+language: zh-CN
+tone_instructions: >-
+  使用简体中文，专业、简洁、友好。只指出可验证且具有实际影响的问题；
+  说明原因、影响和可行修复建议。不要将推测写成已确认的问题，
+  不要声称已执行未实际运行的测试。
+
+reviews:
+  # Balanced review: avoid nitpicking and cosmetic suggestions.
+  profile: chill
+  request_changes_workflow: false
+
+  # Put the summary in CodeRabbit's walkthrough rather than editing the PR body.
+  high_level_summary: true
+  high_level_summary_in_walkthrough: true
+  high_level_summary_instructions: >-
+    使用简体中文概括关键行为变化、兼容性风险及验证范围。
+    区分提交者声称通过的检查与已被 CI 证实通过的检查。
+  changed_files_summary: true
+  collapse_walkthrough: true
+
+  # Keep automated comments focused.
+  sequence_diagrams: false
+  estimate_code_review_effort: false
+  suggested_reviewers: false
+  suggested_labels: false
+  poem: false
+  in_progress_fortune: false
+  enable_prompt_for_ai_agents: false
+
+  auto_review:
+    enabled: true
+    drafts: false
+    auto_incremental_review: true
+    ignore_title_keywords:
+      - WIP
+      - DO NOT REVIEW
+
+  # Ignore generated/build artifacts; still review lockfiles and CI configs.
+  path_filters:
+    - "!dist/**"
+    - "!target/**"
+    - "!node_modules/**"
+    - "!coverage/**"
+    - "!src-tauri/gen/**"
+
+  path_instructions:
+    - path: "src/**"
+      instructions: |
+        Review React 19, TypeScript, and the shared UI for functional defects,
+        async race conditions, state consistency, event listener cleanup,
+        performance regressions, and accessibility problems.
+        Pilo has both a Tauri desktop UI and a WebUI. Shared UI changes must
+        remain compatible with both, including narrow/mobile layouts.
+        Avoid formatting-only comments: oxfmt and oxlint run in CI.
+
+    - path: "src/remote/**"
+      instructions: |
+        Focus on WebUI behavior, mobile interactions, reconnection, session
+        restoration, command discovery, stream/event ordering, and cancellation.
+        Check that stale events from an old turn cannot change the current turn.
+        Consider touch targets, virtual keyboards, safe areas, and viewport changes.
+        Do not assume desktop-only Tauri APIs are available in the browser.
+
+    - path: "src-tauri/**"
+      instructions: |
+        Review Tauri 2 IPC boundaries, permissions, process lifecycle,
+        error propagation, and resource cleanup. Check cross-platform behavior
+        on Windows, macOS, and Linux, including WSL and SSH integration.
+        Do not claim that an OS-specific change was tested on other platforms.
+
+    - path: "crates/**"
+      instructions: |
+        Review Rust 2024 and Tokio code for cancellation safety, deadlocks,
+        data races, subprocess leaks, improper error handling, and resource
+        lifetime problems. Preserve Pi RPC and JSONL streaming semantics.
+        Do not suggest duplicating Pi's native Agent or session functionality.
+
+    - path: "scripts/**"
+      instructions: |
+        Check OS assumptions, quoting, path separators, environment variables,
+        subprocess cleanup, packaging correctness, and release regressions.
+        Pay attention to Windows development and WSL build boundaries.
+
+    - path: ".github/workflows/**"
+      instructions: |
+        Check GitHub Actions for least-privilege permissions, unsafe execution
+        of untrusted fork code, secret exposure, supply-chain risks, and release
+        failures across Windows/macOS/Linux. Verify version/tag consistency.
+
+    - path: "tests/**"
+      instructions: |
+        Check whether tests cover the behavior they claim to verify, especially
+        cancellation, reconnection, platform differences, and error paths.
+        Prefer meaningful regression coverage over redundant assertions.
+
+# Disable unsolicited replies to general comments. This does NOT disable
+# automatic Issue Enrichment comments triggered by new/edited issues.
+chat:
+  auto_reply: false
+  art: false
+
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - AGENTS.md
+      - ".trellis/spec/frontend/**/*.md"
+      - ".trellis/spec/backend/**/*.md"
+  issues:
+    scope: local
+  learnings:
+    scope: local
+
+issue_enrichment:
+  # Automatically enrich newly created or edited GitHub issues.
+  auto_enrich:
+    enabled: true
+
+  # Recommend labels without silently modifying community issues.
+  labeling:
+    auto_apply_labels: false
+    labeling_instructions:
+      - label: bug
+        instructions: >-
+          功能故障、崩溃、状态异常、性能回退或与预期不一致的行为。
+      - label: enhancement
+        instructions: >-
+          新功能、现有功能改进、交互优化或开发体验增强。
+      - label: documentation
+        instructions: >-
+          README、帮助文档、安装指引或其他文档内容的问题。
+      - label: question
+        instructions: >-
+          使用方式、配置、环境支持或行为解释相关的提问。
+
+  # Keep issue planning off: enrichment and plan generation are different features.
+  planning:
+    enabled: false
