@@ -556,6 +556,7 @@ function RemoteWorkspace() {
 															void chat.sendSubmission(submission, "follow_up")
 													: undefined
 											}
+											onEnhancePrompt={chat.handleEnhancePrompt}
 											disabled={
 												chat.readOnly ||
 												chat.sending ||

@@ -38,6 +38,7 @@ import type { Project } from "@/lib/api/projects";
 import type { ChatSubmission } from "@/lib/chat/chat-submission";
 import { useKeyboardShortcut } from "@/lib/use-keyboard-shortcut";
 import { tauriPiloClient } from "@/lib/api/tauri-pilo-client";
+import { promptEnhanceModel } from "@/lib/prompt-enhance";
 import { useProjectModelScope } from "@/lib/use-project-model-scope";
 import { DraftProjectPicker } from "@/components/chat/draft-project-picker";
 
@@ -472,6 +473,16 @@ export function NewChatLanding({
 								}}
 								suggestions={composerSuggestions}
 								onSuggestionTrigger={handleSuggestionTrigger}
+								onEnhancePrompt={
+									projectAvailable && projectId
+										? (draftValue) =>
+												tauriPiloClient.enhancePrompt(
+													projectId,
+													draftValue,
+													promptEnhanceModel(selectedModel),
+												)
+										: undefined
+								}
 							/>
 						</ConversationColumn>
 					</div>

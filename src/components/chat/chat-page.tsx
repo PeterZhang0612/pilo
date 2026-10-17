@@ -9,6 +9,7 @@ import { CacheKeepAliveNotice } from "@/components/chat/cache-keep-alive-notice"
 import { useCacheKeepAliveStatus } from "@/lib/use-cache-keep-alive-status";
 import { useNextPrompt } from "@/components/chat/use-next-prompt";
 import { tauriPiloClient } from "@/lib/api/tauri-pilo-client";
+import { promptEnhanceModel } from "@/lib/prompt-enhance";
 import { SessionMentionScope } from "@/components/chat/session-mention-context";
 import { ChatComposer } from "@/components/chat/chat-composer";
 import { ConversationColumn } from "@/components/chat/chat-conversation-column";
@@ -657,6 +658,13 @@ function ChatPageImpl(props: ChatPageProps) {
 															handleFollowUp(submission);
 														}
 													: undefined
+											}
+											onEnhancePrompt={(draftValue) =>
+												tauriPiloClient.enhancePrompt(
+													session.projectRecord.id,
+													draftValue,
+													promptEnhanceModel(selectedModel),
+												)
 											}
 											disabled={
 												// 后台保留页不可见；其 focus-composer hook 先注册、先执行，
