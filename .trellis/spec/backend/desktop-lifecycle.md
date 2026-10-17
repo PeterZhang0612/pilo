@@ -11,13 +11,17 @@ a browser tab does not hide or terminate the desktop Host.
 - `desktop_autostart_get() -> AutostartMode`
 - `desktop_autostart_set({ mode: AutostartMode }) -> AutostartMode`
 - `AutostartMode = "disabled" | "window" | "tray"` (Serde camelCase).
+- `desktop_exit_on_close_get() -> boolean`
+- `desktop_exit_on_close_set({ enabled: boolean }) -> boolean` returns the saved
+  value; these are desktop-only commands in `desktop_tray.rs`.
 - `desktop_tray_set_labels({ labels: { show, hide, quit } }) -> ()` updates the
   native menu from the main WebView's initialized i18n and language changes.
 - `desktop_settings(id INTEGER PRIMARY KEY CHECK(id = 1), autostart_mode TEXT,
   show_shortcut TEXT)` stores the JSON-encoded startup mode and a normalized
   shortcut string. Missing mode means disabled; missing/NULL shortcut defaults
-  to `mod+alt+p`. Add the nullable column with a guarded migration. Writes to
-  either field must preserve the other.
+  to `mod+alt+p`. Add the nullable column with a guarded migration.
+  `exit_on_close INTEGER NOT NULL DEFAULT 0` is added by a guarded migration;
+  an absent row means false. Writes to any field must preserve the others.
 - `desktop_window::show_main`, `hide_to_tray`, `sync_dock_visibility` own native
   visibility; `desktop_tray::handle_window_event` intercepts main close only.
 - `desktop_shortcut::install(&AppHandle) -> Result<(), String>` registers the
@@ -44,9 +48,16 @@ a browser tab does not hide or terminate the desktop Host.
 - Autostart names are separate for debug/release (`Pilo Dev` / `Pilo`), matching
   their separate Tauri app-data identifiers. Keep plugin versions compatible with
   the locked Tauri runtime; do not upgrade the whole desktop stack for this feature.
-- Main close hides, retaining the WebView, event subscriptions, Pi sessions,
-  terminals and WebUI service. Session-window close still destroys that window.
-  The tray's Hide action hides all windows; Show restores/unminimizes/focuses main.
+- Main close hides by default, retaining the WebView, event subscriptions, Pi
+  sessions, terminals and WebUI service. Settings → Preferences → Startup & system
+  tray exposes an opt-in `exit_on_close` switch. When enabled, main close is
+  prevented and calls `app.exit(0)` so all windows and services exit through the
+  existing async teardown. Read the persisted preference on each main close;
+  changes apply immediately across desktop windows and survive restart.
+  Session-window close still destroys only that window. Neither this switch nor
+  closing a browser tab changes WebUI browser behavior; no remote setting API
+  is exposed. The tray's Hide action still hides all windows regardless of the
+  preference; Show restores/unminimizes/focuses main.
   Reopening an existing hidden session must show and unminimize it before focus.
 - macOS starts with `LSUIElement` in `src-tauri/Info.plist`, applies the chosen
   launch activation policy during setup, and uses Regular for visible windows /
@@ -94,7 +105,9 @@ a browser tab does not hide or terminate the desktop Host.
 - Missing/invalid saved mode: log startup read failure and show the main window.
 - Tray creation failure: log, disallow hidden startup and let main close normally.
 - Settings read failure: show retry UI; write failure: retain the prior selection
-  and show a localized error. No optimistic OS-setting persistence.
+  and show a localized error. No optimistic OS-setting persistence. Load close
+  behavior independently from OS autostart settings. If its native close-time
+  read fails, log and retain default hide behavior (or normal close if no tray).
 - Native show/hide/menu failures: log; never silently destroy a live session.
 - Global shortcut initialization/registration failure (including another app
   owning the combination): log and continue startup with the normal tray and
@@ -106,8 +119,8 @@ a browser tab does not hide or terminate the desktop Host.
 
 - Good: login silently starts the Host; WebUI works while no desktop window shows.
 - Base: old installations remain opted out of login startup; manual launch shows.
-- Bad: treating main Close as Quit, hiding with no working tray, or reopening a
-  duplicate process instead of restoring the hidden window.
+- Bad: treating main Close as Quit without opt-in, hiding with no working tray,
+  or reopening a duplicate process instead of restoring the hidden window.
 
 ## 6. Tests Required
 
@@ -117,8 +130,13 @@ propagation. Shortcut coverage includes safe/invalid parsing, native replacement
 conflicts and persistence rollback, same-key saves, nullable-column migration
 and preservation of startup settings, IPC failures and tray refresh, physical
 key recording on macOS/Windows layouts, and desktop-only accessible rendering.
-Run frontend format/check/build and unit tests, Rust fmt/check/clippy and library
-tests.
+Close-behavior coverage (pending explicit authorization; no tests added/run):
+absent-row/default-false and boolean round-trips, idempotent migration preserving
+startup/shortcut values, writes preserving other columns, IPC save/load errors,
+independent accessible settings loading/retry, default hide vs opt-in graceful
+exit with another session window open, unchanged session-window close/tray Hide,
+and restart persistence. When authorized, run frontend format/check/build and
+unit tests, Rust fmt/check/clippy and library tests.
 
 Native acceptance remains manual: Windows login in both modes, opt-out/restart,
 tray Show/Hide/Quit, taskbar removal, repeated launches/quit during active work,
@@ -134,4 +152,5 @@ interactions.
 Wrong: use browser localStorage to decide native startup, expose autostart over
 remote HTTP, or use `std::process::exit` directly from the tray handler.
 Correct: native-owned persisted mode, desktop IPC only, official OS registration,
-visibility changes instead of destruction, and the existing bounded teardown.
+visibility changes instead of destruction by default, and explicit opt-in exit
+through the existing bounded teardown.

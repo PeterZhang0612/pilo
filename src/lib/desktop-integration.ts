@@ -111,6 +111,14 @@ export function setDesktopAutostart(mode: AutostartMode) {
 	return invoke<AutostartMode>("desktop_autostart_set", { mode });
 }
 
+export function getDesktopExitOnClose() {
+	return invoke<boolean>("desktop_exit_on_close_get");
+}
+
+export function setDesktopExitOnClose(enabled: boolean) {
+	return invoke<boolean>("desktop_exit_on_close_set", { enabled });
+}
+
 function updateTrayLabels() {
 	void invoke<void>("desktop_tray_set_labels", {
 		labels: {

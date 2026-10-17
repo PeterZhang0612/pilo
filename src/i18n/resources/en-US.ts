@@ -85,6 +85,9 @@ const enUS = {
 		autostartDisabled: "Do not launch",
 		autostartWindow: "Show main window",
 		autostartTray: "Run in system tray",
+		exitOnClose: "Quit when the main window closes",
+		closeLoadFailed: "Could not load close behavior settings. Try again.",
+		closeSaveFailed: "Could not save close behavior settings. Try again.",
 		saveFailed:
 			"Could not save launch-at-login settings. Check your system permissions and try again.",
 		loadFailed: "Could not load launch-at-login settings. Try again.",

@@ -4,8 +4,10 @@ import { toast } from "sonner";
 
 import {
 	getDesktopAutostart,
+	getDesktopExitOnClose,
 	isAutostartMode,
 	setDesktopAutostart,
+	setDesktopExitOnClose,
 	type AutostartMode,
 } from "@/lib/desktop-integration";
 import { cn } from "@/lib/utils";
@@ -16,6 +18,7 @@ import {
 	SelectItem,
 	SelectTrigger,
 	SelectValue,
+	Switch,
 } from "@/ui";
 import {
 	SETTINGS_CONTROL_CLASS,
@@ -107,6 +110,81 @@ export function DesktopSettings() {
 					</Select>
 				)}
 			</SettingsRow>
+			<ExitOnCloseSetting />
 		</SettingsSection>
+	);
+}
+
+function ExitOnCloseSetting() {
+	const { t } = useTranslation();
+	const [enabled, setEnabled] = useState<boolean | null>(null);
+	const [saving, setSaving] = useState(false);
+	const [loadError, setLoadError] = useState(false);
+
+	useEffect(() => {
+		let active = true;
+		void getDesktopExitOnClose().then(
+			(value) => {
+				if (active) setEnabled(value);
+			},
+			(error) => {
+				console.error("Failed to load desktop close settings", error);
+				if (active) setLoadError(true);
+			},
+		);
+		return () => {
+			active = false;
+		};
+	}, []);
+
+	const retry = async () => {
+		setLoadError(false);
+		try {
+			setEnabled(await getDesktopExitOnClose());
+		} catch (error) {
+			console.error("Failed to load desktop close settings", error);
+			setLoadError(true);
+		}
+	};
+
+	const changeEnabled = async (value: boolean) => {
+		if (saving) return;
+		setSaving(true);
+		try {
+			setEnabled(await setDesktopExitOnClose(value));
+		} catch (error) {
+			console.error("Failed to save desktop close settings", error);
+			toast.error(t("desktop.closeSaveFailed"));
+		} finally {
+			setSaving(false);
+		}
+	};
+
+	return (
+		<SettingsRow
+			label={
+				<label htmlFor="desktop-exit-on-close">
+					{t("desktop.exitOnClose")}
+				</label>
+			}
+		>
+			{loadError ? (
+				<div role="alert" className="flex flex-wrap items-center gap-2">
+					<span className="text-xs text-destructive">
+						{t("desktop.closeLoadFailed")}
+					</span>
+					<Button variant="ghost" size="sm" onClick={() => void retry()}>
+						{t("common.retry")}
+					</Button>
+				</div>
+			) : (
+				<Switch
+					id="desktop-exit-on-close"
+					checked={enabled ?? false}
+					disabled={enabled === null || saving}
+					onCheckedChange={(value) => void changeEnabled(value)}
+				/>
+			)}
+		</SettingsRow>
 	);
 }

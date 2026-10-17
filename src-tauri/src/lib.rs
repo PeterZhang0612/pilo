@@ -151,6 +151,8 @@ pub fn run() {
             desktop_autostart_get,
             desktop_autostart_set,
             desktop_tray_set_labels,
+            desktop_tray::desktop_exit_on_close_get,
+            desktop_tray::desktop_exit_on_close_set,
             desktop_shortcut::desktop_shortcut_get,
             desktop_shortcut::desktop_shortcut_set,
             debug_chat_performance_log,

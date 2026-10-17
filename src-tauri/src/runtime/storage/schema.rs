@@ -192,6 +192,12 @@ pub(super) fn initialize_schema(db: &SqliteConnection) -> Result<(), String> {
         db.execute_batch("ALTER TABLE desktop_settings ADD COLUMN show_shortcut TEXT;")
             .map_err(|error| error.to_string())?;
     }
+    if !column_exists(db, "desktop_settings", "exit_on_close")? {
+        db.execute_batch(
+            "ALTER TABLE desktop_settings ADD COLUMN exit_on_close INTEGER NOT NULL DEFAULT 0;",
+        )
+        .map_err(|error| error.to_string())?;
+    }
     Ok(())
 }
 

@@ -5,7 +5,7 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
 };
 
-use crate::{desktop_shortcut, desktop_window};
+use crate::{desktop_shortcut, desktop_window, runtime::storage};
 
 const TRAY_ID: &str = "pilo";
 
@@ -99,18 +99,51 @@ pub(crate) fn desktop_tray_set_labels(app: AppHandle, labels: TrayLabels) -> Res
     Ok(())
 }
 
+#[tauri::command]
+pub(crate) async fn desktop_exit_on_close_get(app: AppHandle) -> Result<bool, String> {
+    tauri::async_runtime::spawn_blocking(move || storage::get_exit_on_close(&storage::open(&app)?))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub(crate) async fn desktop_exit_on_close_set(
+    app: AppHandle,
+    enabled: bool,
+) -> Result<bool, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        storage::set_exit_on_close(&storage::open(&app)?, enabled)?;
+        Ok(enabled)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
 pub(crate) fn handle_window_event(window: &tauri::Window, event: &tauri::WindowEvent) {
     let app = window.app_handle();
     let result = match event {
-        tauri::WindowEvent::CloseRequested { api, .. }
-            if window.label() == "main" && available(app) =>
-        {
-            api.prevent_close();
-            window.hide().and_then(|()| {
-                #[cfg(target_os = "windows")]
-                window.set_skip_taskbar(true)?;
-                desktop_window::sync_dock_visibility(app, None)
-            })
+        tauri::WindowEvent::CloseRequested { api, .. } if window.label() == "main" => {
+            let exit_on_close = storage::open(app)
+                .and_then(|db| storage::get_exit_on_close(&db))
+                .unwrap_or_else(|error| {
+                    log::error!(target: "desktop", "failed to load close behavior: {error}");
+                    false
+                });
+            if exit_on_close {
+                api.prevent_close();
+                // Keep the window alive until the existing async exit cleanup finishes.
+                app.exit(0);
+                Ok(())
+            } else if available(app) {
+                api.prevent_close();
+                window.hide().and_then(|()| {
+                    #[cfg(target_os = "windows")]
+                    window.set_skip_taskbar(true)?;
+                    desktop_window::sync_dock_visibility(app, None)
+                })
+            } else {
+                Ok(())
+            }
         }
         tauri::WindowEvent::Destroyed => {
             desktop_window::sync_dock_visibility(app, Some(window.label()))

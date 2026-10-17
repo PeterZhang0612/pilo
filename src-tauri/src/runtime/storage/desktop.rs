@@ -49,6 +49,27 @@ pub(crate) fn set_show_shortcut(db: &Connection, shortcut: &str) -> Result<(), S
     Ok(())
 }
 
+pub(crate) fn get_exit_on_close(db: &Connection) -> Result<bool, String> {
+    db.query_row(
+        "SELECT exit_on_close FROM desktop_settings WHERE id = 1",
+        [],
+        |row| row.get(0),
+    )
+    .optional()
+    .map(|value| value.unwrap_or(false))
+    .map_err(|error| error.to_string())
+}
+
+pub(crate) fn set_exit_on_close(db: &Connection, enabled: bool) -> Result<(), String> {
+    db.execute(
+        r#"INSERT INTO desktop_settings(id, autostart_mode, exit_on_close) VALUES(1, '"disabled"', ?1)
+         ON CONFLICT(id) DO UPDATE SET exit_on_close = excluded.exit_on_close"#,
+        params![enabled],
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
