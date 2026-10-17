@@ -474,6 +474,38 @@ test("frame coalescing merges only compatible high-frequency actions", () => {
 	);
 });
 
+test("thinking actions keep the start and end timestamps of their block", () => {
+	const state = reduce([
+		{
+			type: "local_user_submit",
+			clientMessageId: "u1",
+			text: "run",
+			timestampMs: 1,
+		},
+		{ type: "local_assistant_pending", timestampMs: 1 },
+		{ type: "user_message_start", text: "run", timestampMs: 2 },
+		{ type: "assistant_message_start", timestampMs: 3 },
+		{ type: "assistant_thinking_start", timestampMs: 4 },
+		{ type: "assistant_thinking_delta", delta: "想", timestampMs: 5 },
+		{ type: "assistant_thinking_end", timestampMs: 40 },
+	]);
+	const thinking = state.messages
+		.flatMap((message) => message.content ?? [])
+		.find((item) => item.type === "thinking");
+
+	assert.deepEqual(
+		thinking?.type === "thinking"
+			? {
+					text: thinking.text,
+					status: thinking.status,
+					startedAtMs: thinking.startedAtMs,
+					endedAtMs: thinking.endedAtMs,
+				}
+			: null,
+		{ text: "想", status: "complete", startedAtMs: 4, endedAtMs: 40 },
+	);
+});
+
 test("compaction marker closes the running turn and inserts a compaction message", () => {
 	const state = replayConversationEvents(
 		[

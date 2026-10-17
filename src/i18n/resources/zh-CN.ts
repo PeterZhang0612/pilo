@@ -487,6 +487,8 @@ const zhCN = {
 		processing: "正在处理…",
 		workingTool: "正在{{tool}}…",
 		thoughtProcess: "思考过程",
+		thought: "思考",
+		thoughtDuration: "思考了 {{duration}}",
 		readFiles: "读取 {{count}} 个文件",
 		createdFiles: "新增 {{count}} 个文件",
 		editedFiles: "修改 {{count}} 个文件",
