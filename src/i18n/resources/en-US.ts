@@ -940,6 +940,7 @@ const enUS = {
 		openCommandPalette: "Open command palette",
 		cycleModel: "Cycle all models",
 		cycleScopedModel: "Cycle preferred models",
+		queueMessage: "Queue message",
 		focusComposer: "Focus composer",
 		defaultOccupied: "Default shortcut is already in use",
 		defaultOccupiedDescription:
