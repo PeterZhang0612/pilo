@@ -17,7 +17,11 @@ import {
 	type RemoteHostState,
 } from "@/lib/api/remote";
 import { randomId } from "@/lib/utils";
-import { remoteAddressConfig, sameAddressList } from "@/lib/remote-addresses";
+import {
+	remoteAddressConfig,
+	sameAddressList,
+	sortRemoteAddresses,
+} from "@/lib/remote-addresses";
 import { Button, Input, Spinner, Switch } from "@/ui";
 import {
 	SETTINGS_CONTAINER_CLASS,
@@ -173,6 +177,11 @@ export function RemoteSettings({
 	}, [refresh, state?.enabled]);
 	/* oxlint-enable react/set-state-in-effect */
 
+	const addresses = useMemo(
+		() => sortRemoteAddresses(state?.addresses ?? []),
+		[state?.addresses],
+	);
+
 	const activeDevices = useMemo(
 		() =>
 			(state?.devices ?? []).filter((device) => device.revokedAtMs === null),
@@ -223,12 +232,12 @@ export function RemoteSettings({
 	};
 
 	const saveAddresses = async (
-		draft = addressDraft ?? state?.addresses ?? [],
+		draft = addressDraft ?? addresses,
 	): Promise<RemoteAccessAddress[] | null> => {
 		if (busy || savingAddresses.current || !state) return null;
 		const config = remoteAddressConfig(draft, state.entryAddressId);
 		if (
-			sameAddressList(config.addresses, state.addresses) &&
+			sameAddressList(sortRemoteAddresses(config.addresses), addresses) &&
 			config.entryAddressId === state.entryAddressId
 		)
 			return draft;
@@ -395,17 +404,16 @@ export function RemoteSettings({
 				headerRight={
 					<RemoteLanAddressPicker
 						port={state.port}
-						addresses={addressDraft ?? state.addresses}
+						addresses={addressDraft ?? addresses}
 						disabled={
 							Boolean(busy) ||
 							savingAddressDraft ||
-							(addressDraft ?? state.addresses).filter((item) =>
-								item.baseUrl.trim(),
-							).length >= 32
+							(addressDraft ?? addresses).filter((item) => item.baseUrl.trim())
+								.length >= 32
 						}
 						onAdd={(baseUrl) => {
 							if (busy || savingAddresses.current) return;
-							const current = addressDraft ?? state.addresses;
+							const current = addressDraft ?? addresses;
 							const host = new URL(baseUrl).hostname.replaceAll(".", "-");
 							const id = `lan-${host}-${randomId().replaceAll("-", "")}`;
 							const empty = current.find((item) => !item.baseUrl.trim());
@@ -422,7 +430,7 @@ export function RemoteSettings({
 				}
 			>
 				<div className="space-y-2 px-3 py-3">
-					{(addressDraft ?? state.addresses).map((address, index) => (
+					{(addressDraft ?? addresses).map((address, index) => (
 						<div key={address.id} className="flex items-center gap-2">
 							<Input
 								ref={(input) => {
@@ -445,7 +453,7 @@ export function RemoteSettings({
 								onChange={(event) => {
 									draftRevision.current += 1;
 									setAddressDraft((current) =>
-										(current ?? state.addresses).map((item) =>
+										(current ?? addresses).map((item) =>
 											item.id === address.id
 												? Object.assign({}, item, {
 														baseUrl: event.target.value,
@@ -497,13 +505,13 @@ export function RemoteSettings({
 								size="icon"
 								className="size-11 shrink-0 sm:size-9"
 								disabled={
-									Boolean(busy) || (addressDraft ?? state.addresses).length <= 1
+									Boolean(busy) || (addressDraft ?? addresses).length <= 1
 								}
 								data-remove-address=""
 								onPointerDown={(event) => event.preventDefault()}
 								aria-label={`${t("common.remove")} ${address.baseUrl || index + 1}`}
 								onClick={() => {
-									const next = (addressDraft ?? state.addresses).filter(
+									const next = (addressDraft ?? addresses).filter(
 										(item) => item.id !== address.id,
 									);
 									draftRevision.current += 1;

@@ -130,6 +130,20 @@ remote_devices(id, name, pair_ip, token_hash, created_at_ms, last_seen_at_ms, ex
   `lan` address when one exists and no longer exposes entry or name editing;
   legacy `name` values stay in storage but are neither edited nor shown. The
   legacy command edits only the `public` entry.
+  The saved-address editor and WebUI pairing choices share
+  `sortRemoteAddresses` from `src/lib/remote-addresses.ts`: RFC1918 IPv4 origins
+  appear before public/custom origins, preserving order within each group.
+  This is display ordering, not default-entry selection or a persistence migration.
+  Sort saved editor rows, not the live draft, so typing does not move the focused
+  row. Compare `sortRemoteAddresses(config.addresses)` against the sorted saved
+  projection, not an unsorted draft against a sorted list. Enter can preserve
+  `[public, LAN, empty]` after a save; unchanged blur must not write again just
+  because the saved display projection is `[LAN, public]`.
+- **Remote settings surface**: the desktop-only dialog in `sidebar-footer.tsx`
+  uses the shared Radix `ScrollArea`, not an `overflow-y-auto` dialog. Keep the
+  heading/close control outside the scroll viewport and use a `minmax(0, 1fr)`
+  content row, `min-h-0`, and `overscroll-contain`. Reuse theme scrollbar tokens;
+  do not add a Host-management dialog or native APIs to WebUI.
 - **LAN discovery**: desktop-only, on picker open, never part of the 3-second
   state poll or an HTTP route. `remote/lan.rs` reads Up interfaces through Windows
   PowerShell/.NET, macOS `ifconfig -u`, or Linux `ip -o -4 addr show up`, with a
@@ -403,7 +417,10 @@ LAN picker assertions, pending explicit authorization (no tests added or run):
 multiple/duplicate interfaces, excluded IP classes, timeout/failed command, empty
 result, already-added origins (including default ports/trailing slash), empty-row
 reuse, save overlap/failure, 32-origin cap, Windows PowerShell enumeration and
-narrow-screen keyboard/touch menu behavior.
+narrow-screen keyboard/touch menu behavior. Saved-editor and pairing-list order
+must put RFC1918 hosts above public/custom origins regardless of address IDs,
+retain same-group order, keep live draft rows fixed, and avoid writes on unchanged
+blur. No tests were added or run for saved-list sorting.
 
 Assertion points (inline `#[cfg(test)] mod tests`):
 
