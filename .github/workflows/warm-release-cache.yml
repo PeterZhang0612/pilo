@@ -1,0 +1,116 @@
+name: Warm Release Cache
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".cargo/**"
+      - "src-tauri/**"
+      - "crates/**"
+      - ".github/workflows/warm-release-cache.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+concurrency:
+  group: warm-release-cache
+  cancel-in-progress: true
+
+jobs:
+  warm:
+    name: Warm ${{ matrix.artifact }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-2022
+            artifact: Pilo-windows-x64-installed
+            args: ""
+          - platform: macos-14
+            artifact: Pilo-macos-arm64
+            args: "--target aarch64-apple-darwin"
+          - platform: ubuntu-22.04
+            artifact: Pilo-linux-x64
+            args: ""
+
+    runs-on: ${{ matrix.platform }}
+    timeout-minutes: 60
+    env:
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "8"
+      CARGO_PROFILE_RELEASE_LTO: thin
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.12.3
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.99.1"
+
+      - name: Install macOS ARM64 target
+        if: runner.os == 'macOS'
+        run: rustup target add aarch64-apple-darwin
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            curl \
+            file \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            pkg-config \
+            rpm \
+            wget
+
+      - name: Cache Cargo
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+          shared-key: pilo-release-${{ matrix.artifact }}
+          save-if: true
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build frontend
+        run: pnpm build
+
+      - name: Prepare resource directory
+        shell: bash
+        run: mkdir -p src-tauri/resources
+
+      - name: Warm Rust release dependencies
+        shell: bash
+        env:
+          PILO_ALLOW_INCOMPLETE_SERVER_BUNDLE: "1"
+        run: |
+          cargo build --locked --release \
+            -p pilo --bin pilo \
+            --features tauri/custom-protocol ${{ matrix.args }}
