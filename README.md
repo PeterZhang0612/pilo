@@ -136,11 +136,13 @@ Images reference existing files, not immutable snapshots: deleting or overwritin
 ## Development
 
 Run `pnpm hooks:install` once per clone to enable pre-commit checks. Every
-commit runs `pnpm check` (frontend formatting and lint), `pnpm exec tsc --noEmit`
-(TypeScript types), then Rust formatting checks, workspace checks and Clippy.
-Any failure blocks the commit; files are not auto-formatted. Full frontend
-builds and tests are not part of this hook. Install the project's Node.js
-dependencies, Rust and the platform-specific Tauri build dependencies first.
+commit runs `pnpm check` (frontend formatting and lint), then
+`cargo fmt --all --check` (Rust formatting). Any failure blocks the commit;
+files are not auto-formatted. TypeScript types, Rust workspace checks, Clippy,
+full frontend builds and tests are checked outside this hook. CI still checks
+TypeScript types through `pnpm build`.
+Install the project's Node.js dependencies, Rust and the platform-specific
+Tauri build dependencies first.
 
 The hook uses Git for Windows' bundled `sh` on Windows and the system `sh`
 on macOS/Linux. Ensure `pnpm` and `cargo` are on the committing process's `PATH`.

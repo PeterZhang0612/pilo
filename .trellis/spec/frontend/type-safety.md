@@ -9,8 +9,9 @@
 `tsconfig.json`: `strict: true`, `noUnusedLocals`, `noUnusedParameters`,
 `noFallthroughCasesInSwitch`, `isolatedModules`, `noEmit`, JSX `react-jsx`.
 Path alias: `@/*` → `./src/*`. The project type-checks via `tsc` inside
-`pnpm build`; the pre-commit hook runs `pnpm exec tsc --noEmit` without a Vite
-build (there is no separate `typecheck` script).
+`pnpm build` locally and in CI. TypeScript checking stays outside the
+pre-commit hook to keep commits fast; use `pnpm exec tsc --noEmit` for a
+standalone check without a Vite build (there is no separate `typecheck` script).
 
 ## Conventions
 

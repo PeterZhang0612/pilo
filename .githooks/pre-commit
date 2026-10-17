@@ -5,14 +5,5 @@ set -eu
 printf '[pre-commit] Checking frontend formatting and lint...\n'
 pnpm check
 
-printf '[pre-commit] Checking TypeScript types...\n'
-pnpm exec tsc --noEmit
-
 printf '[pre-commit] Checking Rust formatting...\n'
 cargo fmt --all --check
-
-printf '[pre-commit] Checking Rust workspace...\n'
-cargo check --workspace --all-targets --all-features
-
-printf '[pre-commit] Running Clippy...\n'
-cargo clippy --workspace --all-targets --all-features -- -D warnings
