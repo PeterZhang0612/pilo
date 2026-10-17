@@ -220,6 +220,9 @@ const enUS = {
 		sendShortcut: "Send shortcut",
 		collapseLongMessages: "Collapse long messages",
 		collapseWork: "Collapse work activity",
+		pluginNotifications: "Show plugin notifications",
+		pluginNotificationsHint:
+			"Messages Pi extensions send through ctx.ui.notify.",
 		language: "Language",
 		languageChinese: "简体中文",
 		languageEnglish: "English",

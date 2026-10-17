@@ -217,6 +217,8 @@ const zhCN = {
 		sendShortcut: "发送快捷键",
 		collapseLongMessages: "折叠长消息",
 		collapseWork: "折叠工作过程",
+		pluginNotifications: "显示插件通知",
+		pluginNotificationsHint: "Pi 扩展通过 ctx.ui.notify 发出的消息。",
 		language: "语言",
 		languageChinese: "简体中文",
 		languageEnglish: "English",

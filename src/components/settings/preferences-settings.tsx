@@ -29,6 +29,8 @@ export function PreferencesSettings() {
 		setCollapseCompletedActivity,
 		collapseLongMessages,
 		setCollapseLongMessages,
+		showPluginNotifications,
+		setShowPluginNotifications,
 		developerMode,
 		setDeveloperMode,
 	} = usePreferences();
@@ -62,6 +64,15 @@ export function PreferencesSettings() {
 					<Switch
 						checked={collapseCompletedActivity}
 						onCheckedChange={setCollapseCompletedActivity}
+					/>
+				</SettingsRow>
+				<SettingsRow
+					label={t("settings.pluginNotifications")}
+					helper={t("settings.pluginNotificationsHint")}
+				>
+					<Switch
+						checked={showPluginNotifications}
+						onCheckedChange={setShowPluginNotifications}
 					/>
 				</SettingsRow>
 				<SettingsRow label={t("settings.language")}>
