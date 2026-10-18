@@ -559,6 +559,8 @@ const enUS = {
 		piProcessFailed: "Pi process failed.",
 		piProcessStopped: "The Pi process stopped before the reply was complete.",
 		responseError: "Pi returned an error result.",
+		modelStreamStalled:
+			"The model response stopped making progress, so Pilo stopped this turn. Received content is preserved. Send a new message to continue.",
 		historyReplyInterrupted:
 			"This historical reply was interrupted before it completed.",
 		untitledMessage: "Untitled message",

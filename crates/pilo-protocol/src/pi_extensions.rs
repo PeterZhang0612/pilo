@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 pub enum BuiltinExtension {
     NextPrompt,
     CacheKeepAlive,
+    StreamGuard,
     ModelCatalog,
     SshWorkspace { config: SshWorkspaceConfig },
 }

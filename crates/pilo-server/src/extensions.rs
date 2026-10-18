@@ -20,6 +20,10 @@ const SOURCES: &[(&str, &str)] = &[
         include_str!("../extensions/ssh-workspace.js"),
     ),
     (
+        "stream-guard.js",
+        include_str!("../extensions/stream-guard.js"),
+    ),
+    (
         "model-catalog.js",
         include_str!("../extensions/model-catalog.js"),
     ),
@@ -98,6 +102,7 @@ pub(crate) fn filename(extension: &BuiltinExtension) -> &'static str {
     match extension {
         BuiltinExtension::NextPrompt => "next-prompt.js",
         BuiltinExtension::CacheKeepAlive => "cache-keep-alive.js",
+        BuiltinExtension::StreamGuard => "stream-guard.js",
         BuiltinExtension::ModelCatalog => "model-catalog.js",
         BuiltinExtension::SshWorkspace { .. } => "ssh-workspace.js",
     }

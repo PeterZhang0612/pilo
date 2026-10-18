@@ -32,7 +32,7 @@ share `useNextPrompt`, `useNextPromptSettings`, settings fields and `ChatCompose
   or both present.
 - Pi `pi.start` adds `builtinExtensions: BuiltinExtension[]`, defaulting to `[]`.
   The internally tagged protocol enum uses `{ id: "next-prompt" }`,
-  `{ id: "cache-keep-alive" }`, `{ id: "model-catalog" }`, or
+  `{ id: "cache-keep-alive" }`, `{ id: "stream-guard" }`, `{ id: "model-catalog" }`, or
   `{ id: "ssh-workspace", config }`.
   Existing `extensions: string[]` still means inline source, not file paths.
 
@@ -200,9 +200,41 @@ share `useNextPrompt`, `useNextPromptSettings`, settings fields and `ChatCompose
   Neither composer displays a prediction settings icon. Use coarse-pointer 44px
   targets and the existing viewport/safe-area layout.
 
+### Model stream idle guard
+
+- Normal chat loads `stream-guard.js` through the same Server-owned deployment
+  path on Local/WSL/SSH; desktop and WebUI use the shared assistant message UI.
+  This is an idle watchdog, not an overall turn deadline or transport reconnect.
+- Each `agent_start` enables monitoring, including automatic retries and
+  `agent_before_settle` continuations through `agent.continue()`. Do not rely on
+  `before_agent_start`: it only prepares the original prompt, not these later
+  executions. Requests during prompt preparation or retry backoff stay unguarded.
+  `before_provider_request` starts the timer before response headers/`message_start`;
+  `provider_stream_event` and
+  normalized `message_update` renew it. Any model event counts as progress, not
+  just visible text. Assistant `message_end` disarms it before tool execution;
+  long tools must not be aborted. Tool results cannot disarm an active request.
+- Optional child environment `PILO_MODEL_STREAM_IDLE_TIMEOUT_MS` accepts a
+  positive safe integer up to 2,147,483,647 ms; missing/invalid values use
+  120,000 ms. No new UI setting or dependency is required.
+- Expiry calls the current context's `abort()` once. Only a watchdog-owned
+  `aborted` assistant message is replaced through Pi's `message_end` result:
+  preserve content/usage, set `stopReason: "error"`, and prefix `errorMessage`
+  with `PILO_STREAM_STALLED:`. Pi persists that replacement in its own JSONL.
+  Shared UI localizes this prefix; ordinary errors and manual cancellation stay
+  unchanged. Do not automatically replay a possibly side-effecting turn, and
+  avoid retryable provider wording such as `timeout` in the replacement error.
+- Manual abort removes the timer; late events cannot rearm an aborted/expired
+  request. `agent_end`, session start/switch/shutdown clear all watchdog state.
+  A subsequent turn gets a fresh signal/timer. Idle background model calls are
+  not guarded. Provider cancellation must honor Pi's abort signal to settle.
+- Do not assume SDK request timeouts cover SSE reads after headers. HTTP 200
+  and a missing upstream error do not prove a terminal model event arrived;
+  an incomplete-stream error after manual abort does not prove an earlier EOF.
+
 ### Fixed deployment
 
-- Server embeds three single-file sources from `crates/pilo-server/extensions/`
+- Server embeds five single-file sources from `crates/pilo-server/extensions/`
   and deploys them once at startup into `<runtime-root>/extensions/`. Unchanged
   content is left untouched; missing/changed files use same-directory create-new
   temporary files, sync and atomic rename. Temporary names include PID + nonce;
@@ -224,14 +256,15 @@ share `useNextPrompt`, `useNextPromptSettings`, settings fields and `ChatCompose
   Unicode, and all non-Windows paths; keep canonical paths for filesystem IO.
   Regression tests in `runtime_streams/pi.rs` cover both conversions and
   platform gating without requiring a Windows host for the string cases.
-  Normal chat loads next-prompt; model probe loads model-catalog (plus SSH tools
+  Normal chat loads stream-guard, next-prompt and cache-keep-alive; model probe
+  loads model-catalog (plus SSH tools
   only when required by its profile); parallel/direct Pi load only their profile.
   A disabled setting does not unload the script, but causes no prediction calls.
 - SSH config is child-only `PILO_SSH_WORKSPACE_CONFIG` JSON:
   `{ label, remoteCwd, sshArgs, sshEnvironment }`. Remove inherited config before
   optionally setting it. Never replace text in shared deployed source.
 - User-installed extensions remain Pi-native. Inline-source compatibility remains
-  for other callers, but these three production built-ins do not use it.
+  for other callers, but these production built-ins do not use it.
   `src-tauri/src/runtime/pi_ssh_workspace.js` is retained unchanged solely for the
   existing source-reading SSH test fixture; it has no production loading reference.
 - The model-catalog probe resolves defaults serially: each setModel changes the
@@ -256,6 +289,8 @@ share `useNextPrompt`, `useNextPromptSettings`, settings fields and `ChatCompose
 | Missing model/auth, unsupported API, complete failure | Lightweight unavailable or no suggestion; primary chat unaffected |
 | No next intent / invalid output | Null/empty; no automatic retry or generic continue |
 | Timeout/cancel/late reply/replay | Invalidate or ignore; never overwrite real draft |
+| Main model produces no events for the idle deadline | Abort once, preserve partial assistant content, persist `PILO_STREAM_STALLED:`; no replay |
+| Manual abort / long tools / normal provider error | Preserve existing behavior; do not label as model stall |
 | Duplicate built-in ID / invalid SSH config | Reject Pi start before launch |
 | Relative explicit runtime root / deployment IO failure | Server startup fails; no half-written script is loaded |
 
@@ -273,12 +308,29 @@ log SSH config, model credentials, prediction context or suggestion body.
   the request; returning after completion shows the cached result without a new
   call. Typing or dismissing in B must not clear A. Hydration temporarily hides,
   but does not invalidate, A's cached result.
+- Good stream recovery: an open SSE stream stalls, the watchdog settles the
+  turn with a persisted error, and the user's next prompt completes normally.
 - Base: default disabled or viewing idle history starts neither Pi nor prediction;
   absent cached models still allows follow-chat configuration.
 - Bad: old Web replay, changed settings, typed draft, fork or new run cannot
   resurrect a suggestion. Explicit unavailable targets must not use another model.
 
 ## 6. Tests Required (When Explicitly Authorized)
+
+`tests/integration/pi-stream-guard.test.ts` verifies first-event silence,
+raw/normalized event renewal, long tools, tool-result isolation, manual abort,
+late events, next-turn/lifecycle cleanup, ordinary errors and env bounds with
+fake time. Simulate `before_agent_start` once, then a provider error, `agent_end`
+and a retry's `agent_start`/`before_provider_request`: the retry must have a fresh
+idle deadline, abort once and preserve partial content in the replacement error.
+Also cover pre-settlement continuations, progress renewal, and background requests
+during prompt preparation, idle time and retry backoff without a watchdog.
+`tests/browser/chat-stream-guard.html` checks shared desktop/WebUI alerts in Chinese/English, 320px/wide and light/dark layouts, preserved partial
+text, no stale processing indicator and unchanged ordinary errors.
+A real Pi 1.3.0 RPC check against a local SSE mock also verified no-header and
+partial-stream stalls, manual abort, recovery on the next prompt, one HTTP call
+per prompt (no retry), `agent_settled`, and matching errors in Pi JSONL.
+This is not a Windows desktop or real remote-provider validation.
 
 `tests/integration/pi-next-prompt.test.ts` is included in `pnpm test:integration`
 (and `pnpm test`). Its isolated Pi mock verifies timeout completion when abort
@@ -337,6 +389,14 @@ behaviors have been run:
   The legacy SSH fixture alone does not verify the new deployed script.
 
 ## 7. Wrong vs Correct
+
+Wrong: use a total-turn timeout, start monitoring only at `message_start`, enable
+only at `before_agent_start` (missing retries/continuations), show only a frontend
+error while Pi keeps running, or auto-resend a stalled tool turn.
+
+Correct: monitor model-request inactivity from `before_provider_request`, stop
+before tools, abort through Pi, and persist the error using `message_end` message
+replacement. Preserve manual cancellation and require an explicit new prompt.
 
 Wrong: `ensure()` an idle Session for prediction, send a private command without
 knowing it loaded, or send it through normal chat prompt bookkeeping.

@@ -536,6 +536,8 @@ const zhCN = {
 		piProcessFailed: "Pi 进程运行失败。",
 		piProcessStopped: "Pi 进程在回复完成前已停止。",
 		responseError: "Pi 返回了错误结果。",
+		modelStreamStalled:
+			"模型响应长时间没有进展，已停止本轮。已收到的内容已保留，请发送新消息继续。",
 		historyReplyInterrupted: "这段历史回复在完成前中断。",
 		untitledMessage: "未命名消息",
 		reconnectedActive: "已重新连接正在进行的 Pi 回复。",

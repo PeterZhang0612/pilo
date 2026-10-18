@@ -34,12 +34,13 @@ async fn resolve_launch(
     let profile =
         pi_workspace::resolve_pi_runtime_with_paths(paths, &project, request.extensions.clone())?;
     let mut builtin_extensions = profile.builtin_extensions;
-    // Probes are throwaway sessions; only normal chats load background assistance.
+    // Probes are throwaway sessions; only normal chats load turn guards and assistance.
     if !request
         .builtin_extensions
         .iter()
         .any(|extension| matches!(extension, BuiltinExtension::ModelCatalog))
     {
+        builtin_extensions.push(BuiltinExtension::StreamGuard);
         builtin_extensions.push(BuiltinExtension::NextPrompt);
         builtin_extensions.push(BuiltinExtension::CacheKeepAlive);
     }

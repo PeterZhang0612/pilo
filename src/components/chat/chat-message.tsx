@@ -187,7 +187,9 @@ export const AssistantMessage = memo(function AssistantMessage({
 							role="alert"
 							className="mt-2 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs leading-5 text-destructive"
 						>
-							{visibleErrorMessage}
+							{visibleErrorMessage.startsWith("PILO_STREAM_STALLED:")
+								? t("chat.modelStreamStalled")
+								: visibleErrorMessage}
 						</div>
 					) : null}
 					{streamingLabel || message.stopReason === "aborted" ? (
