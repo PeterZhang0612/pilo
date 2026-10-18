@@ -14,6 +14,10 @@ dist-ssr
 src-tauri/resources/pilo-server-*
 /target/
 
+# Local scratch files and diagnostic test outputs
+/.tmp/
+/tests/tmp/
+
 # Local design notes
 docs/remote-webui-architecture.md
 docs/chat-streaming-performance-design.md

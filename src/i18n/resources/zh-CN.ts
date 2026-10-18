@@ -471,6 +471,8 @@ const zhCN = {
 		todayPrompt: "今天要做点什么？",
 		openProjectInEditor: "在编辑器中打开",
 		openProjectWithEditor: "在 {{editor}} 中打开",
+		openFileInEditor: "在编辑器中打开文件",
+		openFileWithEditor: "在 {{editor}} 中打开 {{name}}",
 		chooseProjectEditor: "选择编辑器",
 		openProjectInEditorFailed:
 			"无法打开 {{editor}}，请确认已安装并注册打开协议。",
@@ -553,6 +555,15 @@ const zhCN = {
 		imagePreviewReleased: "图片预览已释放，重新打开会话即可加载",
 		loadImageFailed: "加载失败，点击重试",
 		imageUnavailable: "图片不可用",
+		fileLinkInvalid: "仅支持不含查询参数或片段的本地文件链接。",
+		fileLinkOpenFailed: "打开文件失败",
+		fileLinkCheckPath:
+			"请检查文件是否存在、可访问，且不是可执行文件或快捷方式。",
+		fileLinkWebUnsupported:
+			"WebUI 暂不支持文件链接。请在桌面端打开 Local 项目，或让 Agent 提供 HTTP(S) 链接。",
+		fileLinkRemoteUnsupported:
+			"暂不支持 WSL 和 SSH 项目的文件链接，请让 Agent 提供 HTTP(S) 链接。",
+		fileLinkNoProject: "请在此对话所属的项目中打开文件。",
 		noPiReply: "还没有 Pi 回复。",
 		messageNavigation: "消息导航",
 		scrollLatest: "滚动到最新消息",
@@ -800,6 +811,8 @@ const zhCN = {
 	},
 	file: {
 		...enUS.file,
+		workspaceTabs: "工作区标签页",
+		workspaceUnavailable: "此视图暂不支持文件预览。",
 		diffLines: "第 {{start}}–{{end}} 行，共 {{total}} 行",
 		loading: "加载中…",
 		search: "搜索文件",

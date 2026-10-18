@@ -145,6 +145,7 @@ export function MarkdownImage({
 	const scope = useContext(ProjectImageContext);
 	const source = resolveMarkdownImageSource(
 		projectSrc ?? (typeof src === "string" ? src : undefined),
+		scope?.baseDirectory,
 	);
 	if (source.type === "external")
 		return (

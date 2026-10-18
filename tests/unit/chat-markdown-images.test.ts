@@ -4,7 +4,10 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Streamdown, defaultUrlTransform } from "streamdown";
 
-import { resolveMarkdownImageSource } from "../../src/lib/chat/chat-markdown-images.ts";
+import {
+	projectMarkdownImageScope,
+	resolveMarkdownImageSource,
+} from "../../src/lib/chat/chat-markdown-images.ts";
 import {
 	loadChatHistoryImageUrl,
 	loadChatProjectImageUrl,
@@ -71,6 +74,57 @@ test("Markdown images never resolve system paths, traversal, or unsupported sche
 		);
 });
 
+test("Markdown preview image scopes resolve from the document directory within the project", () => {
+	const project = { id: "preview-images", path: "/work/project" };
+	for (const [filePath, directory, imagePath] of [
+		["/work/project/README.md", "", "diagram.png"],
+		["/work/project/docs/README.md", "docs", "docs/diagram.png"],
+	]) {
+		const scope = projectMarkdownImageScope(project, filePath);
+		assert.ok(scope);
+		assert.equal(scope.projectId, project.id);
+		assert.equal(scope.baseDirectory, directory);
+		assert.deepEqual(
+			resolveMarkdownImageSource("./diagram.png", scope.baseDirectory),
+			{
+				type: "project",
+				path: imagePath,
+				mimeType: "image/png",
+			},
+		);
+	}
+	assert.deepEqual(resolveMarkdownImageSource("../diagram.png", "docs"), {
+		type: "project",
+		path: "diagram.png",
+		mimeType: "image/png",
+	});
+	for (const src of [
+		"../../secret.png",
+		"/tmp/secret.png",
+		"file:///tmp/a.png",
+		"%2e%2e/%2e%2e/a.png",
+	])
+		assert.equal(resolveMarkdownImageSource(src, "docs").type, "invalid");
+	for (const filePath of [
+		"/work/project-other/README.md",
+		"/tmp/README.md",
+		"/work/project/docs/../../README.md",
+	])
+		assert.equal(projectMarkdownImageScope(project, filePath), null);
+	assert.equal(
+		projectMarkdownImageScope(
+			{ id: "win", path: "C:\\Project" },
+			"\\\\?\\C:\\Project\\docs\\README.md",
+		)?.baseDirectory,
+		"docs",
+	);
+	assert.equal(
+		projectMarkdownImageScope({ id: "root", path: "/" }, "/docs/README.md")
+			?.baseDirectory,
+		"docs",
+	);
+});
+
 test("ordinary HTTP(S) image URLs stay external", () => {
 	for (const url of [
 		"https://example.com/a.png?size=2",
@@ -86,7 +140,7 @@ test("ordinary HTTP(S) image URLs stay external", () => {
 	);
 });
 
-function renderMarkdown(text: string) {
+function renderMarkdown(text: string, baseDirectory?: string) {
 	return renderToStaticMarkup(
 		createElement(
 			ChatMarkdownImageScopeProvider,
@@ -94,6 +148,7 @@ function renderMarkdown(text: string) {
 				scope: {
 					projectId: "project",
 					sessionKey: "session",
+					baseDirectory,
 					readImage: async () => new Uint8Array(),
 				},
 			},
@@ -120,6 +175,17 @@ test("Markdown pipeline routes project images through the loader, not browser-re
 	assert.match(html, /title="screenshots\/page.png"/);
 	assert.match(html, /aria-label="View image Page"/);
 	assert.doesNotMatch(html, /src="(?:\.\/)?screenshots\/page.png"/);
+});
+
+test("Markdown preview pipeline preserves relative images until document scope resolution", () => {
+	const html = renderMarkdown(
+		"![Diagram](./diagram.png) ![Parent](../overview.png) ![Escape](../../secret.png)",
+		"docs",
+	);
+	assert.match(html, /title="docs\/diagram.png"/);
+	assert.match(html, /title="overview.png"/);
+	assert.match(html, /Image unavailable/);
+	assert.doesNotMatch(html, /title="[^"]*secret|src="(?:\.\/|\.\.\/|docs\/)/);
 });
 
 test("Markdown pipeline rejects unsafe image sources and preserves HTTPS images", () => {

@@ -1,4 +1,24 @@
+import type { Project } from "@/lib/api/projects";
+import type { ChatProjectImageScope } from "@/lib/chat/chat-image-media";
 import { resolveChatImageMimeType } from "@/lib/chat/chat-submission";
+import { workspaceFileKey } from "@/lib/project-workspace";
+
+/** Outside-project documents never gain access to their neighbouring system files. */
+export function projectMarkdownImageScope(
+	project: Pick<Project, "id" | "path">,
+	filePath: string,
+): ChatProjectImageScope | null {
+	const root = workspaceFileKey(project.path).replace(/\/+$/, "");
+	const path = workspaceFileKey(filePath);
+	if (!path.startsWith(`${root}/`)) return null;
+	const relative = path.slice(root.length + 1);
+	if (!relative || relative.split("/").includes("..")) return null;
+	return {
+		projectId: project.id,
+		sessionKey: filePath,
+		baseDirectory: relative.split("/").slice(0, -1).join("/"),
+	};
+}
 
 export type MarkdownImageSource =
 	| { type: "external"; url: string }
@@ -6,7 +26,10 @@ export type MarkdownImageSource =
 	| { type: "invalid" };
 
 /** Markdown paths are project-relative, never browser-relative or system paths. */
-export function resolveMarkdownImageSource(src?: string): MarkdownImageSource {
+export function resolveMarkdownImageSource(
+	src?: string,
+	baseDirectory?: string,
+): MarkdownImageSource {
 	if (!src) return { type: "invalid" };
 	if (/^https?:\/\//i.test(src)) {
 		try {
@@ -35,8 +58,16 @@ export function resolveMarkdownImageSource(src?: string): MarkdownImageSource {
 	)
 		return { type: "invalid" };
 	const segments = path.split("/");
-	if (segments.includes("..")) return { type: "invalid" };
-	path = segments.filter((segment) => segment && segment !== ".").join("/");
+	if (baseDirectory === undefined && segments.includes(".."))
+		return { type: "invalid" };
+	const resolved = baseDirectory ? baseDirectory.split("/") : [];
+	for (const segment of segments) {
+		if (segment === "..") {
+			if (!resolved.length) return { type: "invalid" };
+			resolved.pop();
+		} else if (segment && segment !== ".") resolved.push(segment);
+	}
+	path = resolved.join("/");
 	const mimeType = resolveChatImageMimeType({ name: path, type: "" });
 	return path && typeof mimeType === "string"
 		? { type: "project", path, mimeType }

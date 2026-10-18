@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { i18n } from "../../i18n/index.ts";
 import { registerChatFile } from "@/lib/chat/chat-file-lifecycle";
 
 export type FsEntryKind = "file" | "directory" | "symlink" | "other";
@@ -26,6 +27,19 @@ export function readProjectFile(
 		id: projectId,
 		path,
 	}).then((data) => new Uint8Array(data));
+}
+
+/** Text-only projection used by the existing project-contained viewer. */
+export async function readProjectTextFile(
+	projectId: string,
+	path: string,
+): Promise<string> {
+	const data = await readProjectFile(projectId, path);
+	if (data.byteLength > 5 * 1024 * 1024)
+		throw new Error(i18n.t("file.tooLarge", { size: 5 }));
+	if (data.subarray(0, Math.min(data.length, 8192)).includes(0))
+		throw new Error(i18n.t("file.binary"));
+	return new TextDecoder("utf-8", { fatal: true }).decode(data);
 }
 
 /** Image-only, project-contained read for assistant Markdown replies. */

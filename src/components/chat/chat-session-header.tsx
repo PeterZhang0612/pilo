@@ -1,3 +1,5 @@
+import { useContext } from "react";
+import { ProjectWorkspaceContext } from "@/components/app/project-workspace-context";
 import {
 	MessageSquareDashed,
 	PanelLeft,
@@ -14,6 +16,7 @@ import {
 	TRAFFIC_LIGHT_ALIGNED_HEADER,
 	TRAFFIC_LIGHT_GUTTER,
 } from "@/components/title-bar";
+import { ProjectWorkspaceTabs } from "@/components/app/project-workspace-tabs";
 import { ProjectEditorMenu } from "@/components/project-editor-menu";
 import type { Project } from "@/lib/api/projects";
 import { cn } from "@/lib/utils";
@@ -63,6 +66,11 @@ export function SessionHeader({
 }) {
 	const { t } = useTranslation();
 	const editorProject = isTauri() ? project : null;
+	const workspace = useContext(ProjectWorkspaceContext);
+	const activeFilePath = project
+		? workspace?.state.get(project.id)?.activePath
+		: undefined;
+	const fileActive = Boolean(activeFilePath);
 	// 会话窗口的 TitleBar 额外渲染置顶按钮（见 App.tsx 的 showAlwaysOnTop），
 	// 需要按多一个控件宽度避让，否则会压住菜单按钮。
 	const reserveWithPin =
@@ -75,6 +83,7 @@ export function SessionHeader({
 				"flex h-11 shrink-0 items-center bg-background",
 				IS_MACOS ? TRAFFIC_LIGHT_ALIGNED_HEADER : "mt-0.5",
 				overlay ? "absolute inset-x-0 top-0 z-30" : "relative",
+				fileActive && "z-40",
 				IS_MACOS && sidebarCollapsed && TRAFFIC_LIGHT_GUTTER,
 				reserveWindowControls &&
 					(reserveWithPin ? "pr-[10.25rem]" : "pr-[7.75rem]"),
@@ -105,57 +114,41 @@ export function SessionHeader({
 					<PanelLeft className="size-4" />
 				</Button>
 			</div>
-			{session && !session.temporary ? (
-				<div
-					role="tablist"
-					aria-label={t("common.sessions")}
-					className="flex min-w-0 flex-1 items-center px-1"
-				>
-					<div
-						role="tab"
-						aria-selected="true"
-						tabIndex={0}
-						className="group flex h-8 w-fit max-w-[66.666667%] min-w-0 items-center gap-1.5 overflow-hidden rounded-md border border-transparent px-3 text-sm text-foreground outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
+			<ProjectWorkspaceTabs
+				projectId={project?.id}
+				title={
+					session || temporaryActive
+						? sessionState?.name ||
+							session?.title ||
+							(temporaryActive ? t("app.temporaryChat") : t("app.newChat"))
+						: undefined
+				}
+				temporary={temporaryActive}
+			>
+				{temporaryActive ? (
+					<MessageSquareDashed aria-hidden="true" className="size-4 shrink-0" />
+				) : (
+					<svg
+						viewBox="0 0 800 800"
+						className={cn(
+							"size-[1.15em] shrink-0 text-muted-foreground transition-opacity duration-200 motion-reduce:transition-none",
+							// 折叠时淡出，避免与悬浮的展开图标叠在一起
+							sidebarCollapsed ? "opacity-0" : "opacity-60",
+						)}
+						aria-hidden="true"
 					>
-						<svg
-							viewBox="0 0 800 800"
-							className={cn(
-								"size-[1.15em] shrink-0 text-muted-foreground transition-opacity duration-200 motion-reduce:transition-none",
-								// 折叠时淡出，避免与悬浮的展开图标叠在一起
-								sidebarCollapsed ? "opacity-0" : "opacity-60",
-							)}
-							aria-hidden="true"
-						>
-							<path
-								className="fill-current"
-								fillRule="evenodd"
-								d="M165.29 165.29H517.36V400H400V517.36H282.65V634.72H165.29ZM282.65 282.65V400H400V282.65Z"
-							/>
-							<path
-								className="fill-current"
-								d="M517.36 400H634.72V634.72H517.36Z"
-							/>
-						</svg>
-						<span className="min-w-0 flex-1 truncate">
-							{sessionState?.name || session.title}
-						</span>
-					</div>
-				</div>
-			) : temporaryActive ? (
-				/* 临时会话（含草稿态）没有持久化标题，用虚线标识区别于普通会话/落地页，
-				   否则点击「临时会话」后界面看不出变化 */
-				<div className="flex min-w-0 flex-1 items-center px-1">
-					<div className="flex h-8 w-fit max-w-[66.666667%] min-w-0 items-center gap-1.5 overflow-hidden rounded-md border border-dashed border-border px-3 text-sm text-muted-foreground">
-						<MessageSquareDashed className="size-[1.15em] shrink-0" />
-						<span className="min-w-0 flex-1 truncate">
-							{sessionState?.name || session?.title || t("app.temporaryChat")}
-						</span>
-					</div>
-				</div>
-			) : (
-				/* 没有会话：占位保证顶栏几何一致（落地页项目选择已移至输入框上方） */
-				<div className="min-w-0 flex-1" />
-			)}
+						<path
+							className="fill-current"
+							fillRule="evenodd"
+							d="M165.29 165.29H517.36V400H400V517.36H282.65V634.72H165.29ZM282.65 282.65V400H400V282.65Z"
+						/>
+						<path
+							className="fill-current"
+							d="M517.36 400H634.72V634.72H517.36Z"
+						/>
+					</svg>
+				)}
+			</ProjectWorkspaceTabs>
 			{editorProject ||
 			onNewTemporaryChat ||
 			onNewChat ||
@@ -232,7 +225,12 @@ export function SessionHeader({
 							<TooltipContent>{t("app.temporaryChat")}</TooltipContent>
 						</Tooltip>
 					) : null}
-					{editorProject ? <ProjectEditorMenu project={editorProject} /> : null}
+					{editorProject ? (
+						<ProjectEditorMenu
+							project={editorProject}
+							filePath={activeFilePath ?? undefined}
+						/>
+					) : null}
 					{onOpenChanges ? (
 						<Tooltip>
 							<TooltipTrigger asChild>
@@ -254,7 +252,14 @@ export function SessionHeader({
 							session={session}
 							sessionState={sessionState}
 							onRenameSession={onRenameSession}
-							onFindInSession={onFindInSession}
+							onFindInSession={
+								onFindInSession
+									? () => {
+											if (project) workspace?.selectFile(project.id, null);
+											onFindInSession();
+										}
+									: undefined
+							}
 							onOpenInNewWindow={onOpenInNewWindow}
 						/>
 					) : null}

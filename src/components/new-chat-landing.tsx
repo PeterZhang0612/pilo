@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ProjectWorkspacePanel } from "@/components/app/project-workspace-panel";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import {
@@ -423,10 +424,7 @@ export function NewChatLanding({
 					reserveWindowControls={reserveWindowControls}
 					sidebarCollapsed={sidebarCollapsed}
 				/>
-				<div
-					data-chat-panel=""
-					className="relative flex min-h-0 flex-1 flex-col"
-				>
+				<ProjectWorkspacePanel project={project} headerOverlay>
 					<div className="flex min-h-0 w-full flex-1 flex-col">
 						<ConversationColumn className="flex flex-1 items-center justify-center">
 							<ChatEmptyHero />
@@ -483,7 +481,7 @@ export function NewChatLanding({
 							/>
 						</ConversationColumn>
 					</div>
-				</div>
+				</ProjectWorkspacePanel>
 			</div>
 		</SessionMentionScope>
 	);

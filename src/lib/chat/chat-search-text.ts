@@ -1,16 +1,24 @@
 import rehypeRaw from "rehype-raw";
-import rehypeSanitize from "rehype-sanitize";
+import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
 import { unified } from "unified";
+
+import { rehypeFileLinks } from "./chat-markdown-links.ts";
 
 const markdownProcessor = unified()
 	.use(remarkParse)
 	.use(remarkGfm)
 	.use(remarkRehype, { allowDangerousHtml: true })
 	.use(rehypeRaw)
-	.use(rehypeSanitize);
+	.use(rehypeSanitize, {
+		protocols: {
+			...defaultSchema.protocols,
+			href: [...(defaultSchema.protocols?.href ?? []), "file"],
+		},
+	})
+	.use(rehypeFileLinks);
 
 export const SEARCH_BLOCK_TAGS = new Set([
 	"blockquote",
@@ -64,7 +72,9 @@ export function markdownSearchText(markdown: string): string {
 			node.properties?.ariaHidden === "true"
 		)
 			return;
-		const boundary = SEARCH_BLOCK_TAGS.has(node.tagName ?? "");
+		const boundary =
+			SEARCH_BLOCK_TAGS.has(node.tagName ?? "") ||
+			node.properties?.["data-pilo-file-url"] !== undefined;
 		if (boundary) parts.push("\n");
 		for (const child of node.children ?? []) visit(child);
 		if (boundary) parts.push("\n");

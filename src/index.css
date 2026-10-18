@@ -179,13 +179,8 @@
 		--streamdown-caret: "" !important;
 	}
 
-	.markdown-renderer [data-streamdown="code-block"] {
-		--markdown-code-block-bg: hsl(var(--code-background));
-		--markdown-code-block-border: hsl(var(--code-border));
-		--markdown-code-block-foreground: hsl(var(--code-foreground));
-		--markdown-code-block-language: hsl(var(--code-foreground) / 0.55);
-		--markdown-code-block-action-bg: hsl(var(--code-background) / 0.88);
-		--markdown-code-block-action-border: hsl(var(--code-border) / 0.78);
+	.markdown-renderer [data-streamdown="code-block"],
+	.project-file-highlight {
 		--pilo-shiki-background: transparent;
 		--pilo-shiki-foreground: hsl(var(--code-foreground));
 		--pilo-shiki-token-comment: hsl(var(--syntax-comment));
@@ -199,6 +194,15 @@
 		--pilo-shiki-token-link: hsl(var(--syntax-title));
 		--pilo-shiki-token-inserted: hsl(var(--code-added));
 		--pilo-shiki-token-deleted: hsl(var(--code-removed));
+	}
+
+	.markdown-renderer [data-streamdown="code-block"] {
+		--markdown-code-block-bg: hsl(var(--code-background));
+		--markdown-code-block-border: hsl(var(--code-border));
+		--markdown-code-block-foreground: hsl(var(--code-foreground));
+		--markdown-code-block-language: hsl(var(--code-foreground) / 0.55);
+		--markdown-code-block-action-bg: hsl(var(--code-background) / 0.88);
+		--markdown-code-block-action-border: hsl(var(--code-border) / 0.78);
 		position: relative;
 		display: block !important;
 		width: 100%;

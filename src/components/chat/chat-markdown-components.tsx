@@ -1,12 +1,13 @@
 import type { ComponentPropsWithoutRef } from "react";
+import type { PluggableList, Plugin } from "unified";
+import type { Options as SanitizeSchema } from "rehype-sanitize";
 import { defaultRehypePlugins, type Components } from "streamdown";
 import { rehypeProjectImages } from "@/lib/chat/chat-markdown-images";
 import { MarkdownImage } from "@/components/chat/chat-markdown-image";
+import { MarkdownLink } from "@/components/chat/chat-markdown-link";
+import { rehypeFileLinks } from "@/lib/chat/chat-markdown-links";
 import { cn } from "@/lib/utils";
 
-type MarkdownLinkProps = ComponentPropsWithoutRef<"a"> & {
-	node?: unknown;
-};
 type MarkdownCodeProps = ComponentPropsWithoutRef<"code"> & {
 	node?: unknown;
 	inline?: boolean;
@@ -14,18 +15,6 @@ type MarkdownCodeProps = ComponentPropsWithoutRef<"code"> & {
 type MarkdownTableProps = ComponentPropsWithoutRef<"table"> & {
 	node?: unknown;
 };
-
-function MarkdownLink({ children, rel, ...props }: MarkdownLinkProps) {
-	return (
-		<a
-			{...props}
-			target="_blank"
-			rel={`${rel ?? ""} noopener noreferrer`.trim()}
-		>
-			{children}
-		</a>
-	);
-}
 
 function MarkdownInlineCode({
 	className,
@@ -59,12 +48,28 @@ function MarkdownTable({ node: _node, ...props }: MarkdownTableProps) {
 	);
 }
 
+// Streamdown exposes this configured tuple only as the wider Pluggable type.
+const [sanitize, sanitizeSchema] = defaultRehypePlugins.sanitize as [
+	Plugin<[SanitizeSchema]>,
+	SanitizeSchema,
+];
+
 export const MARKDOWN_REHYPE_PLUGINS = [
 	defaultRehypePlugins.raw,
-	defaultRehypePlugins.sanitize,
+	[
+		sanitize,
+		{
+			...sanitizeSchema,
+			protocols: {
+				...sanitizeSchema.protocols,
+				href: [...(sanitizeSchema.protocols?.href ?? []), "file"],
+			},
+		},
+	],
+	rehypeFileLinks,
 	rehypeProjectImages,
 	defaultRehypePlugins.harden,
-];
+] satisfies PluggableList;
 
 export const MARKDOWN_COMPONENTS = {
 	a: MarkdownLink,

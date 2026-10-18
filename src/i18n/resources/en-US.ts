@@ -489,6 +489,8 @@ const enUS = {
 		todayPrompt: "What would you like to work on today?",
 		openProjectInEditor: "Open project in editor",
 		openProjectWithEditor: "Open in {{editor}}",
+		openFileInEditor: "Open file in editor",
+		openFileWithEditor: "Open {{name}} in {{editor}}",
 		chooseProjectEditor: "Choose editor",
 		openProjectInEditorFailed:
 			"Could not open {{editor}}. Make sure it is installed and its URL handler is registered.",
@@ -578,6 +580,17 @@ const enUS = {
 			"Image preview was released; reopen the session to load it",
 		loadImageFailed: "Failed to load; click to retry",
 		imageUnavailable: "Image unavailable",
+		fileLinkInvalid:
+			"Only local file links without query strings or fragments are supported.",
+		fileLinkOpenFailed: "Could not open file",
+		fileLinkCheckPath:
+			"Check that the file exists, is accessible, and is not an executable or shortcut.",
+		fileLinkWebUnsupported:
+			"File links are not supported in WebUI yet. Open a Local project in the desktop app, or ask the agent to provide an HTTP(S) link.",
+		fileLinkRemoteUnsupported:
+			"File links in WSL and SSH projects are not supported yet. Ask the agent to provide an HTTP(S) link.",
+		fileLinkNoProject:
+			"Open this conversation in its project to open the file.",
 		noPiReply: "No Pi reply yet.",
 		messageNavigation: "Message navigation",
 		scrollLatest: "Scroll to latest message",
@@ -823,6 +836,8 @@ const enUS = {
 		viewAll: "View all",
 	},
 	file: {
+		workspaceTabs: "Workspace tabs",
+		workspaceUnavailable: "File previews are unavailable in this view.",
 		diffLines: "Lines {{start}}–{{end}} of {{total}}",
 		loading: "Loading…",
 		search: "Search files",

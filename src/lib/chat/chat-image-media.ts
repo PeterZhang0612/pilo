@@ -147,6 +147,7 @@ export function loadChatHistoryImageUrl(
 export type ChatProjectImageScope = {
 	projectId: string;
 	sessionKey: string;
+	baseDirectory?: string;
 	readImage?: (
 		projectId: string,
 		path: string,

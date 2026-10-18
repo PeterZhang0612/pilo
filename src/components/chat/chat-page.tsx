@@ -1,4 +1,14 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+	memo,
+	useCallback,
+	useContext,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
+import { ProjectWorkspaceContext } from "@/components/app/project-workspace-context";
+import { ProjectWorkspacePanel } from "@/components/app/project-workspace-panel";
 import { useTranslation } from "react-i18next";
 
 import type {
@@ -19,6 +29,7 @@ import {
 } from "@/components/chat/chat-conversation-viewport";
 import { ChatImageScopeProvider } from "@/components/chat/chat-image-viewer";
 import { ChatMarkdownImageScopeProvider } from "@/components/chat/chat-markdown-image";
+import { ChatMarkdownLinkScope } from "@/components/chat/chat-markdown-link";
 import { ChatPendingQueue } from "@/components/chat/chat-pending-queue";
 import { ChatRuntimeRecoveryNotice } from "@/components/chat/chat-runtime-recovery-notice";
 import { ChatInterruptedTurnNotice } from "@/components/chat/chat-interrupted-turn-notice";
@@ -127,6 +138,10 @@ function ChatPageImpl(props: ChatPageProps) {
 	} = props;
 	const { t } = useTranslation();
 	const { desktopNotifications, keyboardShortcuts } = usePreferences();
+	const workspace = useContext(ProjectWorkspaceContext);
+	const fileActive = Boolean(
+		workspace?.state.get(session.projectRecord.id)?.activePath,
+	);
 	const {
 		initialUiState,
 		initialDeferredSubmissions,
@@ -508,62 +523,65 @@ function ChatPageImpl(props: ChatPageProps) {
 								sidebarCollapsed={sidebarCollapsed}
 								overlay={emptyTemporarySession}
 							/>
-							<div
-								data-chat-panel=""
-								className="relative flex min-h-0 flex-1 flex-col"
+							<ProjectWorkspacePanel
+								project={session.projectRecord}
+								active={active}
+								headerOverlay={emptyTemporarySession}
 							>
 								<ChatFindLayer
-									active={active}
+									active={active && !fileActive}
 									open={findOpen}
 									onOpen={() => setFindOpen(true)}
 									onClose={() => setFindOpen(false)}
 									messages={messages}
 									onNavigate={handleFindNavigate}
 								>
-									<ChatMarkdownImageScopeProvider scope={projectImageScope}>
-										<ChatImageScopeProvider scope={historyImageScope}>
-											<ChatConversationViewport
-												ref={conversationViewportRef}
-												active={active}
-												visualLive={live}
-												showSwitchSkeleton={showSwitchSkeleton}
-												sessionId={performanceSessionId ?? session.id}
-												sessionPath={session.sessionPath}
-												messages={messages}
-												onVisibleRangeChange={requestHistoryRange}
-												activeAssistantMessageId={activeAssistantMessageId}
-												compacting={compacting}
-												effectiveLoadState={effectiveLoadState}
-												initialScrollTop={viewportUiState.scrollTop}
-												initialSticky={viewportUiState.sticky}
-												initialVirtualizerCache={
-													viewportUiState.virtualizerMessageCount ===
-													messages.length
-														? viewportUiState.virtualizerCache
-														: undefined
-												}
-												onScrollStateChange={persistScrollState}
-												onVirtualizerCacheChange={persistVirtualizerCache}
-												runtimeScrollRef={scrollRef}
-												onForkAssistant={
-													!session.temporary ? handleForkAssistant : undefined
-												}
-												forkingMessageId={forkingMessageId}
-												forkDisabled={
-													readOnly ||
-													runtimeBusy ||
-													historyPending ||
-													Boolean(forkingMessageId)
-												}
-												suppressInterruptedError={
-													session.externalTurnOpen || running
-												}
-												onVisualReady={handleVisualReady}
-												onRetry={onRetry}
-												onRetryHistory={retryHistory}
-											/>
-										</ChatImageScopeProvider>
-									</ChatMarkdownImageScopeProvider>
+									<ChatMarkdownLinkScope.Provider value={session.projectRecord}>
+										<ChatMarkdownImageScopeProvider scope={projectImageScope}>
+											<ChatImageScopeProvider scope={historyImageScope}>
+												<ChatConversationViewport
+													ref={conversationViewportRef}
+													active={active}
+													visualLive={live}
+													showSwitchSkeleton={showSwitchSkeleton}
+													sessionId={performanceSessionId ?? session.id}
+													sessionPath={session.sessionPath}
+													messages={messages}
+													onVisibleRangeChange={requestHistoryRange}
+													activeAssistantMessageId={activeAssistantMessageId}
+													compacting={compacting}
+													effectiveLoadState={effectiveLoadState}
+													initialScrollTop={viewportUiState.scrollTop}
+													initialSticky={viewportUiState.sticky}
+													initialVirtualizerCache={
+														viewportUiState.virtualizerMessageCount ===
+														messages.length
+															? viewportUiState.virtualizerCache
+															: undefined
+													}
+													onScrollStateChange={persistScrollState}
+													onVirtualizerCacheChange={persistVirtualizerCache}
+													runtimeScrollRef={scrollRef}
+													onForkAssistant={
+														!session.temporary ? handleForkAssistant : undefined
+													}
+													forkingMessageId={forkingMessageId}
+													forkDisabled={
+														readOnly ||
+														runtimeBusy ||
+														historyPending ||
+														Boolean(forkingMessageId)
+													}
+													suppressInterruptedError={
+														session.externalTurnOpen || running
+													}
+													onVisualReady={handleVisualReady}
+													onRetry={onRetry}
+													onRetryHistory={retryHistory}
+												/>
+											</ChatImageScopeProvider>
+										</ChatMarkdownImageScopeProvider>
+									</ChatMarkdownLinkScope.Provider>
 								</ChatFindLayer>
 
 								{/* -mt-4 让滚动区底部上探 16px，消息在输入卡背后被自然裁切；
@@ -722,7 +740,7 @@ function ChatPageImpl(props: ChatPageProps) {
 										/>
 									</ConversationColumn>
 								</div>
-							</div>
+							</ProjectWorkspacePanel>
 						</div>
 					);
 				}}

@@ -1,4 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+	ProjectWorkspaceContext,
+	useProjectWorkspaces,
+} from "@/components/app/project-workspace-context";
+import { ProjectWorkspacePanel } from "@/components/app/project-workspace-panel";
 import { useTranslation } from "react-i18next";
 import { Wifi, WifiOff, X } from "lucide-react";
 import { toast } from "sonner";
@@ -90,6 +95,11 @@ function RemoteWorkspace() {
 		snapshotRefreshKey: connection.snapshotRefreshKey,
 	});
 
+	const workspaceProjectIds = useMemo(
+		() => sessions.projects.map((project) => project.id),
+		[sessions.projects],
+	);
+	const workspaces = useProjectWorkspaces(workspaceProjectIds);
 	const isNarrow = useMediaQuery("(max-width: 1023px)");
 	useRemoteKeyboardInset();
 	// 触屏没有 hover，消息上 hover-only 的复制/时间戳会永久不可见。
@@ -366,316 +376,326 @@ function RemoteWorkspace() {
 	);
 
 	return (
-		<TooltipProvider>
-			<BootShellRemover
-				ready={
-					sessions.bootstrapSettled || !browserOnline || Boolean(fatalError)
-				}
-			/>
-			<SessionMentionProvider projects={projects} sessions={sidebarSessions}>
-				<SessionMentionScope
-					connectionId={chat.activeProject?.connection.id ?? ""}
-				>
-					<div
-						data-remote-webui=""
-						data-touch-reveal={isTouch ? "" : undefined}
-						className="flex h-[var(--remote-viewport-height,100dvh)] overflow-hidden bg-background pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] pt-[env(safe-area-inset-top)] text-foreground"
+		<ProjectWorkspaceContext.Provider value={workspaces}>
+			<TooltipProvider>
+				<BootShellRemover
+					ready={
+						sessions.bootstrapSettled || !browserOnline || Boolean(fatalError)
+					}
+				/>
+				<SessionMentionProvider projects={projects} sessions={sidebarSessions}>
+					<SessionMentionScope
+						connectionId={chat.activeProject?.connection.id ?? ""}
 					>
-						{isNarrow ? (
-							<RemoteMobileNavigation
-								client={connection.client}
-								open={mobileNavigationOpen}
-								onOpenChange={setMobileNavigationOpen}
-								onDeleteSession={handleDeleteMobileSession}
-								envs={envs}
-								projects={sidebarProjects}
-								sessions={sidebarSessions}
-								activeProjectId={chat.activeProjectId || null}
-								selectedSessionId={chat.identifiedSessionId ?? null}
-								connectionState={networkState}
-								refreshingProjectIds={refreshingProjectIds}
-								onSelectSession={chat.handleSelectSession}
-								onNewChat={(projectId) =>
-									chat.startDraft(
-										projectId ?? chat.activeProjectId ?? undefined,
-									)
-								}
-								onRefreshProjectSessions={(projectId) =>
-									void refreshProjectSessions(projectId, true)
-								}
-							/>
-						) : (
-							sidebarNode
-						)}
-						<main className="@container relative flex min-w-0 flex-1 flex-col bg-background">
-							<SessionHeader
-								project={chat.activeProject}
-								session={chat.headerSession ?? undefined}
-								sessionState={chat.chatState ?? undefined}
-								onNewChat={
-									isNarrow
-										? () => chat.startDraft(chat.activeProjectId || undefined)
-										: undefined
-								}
-								onNewTemporaryChat={
-									isNarrow
-										? () =>
-												chat.toggleTemporaryChat(
-													chat.activeProjectId || undefined,
-												)
-										: undefined
-								}
-								onExpandSidebar={() => {
-									if (isNarrow) setMobileNavigationOpen(true);
-									else setSidebarCollapsed(false);
-								}}
-								sidebarCollapsed={isNarrow ? true : sidebarCollapsed}
-								overlay={chat.conversationUi.messageCount === 0}
-							/>
+						<div
+							data-remote-webui=""
+							data-touch-reveal={isTouch ? "" : undefined}
+							className="flex h-[var(--remote-viewport-height,100dvh)] overflow-hidden bg-background pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] pt-[env(safe-area-inset-top)] text-foreground"
+						>
+							{isNarrow ? (
+								<RemoteMobileNavigation
+									client={connection.client}
+									open={mobileNavigationOpen}
+									onOpenChange={setMobileNavigationOpen}
+									onDeleteSession={handleDeleteMobileSession}
+									envs={envs}
+									projects={sidebarProjects}
+									sessions={sidebarSessions}
+									activeProjectId={chat.activeProjectId || null}
+									selectedSessionId={chat.identifiedSessionId ?? null}
+									connectionState={networkState}
+									refreshingProjectIds={refreshingProjectIds}
+									onSelectSession={chat.handleSelectSession}
+									onNewChat={(projectId) =>
+										chat.startDraft(
+											projectId ?? chat.activeProjectId ?? undefined,
+										)
+									}
+									onRefreshProjectSessions={(projectId) =>
+										void refreshProjectSessions(projectId, true)
+									}
+								/>
+							) : (
+								sidebarNode
+							)}
+							<main className="@container relative flex min-w-0 flex-1 flex-col bg-background">
+								<SessionHeader
+									project={chat.activeProject}
+									session={chat.headerSession ?? undefined}
+									sessionState={chat.chatState ?? undefined}
+									onNewChat={
+										isNarrow
+											? () => chat.startDraft(chat.activeProjectId || undefined)
+											: undefined
+									}
+									onNewTemporaryChat={
+										isNarrow
+											? () =>
+													chat.toggleTemporaryChat(
+														chat.activeProjectId || undefined,
+													)
+											: undefined
+									}
+									onExpandSidebar={() => {
+										if (isNarrow) setMobileNavigationOpen(true);
+										else setSidebarCollapsed(false);
+									}}
+									sidebarCollapsed={isNarrow ? true : sidebarCollapsed}
+									overlay={chat.conversationUi.messageCount === 0}
+								/>
 
-							<div
-								data-chat-panel=""
-								className="relative flex min-h-0 flex-1 flex-col"
-							>
-								<ChatMarkdownImageScopeProvider scope={chat.projectImageScope}>
-									<ChatImageScopeProvider scope={chat.historyImageScope}>
-										<RemoteConversationViewport
-											key={chat.routeKey ?? "remote-draft"}
-											active
-											visualLive
-											showSwitchSkeleton={chat.showSwitchSkeleton}
-											sessionId={chat.activeSessionKey ?? "remote-draft"}
-											sessionPath={chat.headerSession?.sessionPath}
-											conversationStore={chat.conversationStore}
-											historyPrefix={chat.historyPrefix}
-											onVisibleRangeChange={chat.requestHistoryRange}
-											compacting={chat.compacting}
-											effectiveLoadState={
-												chat.loadingConversation ? "loading" : "ready"
-											}
-											initialScrollTop={chat.initialScrollState.scrollTop}
-											initialSticky={chat.initialScrollState.sticky}
-											initialVirtualizerCache={
-												chat.initialUiState.virtualizerCache
-											}
-											initialVirtualizerMessageCount={
-												chat.initialUiState.virtualizerMessageCount
-											}
-											onScrollStateChange={chat.persistScrollState}
-											onVirtualizerCacheChange={chat.persistVirtualizerCache}
-											runtimeScrollRef={scrollRef}
-											suppressInterruptedError={active || chat.readOnly}
-											onVisualReady={chat.handleVisualReady}
-											onRetryHistory={chat.retryHistory}
-											onForkAssistant={
-												chat.selectedSession
-													? chat.handleForkAssistant
-													: undefined
-											}
-											forkingMessageId={chat.forkingMessageId}
-											forkDisabled={chat.forkDisabled}
-										/>
-									</ChatImageScopeProvider>
-								</ChatMarkdownImageScopeProvider>
-								<div
-									data-chat-composer-region=""
-									className="relative z-20 -mt-4 w-full shrink-0 pb-[max(1rem,env(safe-area-inset-bottom))]"
-									style={{ paddingRight: scrollbarWidth }}
+								<ProjectWorkspacePanel
+									project={chat.activeProject}
+									readImage={chat.projectImageScope?.readImage}
+									headerOverlay={chat.conversationUi.messageCount === 0}
 								>
-									<ConversationColumn className="relative">
-										<ChatPendingQueue
-											items={chat.conversationUi.pendingUsers}
-											onEdit={(item) =>
-												void chat.handleEditQueued(item.clientMessageId)
-											}
-											onSendNow={(item) =>
-												void chat.handleSendQueuedNow(item.clientMessageId)
-											}
-										/>
-										{recoveryState.status === "idle" &&
-										!chat.readOnly &&
-										!active &&
-										chat.latestTurnInterrupted ? (
-											<ChatInterruptedTurnNotice />
-										) : null}
-										<RemoteConnectionNotice
-											connectionState={networkState}
-											recoveryState={recoveryState}
-											onReconnect={reconnectNow}
-										/>
-										<PiExtensionNotifications
-											notifications={chat.extensionNotifications}
-											onDismiss={chat.dismissExtensionNotification}
-										/>
-										{!chat.hasIdentifiedSession ? (
-											<DraftProjectPicker
-												projects={homeProjects}
-												project={chat.activeProject}
-												onSwitchProject={chat.switchDraftProject}
+									<ChatMarkdownImageScopeProvider
+										scope={chat.projectImageScope}
+									>
+										<ChatImageScopeProvider scope={chat.historyImageScope}>
+											<RemoteConversationViewport
+												key={chat.routeKey ?? "remote-draft"}
+												active
+												visualLive
+												showSwitchSkeleton={chat.showSwitchSkeleton}
+												sessionId={chat.activeSessionKey ?? "remote-draft"}
+												sessionPath={chat.headerSession?.sessionPath}
+												conversationStore={chat.conversationStore}
+												historyPrefix={chat.historyPrefix}
+												onVisibleRangeChange={chat.requestHistoryRange}
+												compacting={chat.compacting}
+												effectiveLoadState={
+													chat.loadingConversation ? "loading" : "ready"
+												}
+												initialScrollTop={chat.initialScrollState.scrollTop}
+												initialSticky={chat.initialScrollState.sticky}
+												initialVirtualizerCache={
+													chat.initialUiState.virtualizerCache
+												}
+												initialVirtualizerMessageCount={
+													chat.initialUiState.virtualizerMessageCount
+												}
+												onScrollStateChange={chat.persistScrollState}
+												onVirtualizerCacheChange={chat.persistVirtualizerCache}
+												runtimeScrollRef={scrollRef}
+												suppressInterruptedError={active || chat.readOnly}
+												onVisualReady={chat.handleVisualReady}
+												onRetryHistory={chat.retryHistory}
+												onForkAssistant={
+													chat.selectedSession
+														? chat.handleForkAssistant
+														: undefined
+												}
+												forkingMessageId={chat.forkingMessageId}
+												forkDisabled={chat.forkDisabled}
 											/>
-										) : null}
-										{chat.extensionDialog ? (
-											<PiExtensionUiDialog
-												request={chat.extensionDialog}
-												onRespond={(response) =>
-													void chat.respondToExtensionDialog(response)
+										</ChatImageScopeProvider>
+									</ChatMarkdownImageScopeProvider>
+									<div
+										data-chat-composer-region=""
+										className="relative z-20 -mt-4 w-full shrink-0 pb-[max(1rem,env(safe-area-inset-bottom))]"
+										style={{ paddingRight: scrollbarWidth }}
+									>
+										<ConversationColumn className="relative">
+											<ChatPendingQueue
+												items={chat.conversationUi.pendingUsers}
+												onEdit={(item) =>
+													void chat.handleEditQueued(item.clientMessageId)
+												}
+												onSendNow={(item) =>
+													void chat.handleSendQueuedNow(item.clientMessageId)
 												}
 											/>
-										) : null}
-										<CacheKeepAliveNotice
-											key={chat.activeSessionKey}
-											status={cacheKeepAliveStatus}
-										/>
-										<ChatComposer
-											nextPrompt={nextPrompt.text}
-											onNextPromptDismiss={nextPrompt.dismiss}
-											value={chat.readOnly ? "" : chat.composer}
-											onChange={chat.handleComposerChange}
-											muted={chat.readOnly}
-											placeholder={
-												chat.sessionHeaderMissing
-													? t("chat.sessionHeaderMissing")
-													: chat.readOnly
-														? t("chat.externalReadOnly")
-														: undefined
-											}
-											desktopShortcuts={false}
-											historyKey={chat.activeProjectId || null}
-											attachmentScopeKey={chat.activeSessionKey}
-											onUploadFile={
-												client && chat.activeProjectId
-													? async (file) => {
-															try {
-																return await client.uploadChatFile(
-																	chat.activeProjectId,
-																	file,
-																);
-															} catch (error) {
-																handleExpiredAuth(error);
-																throw error;
+											{recoveryState.status === "idle" &&
+											!chat.readOnly &&
+											!active &&
+											chat.latestTurnInterrupted ? (
+												<ChatInterruptedTurnNotice />
+											) : null}
+											<RemoteConnectionNotice
+												connectionState={networkState}
+												recoveryState={recoveryState}
+												onReconnect={reconnectNow}
+											/>
+											<PiExtensionNotifications
+												notifications={chat.extensionNotifications}
+												onDismiss={chat.dismissExtensionNotification}
+											/>
+											{!chat.hasIdentifiedSession ? (
+												<DraftProjectPicker
+													projects={homeProjects}
+													project={chat.activeProject}
+													onSwitchProject={chat.switchDraftProject}
+												/>
+											) : null}
+											{chat.extensionDialog ? (
+												<PiExtensionUiDialog
+													request={chat.extensionDialog}
+													onRespond={(response) =>
+														void chat.respondToExtensionDialog(response)
+													}
+												/>
+											) : null}
+											<CacheKeepAliveNotice
+												key={chat.activeSessionKey}
+												status={cacheKeepAliveStatus}
+											/>
+											<ChatComposer
+												nextPrompt={nextPrompt.text}
+												onNextPromptDismiss={nextPrompt.dismiss}
+												value={chat.readOnly ? "" : chat.composer}
+												onChange={chat.handleComposerChange}
+												muted={chat.readOnly}
+												placeholder={
+													chat.sessionHeaderMissing
+														? t("chat.sessionHeaderMissing")
+														: chat.readOnly
+															? t("chat.externalReadOnly")
+															: undefined
+												}
+												desktopShortcuts={false}
+												historyKey={chat.activeProjectId || null}
+												attachmentScopeKey={chat.activeSessionKey}
+												onUploadFile={
+													client && chat.activeProjectId
+														? async (file) => {
+																try {
+																	return await client.uploadChatFile(
+																		chat.activeProjectId,
+																		file,
+																	);
+																} catch (error) {
+																	handleExpiredAuth(error);
+																	throw error;
+																}
 															}
-														}
-													: undefined
-											}
-											suggestions={chat.composerSuggestions}
-											onSuggestionTrigger={chat.handleSuggestionTrigger}
-											images={chat.images}
-											onImagesChange={chat.setImages}
-											onSubmit={(submission) =>
-												void chat.sendSubmission(submission, "prompt")
-											}
-											onSteer={
-												active
-													? (submission) =>
-															void chat.sendSubmission(submission, "steer")
-													: undefined
-											}
-											onSendNow={active ? chat.handleSendNow : undefined}
-											onFollowUp={
-												active
-													? (submission) =>
-															void chat.sendSubmission(submission, "follow_up")
-													: undefined
-											}
-											disabled={
-												chat.readOnly ||
-												chat.sending ||
-												!chat.activeProjectId ||
-												!chat.historyReady
-											}
-											running={active && !chat.readOnly}
-											onStop={
-												chat.readOnly ? undefined : () => void chat.stop()
-											}
-											pendingFollowUps={pendingFollowUps}
-											statusText={chat.composerStatusText}
-											statusError={
-												(chat.sessionHeaderMissing
-													? t("chat.sessionHeaderMissing")
-													: null) ??
-												chat.retryState?.errorMessage ??
-												(chat.historyIndexStale
-													? t("chat.historyIndexStale")
-													: null)
-											}
-											compacting={chat.compacting}
-											retrying={chat.retryState?.kind === "agent"}
-											onAbortRetry={() => void chat.abortPiRetry()}
-											contextUsage={chat.chatState}
-											models={chat.models}
-											modelScope={chat.modelScope}
-											canEditScope={!isNarrow}
-											selectedModel={chat.selectedModel}
-											modelLoading={chat.modelLoading}
-											modelError={chat.modelError ?? fatalError}
-											modelDisabled={
-												chat.readOnly ||
-												!chat.historyReady ||
-												!chat.activeProjectId
-											}
-											onModelMenuOpen={() => {
-												if (chat.hasIdentifiedSession)
-													void chat.refreshAgentConfig(
-														chat.runtimeReady && !chat.readOnly,
-													);
-												else if (chat.activeProjectId)
-													void chat.loadDraftCatalog(chat.activeProjectId);
-											}}
-											onModelRefresh={() => {
-												if (chat.activeProjectId)
-													void chat.loadDraftCatalog(
-														chat.activeProjectId,
-														true,
-													);
-											}}
-											onModelChange={(model) => {
-												if (model) void chat.changeModel(model);
-											}}
-											thinkingLevels={chat.composerThinkingLevels}
-											selectedThinkingLevel={chat.composerSelectedThinkingLevel}
-											thinkingDisabled={
-												chat.readOnly ||
-												!chat.historyReady ||
-												!chat.activeProjectId ||
-												chat.composerThinkingLevels.length === 0
-											}
-											onThinkingChange={(level) => {
-												if (level) void chat.changeThinking(level);
-											}}
-										/>
-									</ConversationColumn>
-								</div>
-							</div>
-						</main>
+														: undefined
+												}
+												suggestions={chat.composerSuggestions}
+												onSuggestionTrigger={chat.handleSuggestionTrigger}
+												images={chat.images}
+												onImagesChange={chat.setImages}
+												onSubmit={(submission) =>
+													void chat.sendSubmission(submission, "prompt")
+												}
+												onSteer={
+													active
+														? (submission) =>
+																void chat.sendSubmission(submission, "steer")
+														: undefined
+												}
+												onSendNow={active ? chat.handleSendNow : undefined}
+												onFollowUp={
+													active
+														? (submission) =>
+																void chat.sendSubmission(
+																	submission,
+																	"follow_up",
+																)
+														: undefined
+												}
+												disabled={
+													chat.readOnly ||
+													chat.sending ||
+													!chat.activeProjectId ||
+													!chat.historyReady
+												}
+												running={active && !chat.readOnly}
+												onStop={
+													chat.readOnly ? undefined : () => void chat.stop()
+												}
+												pendingFollowUps={pendingFollowUps}
+												statusText={chat.composerStatusText}
+												statusError={
+													(chat.sessionHeaderMissing
+														? t("chat.sessionHeaderMissing")
+														: null) ??
+													chat.retryState?.errorMessage ??
+													(chat.historyIndexStale
+														? t("chat.historyIndexStale")
+														: null)
+												}
+												compacting={chat.compacting}
+												retrying={chat.retryState?.kind === "agent"}
+												onAbortRetry={() => void chat.abortPiRetry()}
+												contextUsage={chat.chatState}
+												models={chat.models}
+												modelScope={chat.modelScope}
+												canEditScope={!isNarrow}
+												selectedModel={chat.selectedModel}
+												modelLoading={chat.modelLoading}
+												modelError={chat.modelError ?? fatalError}
+												modelDisabled={
+													chat.readOnly ||
+													!chat.historyReady ||
+													!chat.activeProjectId
+												}
+												onModelMenuOpen={() => {
+													if (chat.hasIdentifiedSession)
+														void chat.refreshAgentConfig(
+															chat.runtimeReady && !chat.readOnly,
+														);
+													else if (chat.activeProjectId)
+														void chat.loadDraftCatalog(chat.activeProjectId);
+												}}
+												onModelRefresh={() => {
+													if (chat.activeProjectId)
+														void chat.loadDraftCatalog(
+															chat.activeProjectId,
+															true,
+														);
+												}}
+												onModelChange={(model) => {
+													if (model) void chat.changeModel(model);
+												}}
+												thinkingLevels={chat.composerThinkingLevels}
+												selectedThinkingLevel={
+													chat.composerSelectedThinkingLevel
+												}
+												thinkingDisabled={
+													chat.readOnly ||
+													!chat.historyReady ||
+													!chat.activeProjectId ||
+													chat.composerThinkingLevels.length === 0
+												}
+												onThinkingChange={(level) => {
+													if (level) void chat.changeThinking(level);
+												}}
+											/>
+										</ConversationColumn>
+									</div>
+								</ProjectWorkspacePanel>
+							</main>
 
-						<ChatImageLightbox />
+							<ChatImageLightbox />
 
-						{visibleError ? (
-							<div
-								role="alert"
-								className="fixed inset-x-3 bottom-24 z-50 mx-auto max-w-lg rounded-xl border border-destructive/30 bg-background px-3 py-2 text-xs shadow-lg"
-							>
-								<div className="flex items-start gap-2">
-									<p className="min-w-0 flex-1 break-words text-destructive">
-										{visibleError}
-									</p>
-									<button
-										type="button"
-										aria-label={t("common.close")}
-										className="flex size-11 shrink-0 items-center justify-center rounded-md"
-										onClick={() => {
-											setFatalError(null);
-											sessions.clearRefreshErrors();
-										}}
-									>
-										<X className="size-3.5" />
-									</button>
+							{visibleError ? (
+								<div
+									role="alert"
+									className="fixed inset-x-3 bottom-24 z-50 mx-auto max-w-lg rounded-xl border border-destructive/30 bg-background px-3 py-2 text-xs shadow-lg"
+								>
+									<div className="flex items-start gap-2">
+										<p className="min-w-0 flex-1 break-words text-destructive">
+											{visibleError}
+										</p>
+										<button
+											type="button"
+											aria-label={t("common.close")}
+											className="flex size-11 shrink-0 items-center justify-center rounded-md"
+											onClick={() => {
+												setFatalError(null);
+												sessions.clearRefreshErrors();
+											}}
+										>
+											<X className="size-3.5" />
+										</button>
+									</div>
 								</div>
-							</div>
-						) : null}
-					</div>
-				</SessionMentionScope>
-			</SessionMentionProvider>
-		</TooltipProvider>
+							) : null}
+						</div>
+					</SessionMentionScope>
+				</SessionMentionProvider>
+			</TooltipProvider>
+		</ProjectWorkspaceContext.Provider>
 	);
 }

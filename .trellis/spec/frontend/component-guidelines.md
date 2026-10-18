@@ -64,7 +64,11 @@ re-styling them.
   Keep selection/deletion available with 44px touch targets and announce the
   visible/total count. Recent sessions retain their existing 50-row limit;
   desktop/wide WebUI navigation is unchanged.
-- Desktop project preview caches highlighting per open tab, including plain-text
+- Project previews share `SessionHeader` tabs via `ProjectWorkspaceContext`,
+  keyed by project rather than conversation. `ProjectWorkspacePanel` preserves
+  hidden chat geometry with `visibility` + `inert`; do not unmount or use
+  `display: none` for chat. See [File Links & Workspace Tabs](./html-report-links.md).
+  Desktop project preview caches highlighting per open tab, including plain-text
   fallback. `highlightProjectFile` skips Shiki above 200,000 code units, 2,000
   lines or 2,000 characters on a line; avoid repeated synchronous tokenization
   when switching tabs. Close drops the tab's cached HTML.

@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { ProjectWorkspacePanel } from "@/components/app/project-workspace-panel";
 import { useTranslation } from "react-i18next";
 
 import type {
@@ -138,10 +139,13 @@ export function ChatPageLoadingFallback({
 		[initialImages, initialMessage, session.id],
 	);
 
+	const headerOverlay =
+		Boolean(session.temporary) && !session.sessionPath && !pendingMessage;
 	return (
 		<SessionMentionScope connectionId={session.projectRecord.connection.id}>
-			<div className="@container flex h-full min-w-0 flex-col bg-background">
+			<div className="@container relative flex h-full min-w-0 flex-col bg-background">
 				<SessionHeader
+					project={session.projectRecord}
 					session={session}
 					onOpenTerminal={onOpenTerminal}
 					terminalRunning={terminalRunning}
@@ -150,15 +154,11 @@ export function ChatPageLoadingFallback({
 					onExpandSidebar={onExpandSidebar}
 					reserveWindowControls={reserveWindowControls}
 					sidebarCollapsed={sidebarCollapsed}
-					overlay={
-						Boolean(session.temporary) &&
-						!session.sessionPath &&
-						!pendingMessage
-					}
+					overlay={headerOverlay}
 				/>
-				<div
-					data-chat-panel=""
-					className="relative flex min-h-0 flex-1 flex-col"
+				<ProjectWorkspacePanel
+					project={session.projectRecord}
+					headerOverlay={headerOverlay}
 				>
 					<div
 						ref={scrollRef}
@@ -186,7 +186,7 @@ export function ChatPageLoadingFallback({
 						writeProjectDraft={writeProjectDraft}
 						scrollbarWidth={scrollbarWidth}
 					/>
-				</div>
+				</ProjectWorkspacePanel>
 			</div>
 		</SessionMentionScope>
 	);

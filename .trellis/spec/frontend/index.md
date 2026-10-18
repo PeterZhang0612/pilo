@@ -23,6 +23,7 @@ This directory contains guidelines for frontend development in this project (Rea
 | [Desktop Startup & Tray](../backend/desktop-lifecycle.md) | Desktop-only startup preferences and localized native menu | Filled |
 | [State Management](./state-management.md)         | Local state, global state, server state | Filled |
 | [Quality Guidelines](./quality-guidelines.md)     | Linting, testing, forbidden patterns    | Filled |
+| [File Links & Workspace Tabs](./html-report-links.md) | Project tabs, safe Markdown/code previews, system opening and remote/WebUI guards | Filled |
 | [Type Safety](./type-safety.md)                   | Type patterns, validation               | Filled |
 
 ---

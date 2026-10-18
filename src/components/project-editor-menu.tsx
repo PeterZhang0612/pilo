@@ -49,27 +49,38 @@ function ProjectEditorIcon({ editor }: { editor: ProjectEditor }) {
 	);
 }
 
-export function ProjectEditorMenu({ project }: { project: Project }) {
+export function ProjectEditorMenu({
+	project,
+	filePath,
+}: {
+	project: Project;
+	filePath?: string;
+}) {
 	const { t } = useTranslation();
 	const selectedEditor = useSyncExternalStore(
 		subscribeProjectEditor,
 		readProjectEditor,
 	);
 	const pointerSelectionRef = useRef(false);
-	const openLabel = t("chat.openProjectWithEditor", {
-		editor: selectedEditor.name,
-	});
+	const openLabel = filePath
+		? t("chat.openFileWithEditor", {
+				editor: selectedEditor.name,
+				name: filePath.split(/[\\/]/).at(-1) ?? filePath,
+			})
+		: t("chat.openProjectWithEditor", { editor: selectedEditor.name });
 
 	function handleOpen(editor: (typeof PROJECT_EDITORS)[number]) {
 		writeProjectEditor(editor.id);
-		void openProjectInEditor(project, editor.id).catch(() => {
+		void openProjectInEditor(project, editor.id, filePath).catch(() => {
 			toast.error(t("chat.openProjectInEditorFailed", { editor: editor.name }));
 		});
 	}
 
 	return (
 		<fieldset
-			aria-label={t("chat.openProjectInEditor")}
+			aria-label={t(
+				filePath ? "chat.openFileInEditor" : "chat.openProjectInEditor",
+			)}
 			className="group/editor inline-flex shrink-0 items-center rounded-md transition-colors hover:bg-hover has-[[data-state=open]]:bg-hover"
 		>
 			<Tooltip>
@@ -84,7 +95,9 @@ export function ProjectEditorMenu({ project }: { project: Project }) {
 						<ProjectEditorIcon editor={selectedEditor.id} />
 					</Button>
 				</TooltipTrigger>
-				<TooltipContent>{openLabel}</TooltipContent>
+				<TooltipContent className="max-w-80 break-words">
+					{openLabel}
+				</TooltipContent>
 			</Tooltip>
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>

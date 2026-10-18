@@ -65,16 +65,17 @@ function encodePath(path: string): string {
 export function projectEditorUrl(
 	project: Pick<Project, "path" | "connection">,
 	editor: ProjectEditor,
+	targetPath = project.path,
 ): string {
 	const kind = project.connection.kind;
 	const windowsPath =
-		kind.type === "local" && /^(?:[a-z]:[\\/]|\\\\)/i.test(project.path);
+		kind.type === "local" && /^(?:[a-z]:[\\/]|\\\\)/i.test(targetPath);
 	const path = windowsPath
-		? project.path
+		? targetPath
 				.replace(/\\/g, "/")
 				.replace(/^\/\/\?\/UNC\//i, "//")
 				.replace(/^\/\/\?\//, "")
-		: project.path;
+		: targetPath;
 	const rootedPath = path.startsWith("/") ? path : `/${path}`;
 
 	if (kind.type === "ssh") {
@@ -124,6 +125,7 @@ export function projectEditorUrl(
 export async function openProjectInEditor(
 	project: Pick<Project, "id" | "path" | "connection">,
 	editor: ProjectEditor,
+	path?: string,
 ): Promise<void> {
 	if (
 		isTauri() &&
@@ -131,11 +133,11 @@ export async function openProjectInEditor(
 		editor === "zed" &&
 		project.connection.kind.type === "wsl"
 	) {
-		await invoke<void>("project_open_in_zed_wsl", { id: project.id });
+		await invoke<void>("project_open_in_zed_wsl", { id: project.id, path });
 		return;
 	}
 
-	const url = projectEditorUrl(project, editor);
+	const url = projectEditorUrl(project, editor, path);
 	if (isTauri()) {
 		await openUrl(url);
 	} else {

@@ -3,6 +3,8 @@ import test from "node:test";
 
 import {
 	PROJECT_EDITORS,
+	openProjectInEditor,
+	projectEditorUrl,
 	readProjectEditor,
 	subscribeProjectEditor,
 	writeProjectEditor,
@@ -126,4 +128,123 @@ test("mounted menus share editor changes and unsubscribe cleanly", (t) => {
 	writeProjectEditor("cursor");
 	assert.equal(menuA.id, "cursor");
 	assert.equal(readProjectEditor().id, "cursor");
+});
+
+test("editor URLs target the selected file without losing connection or path encoding", () => {
+	const local = {
+		path: "C:\\work\\repo",
+		connection: {
+			id: "local",
+			name: "Local",
+			kind: { type: "local" as const },
+		},
+	};
+	const file = "\\\\?\\C:\\work\\repo\\docs\\说明 #1.md";
+	for (const editor of PROJECT_EDITORS) {
+		const prefix = editor.id === "zed" ? "zed://file" : `${editor.id}://file/`;
+		assert.equal(
+			decodeURIComponent(projectEditorUrl(local, editor.id)),
+			`${prefix}C:/work/repo`,
+		);
+		const url = projectEditorUrl(local, editor.id, file);
+		assert.equal(
+			decodeURIComponent(url),
+			`${prefix}C:/work/repo/docs/说明 #1.md`,
+		);
+		assert.ok(url.includes("%20%231.md"));
+	}
+	const remoteFile = "/home/me/repo/docs/说明 #1.md";
+	const wsl = {
+		path: "/home/me/repo",
+		connection: {
+			id: "wsl",
+			name: "WSL",
+			kind: { type: "wsl" as const, distro: "Debian" },
+		},
+	};
+	const ssh = {
+		path: "/home/me/repo",
+		connection: {
+			id: "ssh",
+			name: "SSH",
+			kind: {
+				type: "ssh" as const,
+				target: {
+					type: "direct" as const,
+					hostname: "example.com",
+					user: "dev",
+					port: 2222,
+					authMethod: "agent" as const,
+				},
+			},
+		},
+	};
+	for (const editor of PROJECT_EDITORS) {
+		for (const project of [wsl, ssh]) {
+			const rootUrl = projectEditorUrl(project, editor.id);
+			const fileUrl = projectEditorUrl(project, editor.id, remoteFile);
+			assert.equal(
+				fileUrl,
+				`${rootUrl}/docs/${encodeURIComponent("说明 #1.md")}`,
+			);
+		}
+	}
+});
+
+test("native editor opening forwards the file to URL handlers and the Windows Zed WSL launcher", async (t) => {
+	const keys = ["window", "navigator", "isTauri"];
+	const originals = keys.map((key) =>
+		Object.getOwnPropertyDescriptor(globalThis, key),
+	);
+	t.after(() => {
+		keys.forEach((key, index) => {
+			const original = originals[index];
+			if (original) Object.defineProperty(globalThis, key, original);
+			else Reflect.deleteProperty(globalThis, key);
+		});
+	});
+	const calls: { command: string; args: Record<string, unknown> }[] = [];
+	Object.defineProperty(globalThis, "window", {
+		configurable: true,
+		value: {
+			__TAURI_INTERNALS__: {
+				invoke: async (command: string, args: Record<string, unknown>) => {
+					calls.push({ command, args });
+				},
+			},
+		},
+	});
+	Object.defineProperty(globalThis, "isTauri", {
+		configurable: true,
+		value: true,
+	});
+	Object.defineProperty(globalThis, "navigator", {
+		configurable: true,
+		value: { userAgent: "Windows" },
+	});
+	const project = {
+		id: "wsl-project",
+		path: "/home/me/repo",
+		connection: {
+			id: "wsl",
+			name: "WSL",
+			kind: { type: "wsl" as const, distro: "Debian" },
+		},
+	};
+	await openProjectInEditor(project, "zed", "/home/me/repo/main.ts");
+	assert.deepEqual(calls.at(-1), {
+		command: "project_open_in_zed_wsl",
+		args: { id: project.id, path: "/home/me/repo/main.ts" },
+	});
+	await openProjectInEditor(project, "zed");
+	assert.deepEqual(calls.at(-1), {
+		command: "project_open_in_zed_wsl",
+		args: { id: project.id, path: undefined },
+	});
+	await openProjectInEditor(project, "vscode", "/home/me/repo/main.ts");
+	assert.equal(calls.at(-1)?.command, "plugin:opener|open_url");
+	assert.equal(
+		calls.at(-1)?.args.url,
+		"vscode://vscode-remote/wsl+Debian/home/me/repo/main.ts",
+	);
 });

@@ -21,12 +21,37 @@ pub fn project_list(app: AppHandle) -> Result<Vec<Project>, String> {
 }
 
 #[tauri::command]
-pub async fn project_open_in_zed_wsl(app: AppHandle, id: String) -> Result<(), String> {
+pub async fn project_open_in_zed_wsl(
+    app: AppHandle,
+    id: String,
+    path: Option<String>,
+) -> Result<(), String> {
     let project = project::get(&app, &id)?;
     let crate::domain::ConnectionKind::Wsl { distro } = &project.connection.kind else {
         return Err("opening Zed in WSL requires a WSL project".to_owned());
     };
-    super::super::wsl::open_in_zed(distro, &project.path).await
+    super::super::wsl::open_in_zed(distro, path.as_deref().unwrap_or(&project.path)).await
+}
+
+#[tauri::command]
+pub async fn project_html_report_open(
+    app: AppHandle,
+    project_id: String,
+    url: String,
+) -> Result<(), String> {
+    let project = project::get(&app, &project_id)?;
+    super::super::file_links::open(&app, &project, &url).await
+}
+
+#[tauri::command]
+pub async fn project_file_link_open(
+    app: AppHandle,
+    project_id: String,
+    url: String,
+    preview: bool,
+) -> Result<Option<super::super::file_links::FileLinkPreview>, String> {
+    let project = project::get(&app, &project_id)?;
+    super::super::file_links::open_file_link(&app, &project, &url, preview).await
 }
 
 #[tauri::command]

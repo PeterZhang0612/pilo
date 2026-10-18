@@ -37,7 +37,7 @@ type Highlighter = Awaited<ReturnType<typeof createHighlighter>>;
 
 let highlighterPromise: Promise<Highlighter> | null = null;
 
-function languageForPath(path: string): BundledLanguage | null {
+export function languageForPath(path: string): BundledLanguage | null {
 	const extension = path.split(".").pop()?.toLowerCase();
 	return extension ? (LANGUAGE_BY_EXTENSION[extension] ?? null) : null;
 }

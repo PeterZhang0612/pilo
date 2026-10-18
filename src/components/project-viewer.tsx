@@ -1,247 +1,132 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useContext, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { FileCode, MessageSquare, X } from "lucide-react";
 
-import { i18n } from "@/i18n";
-
-import { TRAFFIC_LIGHT_GUTTER } from "@/components/title-bar";
-import { userErrorMessage } from "@/lib/app-error";
+import { ProjectWorkspaceContext } from "@/components/app/project-workspace-context";
+import { ChatMarkdown } from "@/components/chat/chat-markdown";
+import { ChatMarkdownLinkScope } from "@/components/chat/chat-markdown-link";
+import { ChatMarkdownImageScopeProvider } from "@/components/chat/chat-markdown-image";
+import { projectMarkdownImageScope } from "@/lib/chat/chat-markdown-images";
+import type { ChatProjectImageScope } from "@/lib/chat/chat-image-media";
 import { highlightProjectFile } from "@/lib/code-highlighter";
-import { readProjectFile } from "@/lib/api/files";
+import { fileLinkPreviewKind } from "@/lib/chat/chat-markdown-links";
 import { getMonospaceFontFamilyStack } from "@/lib/font-settings";
 import { usePreferences } from "@/lib/preferences-provider";
 import type { Project } from "@/lib/api/projects";
+import {
+	EMPTY_PROJECT_WORKSPACE,
+	type WorkspaceFile,
+} from "@/lib/project-workspace";
 import { cn } from "@/lib/utils";
-import { Button, EmptyState } from "@/ui";
 
 import "./project-viewer.css";
 
-export type ViewerOpenRequest = {
-	id: number;
-	projectId: string;
-	path: string;
-};
-
-type ViewerTab = {
-	path: string;
-	content: string;
-	loading: boolean;
-	html?: string | null;
-	error?: string;
-};
-
-const MAX_VIEWER_BYTES = 5 * 1024 * 1024;
-
-function decodeFile(data: Uint8Array) {
-	if (data.byteLength > MAX_VIEWER_BYTES) {
-		throw new Error(
-			i18n.t("file.tooLarge", {
-				size: MAX_VIEWER_BYTES / 1024 / 1024,
-			}),
-		);
-	}
-	if (data.subarray(0, Math.min(data.length, 8192)).includes(0)) {
-		throw new Error(i18n.t("file.binary"));
-	}
-	return new TextDecoder("utf-8", { fatal: true }).decode(data);
-}
-
-function fileName(path: string) {
-	return path.split("/").pop() || path;
-}
-
-export function ProjectViewer({
+function ProjectMarkdownPreview({
 	project,
-	request,
-	visible,
-	onClose,
-	reserveTrafficLights = false,
+	file,
+	readImage,
 }: {
 	project: Project;
-	request?: ViewerOpenRequest;
-	visible: boolean;
-	onClose: () => void;
-	/** macOS 侧边栏折叠时红绿灯覆盖主区左上角，顶部需要避让。 */
-	reserveTrafficLights?: boolean;
+	file: WorkspaceFile;
+	readImage?: ChatProjectImageScope["readImage"];
 }) {
-	const { codeFontFamily, codeFontSize } = usePreferences();
-	const [tabs, setTabs] = useState<ViewerTab[]>([]);
-	const [activePath, setActivePath] = useState<string | null>(null);
-	const { t } = useTranslation();
-	const openedPathsRef = useRef(new Set<string>());
-	const activeTab = useMemo(
-		() => tabs.find((tab) => tab.path === activePath) ?? null,
-		[activePath, tabs],
+	const scope = useMemo(() => {
+		const imageScope = projectMarkdownImageScope(
+			{ id: project.id, path: project.path },
+			file.path,
+		);
+		return imageScope ? { ...imageScope, readImage } : null;
+	}, [project.id, project.path, file.path, readImage]);
+	return (
+		<ChatMarkdownImageScopeProvider scope={scope}>
+			<ChatMarkdown
+				text={file.content}
+				className="mx-auto max-w-4xl p-4 font-sans sm:p-6"
+			/>
+		</ChatMarkdownImageScopeProvider>
 	);
+}
 
+/** Content only: session and file navigation share SessionHeader's tab strip. */
+export function ProjectViewer({
+	project,
+	headerOverlay = false,
+	readImage,
+}: {
+	project: Project;
+	headerOverlay?: boolean;
+	readImage?: ChatProjectImageScope["readImage"];
+}) {
+	const { t } = useTranslation();
+	const { codeFontFamily, codeFontSize } = usePreferences();
+	const workspace = useContext(ProjectWorkspaceContext);
+	const { files, activePath } =
+		workspace?.state.get(project.id) ?? EMPTY_PROJECT_WORKSPACE;
+	const activeFile = files.find((file) => file.path === activePath);
+	const highlightFile = workspace?.highlightFile;
 	useEffect(() => {
-		if (!request || request.projectId !== project.id) return;
-		const path = request.path;
-		const timer = window.setTimeout(() => {
-			const alreadyOpen = openedPathsRef.current.has(path);
-			setActivePath(path);
-			if (alreadyOpen) return;
-			openedPathsRef.current.add(path);
-			setTabs((current) => [...current, { path, content: "", loading: true }]);
-			void readProjectFile(project.id, path)
-				.then((data) => decodeFile(data))
-				.then((content) => {
-					setTabs((current) =>
-						current.map((tab) =>
-							tab.path === path
-								? { ...tab, content, loading: false, error: undefined }
-								: tab,
-						),
-					);
-				})
-				.catch((error) => {
-					setTabs((current) =>
-						current.map((tab) =>
-							tab.path === path
-								? { ...tab, loading: false, error: userErrorMessage(error) }
-								: tab,
-						),
-					);
-				});
-		}, 0);
-		return () => window.clearTimeout(timer);
-	}, [request, project.id]);
-
-	useEffect(() => {
-		let cancelled = false;
 		if (
-			!activeTab ||
-			activeTab.loading ||
-			activeTab.error ||
-			activeTab.html !== undefined
+			!activeFile ||
+			activeFile.html !== undefined ||
+			fileLinkPreviewKind(activeFile.path) === "markdown" ||
+			!highlightFile
 		)
 			return;
-		void highlightProjectFile(activeTab.path, activeTab.content)
+		let cancelled = false;
+		void highlightProjectFile(activeFile.path, activeFile.content)
 			.then((html) => {
-				if (cancelled) return;
-				setTabs((current) =>
-					current.map((tab) =>
-						tab.path === activeTab.path && tab.content === activeTab.content
-							? { ...tab, html }
-							: tab,
-					),
-				);
+				if (!cancelled) highlightFile(project.id, activeFile, html);
 			})
-			.catch(() => undefined);
+			.catch(() => {
+				if (!cancelled) highlightFile(project.id, activeFile, null);
+			});
 		return () => {
 			cancelled = true;
 		};
-	}, [activeTab]);
-
-	const highlightedHtml = activeTab?.html ?? null;
-
-	const closeTab = useCallback(
-		(path: string) => {
-			const index = tabs.findIndex((candidate) => candidate.path === path);
-			const next = tabs.filter((candidate) => candidate.path !== path);
-			openedPathsRef.current.delete(path);
-			setTabs(next);
-			if (activePath === path) {
-				setActivePath(next[Math.min(index, next.length - 1)]?.path ?? null);
-			}
-		},
-		[activePath, tabs],
-	);
-
+	}, [activeFile, highlightFile, project.id]);
 	return (
-		<div
-			className={cn(
-				"absolute inset-0 z-20 flex min-h-0 flex-col bg-background",
-				!visible && "hidden",
-			)}
-		>
-			<header
+		<ChatMarkdownLinkScope.Provider value={project}>
+			<div
 				className={cn(
-					"flex h-10 shrink-0 items-center border-b border-border bg-muted/20",
-					reserveTrafficLights && TRAFFIC_LIGHT_GUTTER,
+					"absolute inset-0 z-30 bg-background",
+					headerOverlay && "top-11",
+					activePath === null && "pointer-events-none invisible",
 				)}
+				inert={activePath === null}
 			>
-				<Button
-					variant="ghost"
-					size="sm"
-					className="ml-1 h-7 gap-1.5 px-2 text-xs text-muted-foreground"
-					onClick={onClose}
-				>
-					<MessageSquare className="size-3.5" />
-					聊天
-				</Button>
-				<div className="scrollbar-pro flex min-w-0 flex-1 items-stretch overflow-x-auto px-1">
-					{tabs.map((tab) => (
-						<div
-							key={tab.path}
-							className={cn(
-								"group/tab flex max-w-56 shrink-0 items-center border-x border-transparent text-xs text-muted-foreground",
-								activePath === tab.path &&
-									"border-border bg-background text-foreground",
-							)}
-						>
-							<button
-								type="button"
-								className="flex min-w-0 items-center gap-1.5 px-2.5 py-2"
-								onClick={() => setActivePath(tab.path)}
-							>
-								<FileCode className="size-3.5 shrink-0" />
-								<span className="truncate">{fileName(tab.path)}</span>
-							</button>
-							<button
-								type="button"
-								className="mr-1 rounded p-0.5 opacity-0 transition-opacity duration-100 hover:bg-muted group-hover/tab:opacity-100 focus-visible:opacity-100"
-								aria-label={t("file.closeFile", {
-									name: fileName(tab.path),
-								})}
-								onClick={() => closeTab(tab.path)}
-							>
-								<X className="size-3" />
-							</button>
-						</div>
-					))}
-				</div>
-			</header>
-			<div className="min-h-0 flex-1">
-				{!activeTab ? (
-					<EmptyState
-						title={t("file.noOpenFiles")}
-						description={t("file.openFromFiles")}
-					/>
-				) : activeTab.loading ? (
-					<div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-						{t("file.readFile", { path: activeTab.path })}
-					</div>
-				) : activeTab.error ? (
-					<EmptyState
-						title={t("file.openFailed")}
-						description={activeTab.error}
-					/>
-				) : highlightedHtml ? (
-					<div
-						className="project-file-highlight scrollbar-pro h-full overflow-auto bg-background"
+				{files.map((file) => (
+					<section
+						key={file.path}
+						role="tabpanel"
+						aria-label={file.path}
+						tabIndex={0}
+						inert={file.path !== activePath}
+						className={cn(
+							"project-file-highlight scrollbar-pro absolute inset-2 overflow-auto overscroll-contain rounded-lg border border-border bg-background text-foreground focus-visible:outline-2 focus-visible:outline-ring",
+							file.path !== activePath && "invisible",
+						)}
 						style={{
 							fontFamily: getMonospaceFontFamilyStack(codeFontFamily),
 							fontSize: codeFontSize,
 						}}
-						dangerouslySetInnerHTML={{ __html: highlightedHtml }}
-					/>
-				) : (
-					<div className="scrollbar-pro h-full overflow-auto bg-background">
-						<pre
-							className="min-h-full min-w-max whitespace-pre p-3 text-foreground selection:bg-accent"
-							style={{
-								fontFamily: getMonospaceFontFamilyStack(codeFontFamily),
-								fontSize: codeFontSize,
-								lineHeight: 1.55,
-								tabSize: 4,
-							}}
-						>
-							<code>{activeTab.content}</code>
-						</pre>
-					</div>
-				)}
+					>
+						{fileLinkPreviewKind(file.path) === "markdown" ? (
+							<Suspense fallback={<p className="p-4">{t("common.loading")}</p>}>
+								<ProjectMarkdownPreview
+									project={project}
+									file={file}
+									readImage={readImage}
+								/>
+							</Suspense>
+						) : file.html ? (
+							<div dangerouslySetInnerHTML={{ __html: file.html }} />
+						) : (
+							<pre className="min-h-full min-w-max whitespace-pre p-3 leading-relaxed">
+								<code>{file.content}</code>
+							</pre>
+						)}
+					</section>
+				))}
 			</div>
-		</div>
+		</ChatMarkdownLinkScope.Provider>
 	);
 }
