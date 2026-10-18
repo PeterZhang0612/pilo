@@ -509,10 +509,13 @@ function reduceConversationAction(
 		case "assistant_thinking_start":
 			return withAssistant(state, context, action.timestampMs, (message) => ({
 				...message,
-				content: startAssistantThinkingContent(message.content, () =>
-					action.sourceEntryId
-						? `${action.sourceEntryId}:content:${action.sourceContentIndex ?? 0}`
-						: context.createContentId("thinking"),
+				content: startAssistantThinkingContent(
+					message.content,
+					() =>
+						action.sourceEntryId
+							? `${action.sourceEntryId}:content:${action.sourceContentIndex ?? 0}`
+							: context.createContentId("thinking"),
+					action.timestampMs ?? context.now(),
 				),
 				streaming: true,
 			}));
@@ -523,13 +526,17 @@ function reduceConversationAction(
 					message.content,
 					action.delta,
 					() => context.createContentId("thinking"),
+					action.timestampMs ?? context.now(),
 				),
 				streaming: true,
 			}));
 		case "assistant_thinking_end":
 			return withAssistant(state, context, action.timestampMs, (message) => ({
 				...message,
-				content: finishAssistantThinkingContent(message.content),
+				content: finishAssistantThinkingContent(
+					message.content,
+					action.timestampMs ?? context.now(),
+				),
 			}));
 		case "tool_execution_start":
 			return withAssistant(state, context, action.timestampMs, (message) => ({

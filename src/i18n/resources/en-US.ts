@@ -524,6 +524,8 @@ const enUS = {
 		processing: "Processing…",
 		workingTool: "{{tool}}…",
 		thoughtProcess: "Thought process",
+		thought: "Thought",
+		thoughtDuration: "Thought for {{duration}}",
 		readFiles: "Read {{count}} files",
 		createdFiles: "Created {{count}} files",
 		editedFiles: "Edited {{count}} files",
