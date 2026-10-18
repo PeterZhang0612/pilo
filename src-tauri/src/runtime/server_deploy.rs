@@ -40,6 +40,12 @@ pub(super) struct SpawnedServer {
 
 mod target;
 
+#[cfg(all(test, unix))]
+tokio::task_local! {
+    // Keep fake launchers isolated without changing process-wide environment variables.
+    pub(super) static TEST_SERVER: std::cell::RefCell<Option<SpawnedServer>>;
+}
+
 pub(crate) use target::initialize_server_resource_dir;
 
 #[cfg(test)]
@@ -60,6 +66,11 @@ pub(super) async fn spawn_server(
     force_redeploy: bool,
     diagnostics: &ConnectionDiagnostics,
 ) -> Result<SpawnedServer, String> {
+    #[cfg(all(test, unix))]
+    if let Ok(server) = TEST_SERVER.try_with(|server| server.borrow_mut().take()) {
+        return server.ok_or_else(|| "test server launcher was already consumed".to_owned());
+    }
+
     match &connection.kind {
         ConnectionKind::Local => {
             // Debug builds embed the current server, so prefer it over the staged
@@ -204,6 +215,7 @@ async fn probe_wsl_target(
     diagnostics: &ConnectionDiagnostics,
 ) -> Result<ServerTarget, String> {
     let mut command = Command::new("wsl.exe");
+    command.kill_on_drop(true);
     command.args([
         "--distribution",
         distro,
@@ -240,6 +252,7 @@ async fn probe_ssh_target(
     diagnostics: &ConnectionDiagnostics,
 ) -> Result<ServerTarget, String> {
     let mut command = ssh_command(connection)?;
+    command.kill_on_drop(true);
     command.env(ASKPASS_ATTEMPT_ENV, diagnostics.attempt_id.to_string());
     command.arg(wrap_posix_script(
         "printf '%s\\t%s\\n' \"$(uname -s)\" \"$(uname -m)\"",
@@ -277,6 +290,7 @@ async fn deploy_server_wsl(
         fingerprint = artifact.fingerprint,
     );
     let mut command = Command::new("wsl.exe");
+    command.kill_on_drop(true);
     command.args([
         "--distribution",
         distro,
