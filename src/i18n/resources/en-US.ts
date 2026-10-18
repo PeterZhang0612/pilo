@@ -495,6 +495,7 @@ const enUS = {
 		acceptNextPrompt: "Use suggestion",
 		adoptNextPrompt: "Use suggestion: {{text}}",
 		composerPlaceholder: "Message Pi, @ to mention files",
+		openFile: "Open file {{path}}",
 		addAttachment: "Add attachment",
 		dropFiles: "Drop files to add to your message",
 		preparingAttachments: "Preparing attachments…",
