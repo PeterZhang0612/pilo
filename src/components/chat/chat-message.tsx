@@ -173,14 +173,7 @@ export const AssistantMessage = memo(function AssistantMessage({
 					minHeight: replyRunwayPx,
 				}}
 			>
-				{/* Layout-neutral headroom lets an empty status satisfy its sticky inset. */}
-				<div
-					className={
-						streamingLabel
-							? "relative -mt-1 before:block before:h-1"
-							: "relative"
-					}
-				>
+				<div className="relative">
 					{contentNodes}
 					{visibleErrorMessage ? (
 						<div

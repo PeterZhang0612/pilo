@@ -109,8 +109,8 @@ function RemoteWorkspace() {
 	const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 	const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
 	const scrollRef = useRef<HTMLDivElement>(null);
-	// "chat-scrollbar" 预留 stable gutter，输入框不在滚动容器内，需补等宽内边距
-	// 才能与消息列左右对齐（手机 overlay 滚动条为 0，仅在桌面浏览器可见）。
+	// Wide layouts compensate for the message scrollbar gutter; narrow layouts
+	// keep the composer side spacing symmetric.
 	const scrollbarWidth = useScrollbarGutterWidth(scrollRef, true);
 	const closeMobileNavigation = useCallback(
 		() => setMobileNavigationOpen(false),
@@ -494,7 +494,7 @@ function RemoteWorkspace() {
 									<div
 										data-chat-composer-region=""
 										className="relative z-20 -mt-4 w-full shrink-0 pb-[max(1rem,env(safe-area-inset-bottom))]"
-										style={{ paddingRight: scrollbarWidth }}
+										style={{ paddingRight: isNarrow ? 0 : scrollbarWidth }}
 									>
 										<ConversationColumn className="relative">
 											<ChatPendingQueue

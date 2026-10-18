@@ -662,14 +662,6 @@
 	will-change: opacity, transform;
 }
 
-/* Keep the live status still when bottom-following: native scroll offsets round
-   to device pixels while streamed line boxes retain fractional heights. The
-   scroller already includes its bottom padding in the sticky view rectangle. */
-.chat-scrollbar[data-chat-following] [data-chat-streaming-status] {
-	position: sticky;
-	bottom: calc(var(--chat-assistant-block-padding) + 1px);
-}
-
 .chat-agent-activity-label {
 	color: hsl(var(--primary));
 }
@@ -781,6 +773,17 @@
 		--pilo-mobile-font-family: "Inter", system-ui, sans-serif;
 		--pilo-page-font-family: var(--pilo-mobile-font-family);
 		font-style: normal;
+	}
+
+	/* Match the symmetric composer width without reserving a message-only gutter.
+	   Native touch, wheel and keyboard scrolling remain unchanged. */
+	[data-remote-webui] .chat-scrollbar {
+		scrollbar-gutter: auto;
+		scrollbar-width: none;
+	}
+
+	[data-remote-webui] .chat-scrollbar::-webkit-scrollbar {
+		display: none;
 	}
 
 	/* Keep the iOS focus-zoom floor in landscape and on tablets too. */

@@ -305,7 +305,22 @@ export function useChatStickyScroll({
 		// Virtua's row observer updates an ancestor's height during delivery.
 		// Observe the streaming body too so following need not wait another frame.
 		if (streamingContent) observer.observe(streamingContent);
-		return () => observer.disconnect();
+		// Nested markdown/tool commits can grow an already-delivered resize target.
+		// Mutation delivery catches that growth before a deferred resize can paint.
+		const mutations = new MutationObserver(() => {
+			if (observedContentRevision !== contentRevisionRef.current) return;
+			if (ownershipRef.current === "following") clampToBottom();
+			syncScrollToLatestVisibility();
+		});
+		mutations.observe(contentElement, {
+			childList: true,
+			characterData: true,
+			subtree: true,
+		});
+		return () => {
+			observer.disconnect();
+			mutations.disconnect();
+		};
 	}, [
 		activeAssistantMessageId,
 		clampToBottom,

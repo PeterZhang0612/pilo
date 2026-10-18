@@ -173,6 +173,14 @@ spacing, type sizes, or control heights.
   omitting it uses device defaults, and narrow WebUI stays full-width.
   Android `theme-color` follows computed `--background` after family/mode/CSS
   changes, not a hardcoded family palette.
+- Narrow WebUI (<=1023px) keeps equal composer side margins and aligned message
+  edges: omit composer gutter compensation **and** remove the message-only gutter
+  with `scrollbar-gutter: auto`, `scrollbar-width: none` and a WebKit scrollbar
+  fallback. Keep native scrolling; desktop/wide WebUI retains its stable gutter
+  and measured composer compensation. Changing only the composer breaks message
+  alignment. Verify `/tests/browser/chat-column-alignment.html` with short and
+  overflowing messages, including 1023/1024px. Assert computed gutter policy as
+  well as rectangles: overlay-scrollbar systems can conceal an incorrect policy.
 - Mermaid SVG colors are snapshots, not live CSS references. In the shared
   `ChatMarkdownBody`, reread tokens in a passive effect after `ThemeProvider`'s
   layout effects for mode, family and custom-CSS changes. Update the memoized
@@ -197,23 +205,34 @@ spacing, type sizes, or control heights.
   another frame and visibly displaces the processing status. When verification
   is authorized, sample the status position after resize delivery, not just
   monotonic `scrollTop`, and cover a final multiline error in a plain short chat
-  on desktop and WebUI.
-- While following, the live assistant status uses a bottom-sticky constraint
-  with the assistant column's block-padding token plus 1 CSS px of rounding
-  headroom. Native scroll offsets round to device pixels while line boxes keep
-  fractional heights; monotonic scrolling can still move the whole status by
-  less than a pixel. Keep the status in document flow for short content and
-  remove the sticky constraint when reading. The scrollport's bottom padding
-  already contributes to the sticky view rectangle; adding it again displaces
-  the status by that padding. The live content wrapper supplies a small block
-  `::before` spacer balanced by an equal negative top margin. This preserves
-  layout while giving even an empty status room inside its sticky containing
-  block; padding or merely preventing margin collapse does not supply that
-  room. Otherwise the empty-to-first-output transition still moves by about 1px.
-  Verify constant frame/task status coordinates from the empty status through
-  the first output and during overflowing text/tool output, plus normal
-  short-chat flow and manual
-  upward scrolling on desktop and narrow WebUI.
+  on desktop and WebUI. Resize delivery alone is insufficient: nested markdown
+  commits and progressive work reveals can grow a previously delivered ancestor,
+  whose next notification is deferred by the browser's resize-depth limit.
+  In the same hook, observe content `childList`/`characterData` mutations with
+  `subtree: true` and run the same ownership-gated DOM clamp in mutation delivery,
+  not a later rAF. Do not observe attributes (virtualizer/style feedback), add a
+  second Virtua scroll writer, or pull reading ownership back to bottom. Both
+  observers must disconnect on rebind/cleanup. Run
+  `/tests/browser/chat-scroll-following.html`: require `data-test-status="passed"`
+  for post-rAF task samples during thinking/text bursts, parallel tool insertion,
+  partial output, completion, reading and turn-end errors in plain/virtualized
+  wide/narrow layouts. Settled-only assertions miss the one-frame regression.
+- Keep the live assistant status in normal document flow after the full reply,
+  both while following and reading. Do not pin it with `position: sticky` or
+  add sticky-inset spacers: when tool details expand or streamed output grows
+  past the viewport, a bottom-sticky status floats over that content. Existing
+  scroll following owns keeping the latest output visible; status positioning
+  must not compensate for fractional scroll rounding by overlapping the reply.
+  Run `/tests/browser/chat-streaming-status.html` and require
+  `document.body.dataset.testStatus === "passed"`. It checks expanded/collapsed
+  and growing tool details, following/reading, plain/virtualized rendering and
+  desktop/narrow widths. Before measuring short/growing Markdown replies, wait
+  with a bounded deadline for the expected rendered paragraphs, then settle
+  layout. A fixed rAF count is not a Markdown-ready signal: the first runtime
+  import can suspend, leaving the previous tool layout visible. Keep the geometry
+  assertions independent of readiness so overlapping/pinned status still fails.
+  Browser layout assertions do not replace real Windows WebView verification of
+  automatic scrolling.
 - User-bubble and composer outer right edges share `ConversationColumn` geometry.
   The composer sits outside `.chat-scrollbar`, so desktop, WebUI and the loading
   fallback use `useScrollbarGutterWidth` to compensate its actual gutter (zero

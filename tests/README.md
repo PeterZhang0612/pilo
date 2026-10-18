@@ -57,6 +57,9 @@ Open one of these paths at `http://127.0.0.1:1420`:
 - `/tests/browser/chat-markdown-links.html` (mocked system-opening IPC and remote/WebUI guards)
 - `/tests/browser/project-workspace-tabs.html` (shared header file tabs, Markdown/code, retained chat state, project isolation, keyboard and narrow layouts)
 - `/tests/browser/chat-mentions.html`
+- `/tests/browser/chat-scroll-following.html`
+- `/tests/browser/chat-streaming-status.html`
+- `/tests/browser/chat-column-alignment.html` (message/composer edges, symmetric mobile margins, scrolling and desktop gutter; check 320/390/640/768/1023/1024/1440px)
 - `/tests/browser/dom-text-selection.html`
 - `/tests/browser/remote-mobile-navigation.html`
 
