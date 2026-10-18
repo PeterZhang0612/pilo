@@ -1,5 +1,6 @@
 use super::*;
 use crate::runtime::events::ExtensionUiRequestPayload;
+use crate::runtime::token_usage::TokenUsage;
 
 #[test]
 fn maps_assistant_message_start_instead_of_agent_start() {
@@ -268,6 +269,26 @@ fn agent_end_does_not_finish_until_agent_settled() {
             .is_empty()
     );
 
+    // 用量只认 message_end；agent_end 里的 usage 不得重复计入。
+    assert_eq!(
+        adapter.adapt(
+            5,
+            &serde_json::json!({
+                "type": "message_end",
+                "message": {
+                    "role": "assistant",
+                    "content": [],
+                    "stopReason": "stop",
+                    "usage": { "input": 10, "output": 5 }
+                }
+            })
+        ),
+        [RuntimeEvent::AssistantTextSnapshot {
+            generation: 5,
+            text: String::new(),
+        }]
+    );
+
     assert_eq!(
         adapter.adapt(
             5,
@@ -277,7 +298,8 @@ fn agent_end_does_not_finish_until_agent_settled() {
                 "messages": [{
                     "role": "assistant",
                     "content": [],
-                    "stopReason": "stop"
+                    "stopReason": "stop",
+                    "usage": { "input": 10, "output": 5 }
                 }]
             })
         ),
@@ -290,6 +312,77 @@ fn agent_end_does_not_finish_until_agent_settled() {
             generation: 5,
             stop_reason: Some("stop".to_owned()),
             error_message: None,
+            usage: Some(TokenUsage {
+                input: 10,
+                output: 5,
+                cache_read: 0,
+                cache_write: 0,
+                total: 15,
+                cost: None,
+            }),
+        }]
+    );
+}
+
+/// 自动重试会在一次 agent_settled 前产生多次 agent_end；每次运行各自的
+/// assistant 消息用量都必须保留，不能互相覆盖。
+#[test]
+fn usage_accumulates_across_auto_retries() {
+    let mut adapter = PiEventAdapter::default();
+
+    for (attempt, (input, output)) in [(10, 5), (100, 50)].into_iter().enumerate() {
+        let usage = serde_json::json!({ "input": input, "output": output });
+        assert_eq!(
+            adapter.adapt(
+                5,
+                &serde_json::json!({
+                    "type": "message_end",
+                    "message": {
+                        "role": "assistant",
+                        "content": [],
+                        "stopReason": "error",
+                        "usage": usage
+                    }
+                })
+            ),
+            [RuntimeEvent::AssistantTextSnapshot {
+                generation: 5,
+                text: String::new(),
+            }]
+        );
+        assert!(
+            adapter
+                .adapt(
+                    5,
+                    &serde_json::json!({
+                        "type": "agent_end",
+                        "willRetry": attempt == 0,
+                        "messages": [{
+                            "role": "assistant",
+                            "content": [],
+                            "stopReason": "error",
+                            "usage": usage
+                        }]
+                    })
+                )
+                .is_empty()
+        );
+    }
+
+    assert_eq!(
+        adapter.adapt(5, &serde_json::json!({ "type": "agent_settled" })),
+        [RuntimeEvent::AssistantMessageEnd {
+            generation: 5,
+            stop_reason: Some("error".to_owned()),
+            error_message: None,
+            usage: Some(TokenUsage {
+                input: 110,
+                output: 55,
+                cache_read: 0,
+                cache_write: 0,
+                total: 165,
+                cost: None,
+            }),
         }]
     );
 }
@@ -319,6 +412,7 @@ fn settled_uses_latest_error_metadata_and_resets_state() {
             generation: 5,
             stop_reason: Some("error".to_owned()),
             error_message: Some("provider failed".to_owned()),
+            usage: None,
         }]
     );
     assert_eq!(
@@ -327,6 +421,7 @@ fn settled_uses_latest_error_metadata_and_resets_state() {
             generation: 5,
             stop_reason: None,
             error_message: None,
+            usage: None,
         }]
     );
 }

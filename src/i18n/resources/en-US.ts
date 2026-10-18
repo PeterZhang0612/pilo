@@ -674,6 +674,8 @@ const enUS = {
 		contextSection: "Context",
 		tokensSection: "Token usage",
 		tokensTotal: "Total",
+		turnTokens: "Turn tokens",
+		turnCost: "Turn cost",
 		totalCost: "Total cost",
 		input: "Input",
 		output: "Output",

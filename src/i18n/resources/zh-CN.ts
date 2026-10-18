@@ -647,6 +647,8 @@ const zhCN = {
 		contextSection: "上下文",
 		tokensSection: "Token 用量",
 		tokensTotal: "总计",
+		turnTokens: "本轮 Token",
+		turnCost: "本轮费用",
 		totalCost: "总费用",
 		input: "输入",
 		output: "输出",

@@ -11,6 +11,7 @@ import {
 	replayConversationEvents,
 	replayConversationEventsBatched,
 } from "../../src/lib/chat/conversation-replay.ts";
+import { toConversationAction } from "../../src/lib/chat/conversation-runtime-adapter.ts";
 import type {
 	ConversationAction,
 	ConversationEvent,
@@ -474,6 +475,7 @@ test("frame coalescing merges only compatible high-frequency actions", () => {
 	);
 });
 
+
 test("compaction marker closes the running turn and inserts a compaction message", () => {
 	const state = replayConversationEvents(
 		[
@@ -520,3 +522,93 @@ test("compaction marker closes the running turn and inserts a compaction message
 	assert.equal(compaction.text, "summary text");
 	assert.equal(compaction.tokensBefore, 217_975);
 });
+
+test("history replay keeps the turn token usage on the assistant message", () => {
+	const state = replayConversationEvents(
+		[
+			{
+				type: "user_message_start",
+				text: "run",
+				timestampMs: 1,
+				sourceEntryId: "u1",
+			},
+			{ type: "assistant_message_start", timestampMs: 2, sourceEntryId: "a1" },
+			{
+				type: "assistant_text_delta",
+				delta: "done",
+				timestampMs: 3,
+				sourceEntryId: "a1",
+				sourceContentIndex: 0,
+			},
+			{
+				type: "assistant_turn_end",
+				stopReason: "stop",
+				completion: "complete",
+				timestampMs: 4,
+				usage: {
+					input: 10,
+					output: 5,
+					cacheRead: 20,
+					cacheWrite: 2,
+					total: 37,
+					cost: 0.01,
+				},
+			},
+		] satisfies ConversationEvent[],
+		context(),
+	);
+
+	const assistant = state.messages[1];
+	if (assistant?.role !== "assistant") throw new Error("expected assistant");
+	assert.deepEqual(assistant.usage, {
+		input: 10,
+		output: 5,
+		cacheRead: 20,
+		cacheWrite: 2,
+		total: 37,
+		cost: 0.01,
+	});
+});
+
+test("turns without reported usage keep the field empty", () => {
+	const state = replayConversationEvents(
+		[
+			{
+				type: "user_message_start",
+				text: "run",
+				timestampMs: 1,
+				sourceEntryId: "u1",
+			},
+			{ type: "assistant_message_start", timestampMs: 2, sourceEntryId: "a1" },
+			{
+				type: "assistant_text_delta",
+				delta: "done",
+				timestampMs: 3,
+				sourceEntryId: "a1",
+				sourceContentIndex: 0,
+			},
+			{ type: "assistant_turn_end", stopReason: "stop", timestampMs: 4 },
+		] satisfies ConversationEvent[],
+		context(),
+	);
+
+	const assistant = state.messages[1];
+	if (assistant?.role !== "assistant") throw new Error("expected assistant");
+	assert.equal(assistant.usage, undefined);
+});
+
+test("live assistant_message_end carries usage into the turn end action", () => {
+	const action = toConversationAction({
+		type: "assistant_message_end",
+		generation: 1,
+		stopReason: "stop",
+		errorMessage: null,
+		usage: { input: 3, output: 7, cacheRead: 40, cacheWrite: 0, total: 50 },
+	});
+
+	if (action?.type !== "assistant_turn_end")
+		throw new Error("expected turn end");
+	assert.equal(action.usage?.total, 50);
+	assert.equal(action.usage?.cacheRead, 40);
+});
+
