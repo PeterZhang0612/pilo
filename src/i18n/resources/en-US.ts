@@ -966,6 +966,7 @@ const enUS = {
 		cycleModel: "Cycle all models",
 		cycleScopedModel: "Cycle preferred models",
 		focusComposer: "Focus composer",
+		queueMessage: "Queue message",
 		defaultOccupied: "Default shortcut is already in use",
 		defaultOccupiedDescription:
 			"“{{label}}” is using this shortcut. Reset all shortcuts first.",

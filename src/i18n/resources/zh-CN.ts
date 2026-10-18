@@ -939,6 +939,7 @@ const zhCN = {
 		cycleModel: "切换全部模型",
 		cycleScopedModel: "切换常用模型",
 		focusComposer: "开始输入",
+		queueMessage: "排队发送",
 		defaultOccupied: "默认按键已被占用。",
 		defaultOccupiedDescription: "与“{{label}}”冲突，可先全部重置。",
 		modifierRequired: "请使用组合键或功能键。",
