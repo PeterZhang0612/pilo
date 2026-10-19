@@ -241,6 +241,7 @@ const enUS = {
 		sendShortcut: "Send shortcut",
 		collapseLongMessages: "Collapse long messages",
 		collapseWork: "Collapse work activity",
+		pluginNotifications: "Plugin notifications",
 		language: "Language",
 		languageChinese: "简体中文",
 		languageEnglish: "English",

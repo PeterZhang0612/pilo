@@ -236,6 +236,7 @@ const zhCN = {
 		sendShortcut: "发送按键",
 		collapseLongMessages: "长文收起",
 		collapseWork: "收起过程",
+		pluginNotifications: "插件通知",
 		language: "界面语言",
 		languageChinese: "简体中文",
 		languageEnglish: "English",

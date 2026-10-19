@@ -19,6 +19,7 @@ import {
 	type PiCommand,
 	type PiloRuntimeEvent,
 } from "@/lib/api/pi-runtime";
+import { usePreferences } from "@/lib/preferences-provider";
 
 type ChatSessionClient = ReturnType<typeof createChatSessionClient>;
 
@@ -99,6 +100,14 @@ export function usePiSessionFeatures({
 	onProjectMcpDeclined,
 }: UsePiSessionFeaturesOptions) {
 	const { t } = useTranslation();
+	const { showPluginNotifications } = usePreferences();
+	// 通过 ref 读取偏好：若让它进入 showExtensionNotification 的依赖，
+	// 开关一变就会重建 handleExtensionRequest 并重跑会话监听 effect，
+	// 重订阅窗口内的 extension_ui_request 会丢失，Pi 会一直等响应。
+	const showPluginNotificationsRef = useRef(showPluginNotifications);
+	useEffect(() => {
+		showPluginNotificationsRef.current = showPluginNotifications;
+	}, [showPluginNotifications]);
 	const commandSuggestions = useMemo(
 		() => createPiCommandSuggestions(commands ?? []),
 		[commands],
@@ -158,6 +167,8 @@ export function usePiSessionFeatures({
 
 	const showExtensionNotification = useCallback(
 		(event: PiExtensionDialogRequest) => {
+			// 插件通知默认关闭；关闭时不建状态、不起计时器，事件直接丢弃。
+			if (!showPluginNotificationsRef.current) return;
 			const type = event.notifyType ?? "info";
 			const notification: PiExtensionNotification = {
 				id: event.id,
@@ -199,6 +210,7 @@ export function usePiSessionFeatures({
 				].slice(-MAX_EXTENSION_NOTIFICATIONS);
 			});
 		},
+		// 偏好经 ref 读取，回调保持稳定，避免重订阅会话监听器。
 		[],
 	);
 
