@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, type ReactNode } from "react";
+import { useLayoutEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import {
@@ -48,6 +48,9 @@ export type ThinkingActivity = {
 	type: "thinking";
 	text: string;
 	status: ChatActivityStatus;
+	/** 流式开始/结束时刻；历史回放的消息可能没有，因此是可选的。 */
+	startedAtMs?: number;
+	endedAtMs?: number;
 };
 
 export type ToolCallActivity = {
@@ -158,57 +161,110 @@ function toolLabel(t: TFunction, toolName: string) {
 	}
 }
 
-function ActivityProcessStep({
-	icon,
-	children,
+function ThinkingActivityView({
+	activity,
+	expansionKey,
 }: {
-	icon: ReactNode;
-	children: ReactNode;
+	activity: ThinkingActivity;
+	expansionKey: string;
 }) {
-	return (
-		<div
-			className={cn(
-				"flex min-h-6 w-full items-baseline gap-1.5 py-0.5",
-				PROCESS_TEXT_CLASS,
-			)}
-		>
-			<span className="relative top-[0.125em] inline-flex shrink-0">
-				{icon}
-			</span>
-			<div className="min-w-0 flex-1">{children}</div>
-		</div>
-	);
-}
-
-function ThinkingActivityView({ activity }: { activity: ThinkingActivity }) {
 	const { t } = useTranslation();
+	const { showWorkDuration } = usePreferences();
 	const running = activity.status === "running";
-	return (
-		<ActivityProcessStep
-			icon={
-				<Sparkles
-					className={cn(
-						PROCESS_ICON_CLASS,
-						running && "motion-safe:animate-pulse",
-					)}
-				/>
-			}
-		>
-			{activity.text ? (
-				<ChatMarkdown
-					text={activity.text}
-					isStreaming={running}
-					className={cn(
-						"!leading-[1.5] !text-muted-foreground",
-						"[&_p]:!mb-1 [&_li:not(:first-child)]:!mt-0.5",
-						"[&_:is(h1,h2,h3,h4,h5,h6)]:!my-1 [&_:is(h1,h2,h3,h4,h5,h6)]:!text-[1em] [&_:is(h1,h2,h3,h4,h5,h6)]:!font-medium",
-						"[&_[data-streamdown='code-block']]:!my-2",
-					)}
-				/>
-			) : (
-				<span>{t("chat.thinking")}</span>
+	// 思考默认收成单行（与工具调用一致），展开状态按条目记忆，
+	// 因此状态从 running 变为 complete 不会把用户展开的内容重新收起。
+	const [open, setOpen] = useChatExpansionState(expansionKey, false);
+	const durationMs =
+		activity.startedAtMs !== undefined && activity.endedAtMs !== undefined
+			? Math.max(0, activity.endedAtMs - activity.startedAtMs)
+			: undefined;
+	// 只有耗时达到或超过 1 秒才展示持续时长；不足 1 秒或无跨度时间戳显示“思考”，避免出现“思考了0秒”
+	const durationLabel =
+		!running &&
+		showWorkDuration &&
+		durationMs !== undefined &&
+		durationMs >= 1000
+			? formatWorkDuration(durationMs, {
+					hour: t("common.hour"),
+					minute: t("common.minute"),
+					second: t("common.second"),
+				})
+			: "";
+	const label = running
+		? t("chat.thinking")
+		: durationLabel
+			? t("chat.thoughtDuration", { duration: durationLabel })
+			: t("chat.thought");
+
+	// Scan from the end so streaming updates do not split the entire thinking body.
+	const previewText = useMemo(() => {
+		let end = activity.text.length;
+		while (end > 0) {
+			const start = activity.text.lastIndexOf("\n", end - 1) + 1;
+			const line = activity.text.slice(start, end).trim();
+			if (line) return line;
+			end = start - 1;
+		}
+		return "";
+	}, [activity.text]);
+	const hasDetails = previewText.length > 0;
+
+	const details = (
+		<ChatMarkdown
+			text={activity.text}
+			isStreaming={running}
+			className={cn(
+				"!leading-[1.5] !text-muted-foreground",
+				"[&_p]:!mb-1 [&_li:not(:first-child)]:!mt-0.5",
+				"[&_:is(h1,h2,h3,h4,h5,h6)]:!my-1 [&_:is(h1,h2,h3,h4,h5,h6)]:!text-[1em] [&_:is(h1,h2,h3,h4,h5,h6)]:!font-medium",
+				"[&_[data-streamdown='code-block']]:!my-2",
 			)}
-		</ActivityProcessStep>
+		/>
+	);
+	const trigger = (
+		<button
+			type="button"
+			className={cn(
+				"group/thinking -mx-1 flex min-h-6 w-[calc(100%+0.5rem)] items-center gap-1.5 rounded-md px-1 py-0.5 text-left transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none",
+				PROCESS_TEXT_CLASS,
+				hasDetails ? "hover:bg-hover hover:text-foreground" : "cursor-default",
+				open && "bg-hover text-foreground",
+			)}
+			onClick={(event) => {
+				if (!hasDetails) return;
+				toggleChatExpansionWithAnchor(event.currentTarget, () =>
+					setOpen((value) => !value),
+				);
+			}}
+			aria-expanded={hasDetails ? open : undefined}
+		>
+			<Sparkles
+				className={cn(
+					PROCESS_ICON_CLASS,
+					running && "motion-safe:animate-pulse",
+				)}
+			/>
+			<span className="shrink-0 truncate">{label}</span>
+			{previewText && !open ? (
+				<span className="min-w-0 flex-1 truncate font-normal text-muted-foreground/75">
+					{previewText}
+				</span>
+			) : (
+				<span className="min-w-0 flex-1" aria-hidden="true" />
+			)}
+		</button>
+	);
+
+	return (
+		<div className="w-full" data-chat-expansion-root>
+			<Hint
+				label={hasDetails && !open ? activity.text : undefined}
+				className="scrollbar-pro max-h-[min(24rem,var(--radix-tooltip-content-available-height))] max-w-[min(20rem,calc(100vw-2rem))] overflow-y-auto overscroll-contain whitespace-pre-wrap"
+			>
+				{trigger}
+			</Hint>
+			{hasDetails && open ? <div className="pt-0.5">{details}</div> : null}
+		</div>
 	);
 }
 
@@ -515,7 +571,11 @@ export function AssistantActivityView({
 				<div className="space-y-0 pt-0.5">
 					{activity.map((item) =>
 						item.type === "thinking" ? (
-							<ThinkingActivityView key={item.id} activity={item} />
+							<ThinkingActivityView
+								key={item.id}
+								activity={item}
+								expansionKey={`${expansionKey}:thinking:${item.id}`}
+							/>
 						) : (
 							<ToolCallActivityView
 								key={`${item.id}-${item.status}`}

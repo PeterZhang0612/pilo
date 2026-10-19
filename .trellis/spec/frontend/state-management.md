@@ -54,7 +54,10 @@ The setter updates the projection before publishing the store snapshot.
 
 Web event frames coalesce adjacent deltas and use `reduceConversationActions`.
 Flush at user/non-assistant boundaries and after `assistant_turn_end` before
-deciding whether the next action must adopt an external live turn. Fork actions
+deciding whether the next action must adopt an external live turn. A value the
+reducer derives from event timing (for example a thinking block duration) comes
+from the Host event timestamp carried by the action; when it is absent, leave the
+value undefined instead of substituting the client clock. Fork actions
 obtain the latest messages on click, before their first await, rather than
 subscribing shell callbacks to every streaming message change.
 
