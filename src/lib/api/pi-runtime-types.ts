@@ -1,3 +1,4 @@
+import type { TokenUsage } from "./token-usage";
 import type { CacheKeepAliveSettings } from "@/lib/cache-keep-alive";
 import type { NextPromptSettings } from "../next-prompt";
 import type { ProjectModelScope } from "../project-model-scope";
@@ -203,6 +204,11 @@ export type PiloRuntimeEvent = {
 			generation: number;
 	  }
 	| {
+			type: "assistant_usage_update";
+			generation: number;
+			usage: TokenUsage;
+	  }
+	| {
 			type: "assistant_text_delta";
 			generation: number;
 			delta: string;
@@ -253,6 +259,8 @@ export type PiloRuntimeEvent = {
 			generation: number;
 			stopReason: string | null;
 			errorMessage: string | null;
+			/** 当前回复段累计的模型用量；Pi 未上报时为 null。 */
+			usage: TokenUsage | null;
 	  }
 	| {
 			type: "queue_update";

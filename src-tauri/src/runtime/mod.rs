@@ -32,6 +32,7 @@ mod session_watcher;
 pub(crate) mod ssh;
 pub(crate) mod storage;
 mod terminal;
+mod token_usage;
 #[allow(dead_code)]
 mod wsl;
 

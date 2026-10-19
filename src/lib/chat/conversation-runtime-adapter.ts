@@ -22,6 +22,8 @@ export function toConversationAction(
 			};
 		case "assistant_text_snapshot":
 			return { type: event.type, text: event.text };
+		case "assistant_usage_update":
+			return { type: event.type, usage: event.usage };
 		case "tool_execution_start":
 			return {
 				type: event.type,
@@ -50,6 +52,7 @@ export function toConversationAction(
 				type: "assistant_turn_end",
 				stopReason: event.stopReason,
 				errorMessage: event.errorMessage,
+				usage: event.usage,
 			};
 		case "theme_settings_changed":
 		case "project_model_scope_changed":
