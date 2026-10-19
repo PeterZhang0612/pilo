@@ -588,3 +588,53 @@ test("fallback submissions for new sessions can go directly to runtime", () => {
 		false,
 	);
 });
+test("a new session only pins the run configuration the user picked", () => {
+	const sampleProject = {
+		id: "proj-1",
+		name: "Project 1",
+		path: "/test",
+		connection: { id: "local", name: "Local", kind: "local" as const },
+	};
+	const sessionWithNullModel = resolveChatSession({
+		sessions: [],
+		openedChats: [],
+		activeProject: sampleProject,
+		selectedSessionId: null,
+		selectedIndexedSession: null,
+		selectedProject: sampleProject,
+		draftSessionStarted: true,
+		draftTemporary: false,
+		draftSessionId: "draft-1",
+		draftSessionModel: null,
+		draftSessionThinkingLevel: null,
+		isExternalOpenTurn: () => false,
+		hostTurnOpen: false,
+	});
+	// 没选过模型时留空，会话页才会采用 Pi 当前配置里的默认模型。
+	assert.equal(sessionWithNullModel?.initialModel, undefined);
+	assert.equal(sessionWithNullModel?.initialThinkingLevel, undefined);
+
+	const customModel = {
+		id: "custom-model",
+		name: "Custom Model",
+		provider: "test",
+		reasoning: false,
+	};
+	const sessionWithCustomModel = resolveChatSession({
+		sessions: [],
+		openedChats: [],
+		activeProject: sampleProject,
+		selectedSessionId: null,
+		selectedIndexedSession: null,
+		selectedProject: sampleProject,
+		draftSessionStarted: true,
+		draftTemporary: false,
+		draftSessionId: "draft-1",
+		draftSessionModel: customModel,
+		draftSessionThinkingLevel: "high",
+		isExternalOpenTurn: () => false,
+		hostTurnOpen: false,
+	});
+	assert.deepEqual(sessionWithCustomModel?.initialModel, customModel);
+	assert.equal(sessionWithCustomModel?.initialThinkingLevel, "high");
+});

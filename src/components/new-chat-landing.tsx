@@ -31,6 +31,7 @@ import {
 	getCachedProjectPiModels,
 	hydrateProjectPiModels,
 	isProjectPiModelsIncomplete,
+	shouldRefreshProjectPiModelsSilently,
 	refreshProjectPiModels,
 	subscribeProjectPiModels,
 } from "@/lib/api/pi-models";
@@ -239,7 +240,7 @@ export function NewChatLanding({
 	);
 
 	const loadModels = useCallback(
-		async (force = false) => {
+		async (force = false, silent = false) => {
 			if (!projectId || modelLoadingRef.current) return;
 			const cached = getCachedProjectPiModels(projectId);
 			if (!force && cached && !isProjectPiModelsIncomplete(cached)) {
@@ -248,7 +249,9 @@ export function NewChatLanding({
 			}
 			const requestId = ++modelRequestRef.current;
 			modelLoadingRef.current = true;
-			setModelLoadState("loading");
+			if (!silent) {
+				setModelLoadState("loading");
+			}
 			setModelError(null);
 			try {
 				const result = await refreshProjectPiModels(projectId);
@@ -256,6 +259,11 @@ export function NewChatLanding({
 				applyModelSnapshot(result);
 			} catch (error) {
 				if (modelRequestRef.current !== requestId) return;
+				// 后台重探失败不该打断正在填写的新会话页：保留已有目录即可。
+				if (silent) {
+					console.warn("Failed to refresh Pi models in the background", error);
+					return;
+				}
 				setModelError(runtimeErrorMessage(error));
 				setModelLoadState(cached ? "ready" : "error");
 			} finally {
@@ -300,6 +308,12 @@ export function NewChatLanding({
 				if (cached) applyModelSnapshot(cached);
 				if (!cached || isProjectPiModelsIncomplete(cached)) {
 					void loadModels();
+					return;
+				}
+				// 完整的目录不会自己过期，新会话页是唯一能发现 Pi 默认模型被改动的
+				// 时机：后台静默重探一次，用户没手动选过模型就跟着新默认值走。
+				if (shouldRefreshProjectPiModelsSilently(cached)) {
+					void loadModels(true, true);
 				}
 			})
 			.catch((error) => {
@@ -396,7 +410,12 @@ export function NewChatLanding({
 				}
 			}
 
-			onStartSession(submission, selectedModel, selectedThinkingLevel);
+			// 用户没动过选择器就交给 Pi 的默认模型，别把目录里的旧默认值钉进会话。
+			onStartSession(
+				submission,
+				modelSelectionDirtyRef.current ? selectedModel : null,
+				thinkingSelectionDirtyRef.current ? selectedThinkingLevel : null,
+			);
 			updateDraft("");
 		},
 		[
