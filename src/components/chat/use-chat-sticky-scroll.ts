@@ -91,6 +91,11 @@ export function useChatStickyScroll({
 	const commitOwnership = useCallback((nextOwnership: ScrollOwnership) => {
 		if (ownershipRef.current === nextOwnership) return;
 		ownershipRef.current = nextOwnership;
+		// Release the sticky status during input, not a later React commit.
+		scrollElementRef.current?.toggleAttribute(
+			"data-chat-following",
+			nextOwnership === "following",
+		);
 		setIsSticky(nextOwnership === "following");
 	}, []);
 
@@ -217,6 +222,10 @@ export function useChatStickyScroll({
 			scrollElementRef.current = nextScrollElement;
 			setScrollElement(nextScrollElement);
 			if (!nextScrollElement) return;
+			nextScrollElement.toggleAttribute(
+				"data-chat-following",
+				ownershipRef.current === "following",
+			);
 			nextScrollElement.addEventListener("wheel", handleWheel, {
 				passive: true,
 			});

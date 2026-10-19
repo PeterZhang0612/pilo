@@ -336,7 +336,6 @@ const ChatConversationViewportImpl = forwardRef<
 			<div className="relative isolate min-h-0 w-full flex-1">
 				<div
 					ref={bindScrollRef}
-					data-chat-following={viewportSticky ? "" : undefined}
 					aria-hidden={showSwitchSkeleton || undefined}
 					onScroll={
 						plainShortChat
