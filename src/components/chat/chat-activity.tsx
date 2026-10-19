@@ -459,11 +459,11 @@ function ToolCallActivityView({
 					<Hint label={openablePath}>
 						<button
 							type="button"
-							className="relative z-10 min-w-0 shrink truncate rounded-sm font-mono text-[length:var(--pilo-code-font-size)] font-normal text-muted-foreground underline decoration-dotted underline-offset-2 transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+							className="relative z-10 inline-flex min-w-0 shrink cursor-pointer items-center rounded-sm bg-muted/50 px-1 font-mono text-[length:var(--pilo-code-font-size)] font-normal text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:bg-muted focus-visible:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
 							aria-label={t("chat.openFile", { path: openablePath })}
 							onClick={() => fileOpener?.openFile(openablePath)}
 						>
-							{previewLabel}
+							<span className="min-w-0 truncate">{previewLabel}</span>
 						</button>
 					</Hint>
 				) : previewLabel ? (
@@ -644,7 +644,7 @@ export function AssistantActivityView({
 				{running ? <Spinner className="size-3.5 shrink-0" /> : null}
 			</button>
 			{groupOpen ? (
-				<div className="space-y-0 pt-0.5">
+				<div className="space-y-0.5 pt-0.5">
 					{activity.map((item) =>
 						item.type === "thinking" ? (
 							<ThinkingActivityView
