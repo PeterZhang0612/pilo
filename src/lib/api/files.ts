@@ -19,6 +19,7 @@ export function readProjectDir(
 	return invoke("project_fs_read_dir", { id: projectId, path });
 }
 
+/** Read-only viewer access: project-relative or absolute on the project connection. */
 export function readProjectFile(
 	projectId: string,
 	path: string,

@@ -67,6 +67,60 @@ or macOS code paths.
 - Blocking the async runtime with synchronous long-running work; use
   `spawn_blocking` / a background thread.
 
+## Viewer Absolute File Reads
+
+### 1. Scope / Trigger
+
+Desktop tool-path clicks may preview files outside the project, including Skills.
+Only read-only viewer access expands; WebUI gets no generic filesystem route.
+
+### 2. Signatures
+
+- `project_fs_read_file(id: String, path: String) -> Result<Vec<u8>, String>`
+  delegates to `remote_fs::read_viewer_file(servers, project, path)`.
+- Internal `remote_fs::read_file` remains project-contained, including its use
+  by `read_image`.
+
+### 3. Contracts
+
+Relative paths use the original project root. Absolute POSIX, Windows drive and
+UNC paths use the selected file's parent as the server request root and its name
+as the relative path. Resolve through the project's connection, never the desktop
+host's filesystem parser for WSL/SSH. The temporary root never updates storage.
+Workspace file identity preserves absolute paths (including drive/UNC paths);
+only relative paths are joined to the project directory.
+
+### 4. Validation & Error Matrix
+
+The existing server canonicalization, parent containment, symlink-escape checks,
+binary transport limits and viewer text/size checks still apply. Server file reads
+require regular files before opening, rejecting directories, devices and FIFOs.
+Read at most `MAX_BINARY_PAYLOAD_BYTES + 1` bytes and reject an oversized result
+even if the file grows after metadata inspection; metadata length alone is not
+a read bound. Missing files and unreadable parents propagate normal viewer errors.
+Writes, deletes, directory listings and Markdown image reads keep their project scope.
+
+### 5. Good / Base / Bad Cases
+
+Good: an SSH Skill absolute path is read on SSH. Base: project-relative file
+previews are unchanged. Bad: interpreting a WSL path with Windows host APIs.
+
+### 6. Tests Required
+
+Pending explicit authorization: relative/internal/external absolute files,
+POSIX root-level files, Windows drive roots and UNC shares, Unicode/spaces,
+missing or unreadable files, symlink escapes, size/binary rejection and project
+switches. Reject directories, devices (including `/dev/zero`) and FIFOs without
+reading them; reject files that grow past the limit during reading. Absolute
+workspace paths must retain editor targets and deduplicate with file-link tabs.
+Confirm WebUI still has no generic file-read endpoint and mutations remain
+project-contained.
+
+### 7. Wrong vs Correct
+
+Wrong: permit absolute paths in the shared server filesystem validator.
+Correct: select a temporary read-only viewer root and reuse server validation.
+
 ## Platform Notes
 
 - macOS/Windows-only code is gated with `#[cfg(target_os = ...)]` and

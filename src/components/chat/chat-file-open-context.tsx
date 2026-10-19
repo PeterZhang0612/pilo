@@ -1,7 +1,7 @@
 import { useEffect, useSyncExternalStore } from "react";
 
 /**
- * 打开项目内文件（桌面端落到右侧 ProjectViewer）。
+ * 打开当前连接中的文件（桌面端落到右侧 ProjectViewer）。
  *
  * 工具行要把文件路径变成可点入口，但消息渲染层级有五六层，逐层传参会污染
  * 一路上的组件签名。这里沿用聊天区既有的模块级 external store 做法

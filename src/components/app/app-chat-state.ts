@@ -125,14 +125,13 @@ export function firstProjectInConnectionOrder(
 	return projects[0] ?? null;
 }
 
-export function projectRelativePath(project: Project, candidate: string) {
+export function projectViewerPath(project: Project, candidate: string) {
 	const root = project.path.replace(/\\/g, "/").replace(/\/+$/, "");
 	const path = candidate.trim().replace(/\\/g, "/");
-	if (!path || path === root) return null;
+	if (!path || path === root || path.endsWith("/")) return null;
+	if (path.split("/").some((part) => part === "..")) return null;
 	if (path.startsWith(`${root}/`)) return path.slice(root.length + 1);
 	if (path.startsWith("./")) return path.slice(2);
-	if (path.startsWith("/") || /^[A-Za-z]:\//.test(path)) return null;
-	if (path.split("/").some((part) => part === "..")) return null;
 	return path;
 }
 

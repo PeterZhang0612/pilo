@@ -352,7 +352,7 @@ pub async fn project_fs_read_file(
     path: String,
 ) -> Result<Vec<u8>, String> {
     let project = project::get(&app, &id)?;
-    remote_fs::read_file(&runtime.servers, &project, &path).await
+    remote_fs::read_viewer_file(&runtime.servers, &project, &path).await
 }
 
 #[tauri::command]

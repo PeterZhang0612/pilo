@@ -21,7 +21,7 @@ import { SessionMentionProvider } from "@/components/chat/session-mention-contex
 import { AppSidebar } from "@/components/sidebar/app-sidebar";
 import { AddProjectDialog } from "@/components/sidebar/add-project-dialog";
 import {
-	projectRelativePath,
+	projectViewerPath,
 	retainedBackgroundChatVisualControllerIds,
 	type OpenChat,
 } from "@/components/app/app-chat-state";
@@ -282,9 +282,12 @@ function App() {
 	const openViewerFile = useCallback(
 		(candidate: string) => {
 			if (!activeProject) return;
-			const path = projectRelativePath(activeProject, candidate);
+			const path = projectViewerPath(activeProject, candidate);
 			if (!path) return;
-			const absolutePath = `${activeProject.path.replace(/[\\/]+$/, "")}/${path}`;
+			const absolutePath =
+				path.startsWith("/") || /^[A-Za-z]:\//.test(path)
+					? path
+					: `${activeProject.path.replace(/[\\/]+$/, "")}/${path}`;
 			const existing = openedProjectFiles?.find(
 				(file) =>
 					workspaceFileKey(file.path) === workspaceFileKey(absolutePath),
@@ -317,7 +320,7 @@ function App() {
 
 	const canOpenViewerFile = useCallback(
 		(candidate: string) =>
-			Boolean(activeProject && projectRelativePath(activeProject, candidate)),
+			Boolean(activeProject && projectViewerPath(activeProject, candidate)),
 		[activeProject],
 	);
 

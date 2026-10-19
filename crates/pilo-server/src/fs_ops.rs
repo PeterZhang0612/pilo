@@ -1,4 +1,5 @@
 use std::{
+    io::Read as _,
     path::{Path, PathBuf},
     time::UNIX_EPOCH,
 };
@@ -216,16 +217,30 @@ pub(crate) fn fs_read_dir(params: FsPathParams) -> Result<Value, String> {
 
 pub(crate) fn fs_read_file(params: FsPathParams) -> Result<Vec<u8>, String> {
     let (_, path) = checked_existing_path(&params.project, &params.path, false)?;
-    let size = std::fs::metadata(&path)
-        .map_err(|error| error.to_string())?
-        .len();
+    let metadata = std::fs::metadata(&path).map_err(|error| error.to_string())?;
+    if !metadata.is_file() {
+        return Err("file read requires a regular file".to_owned());
+    }
+    let size = metadata.len();
     if size > MAX_BINARY_PAYLOAD_BYTES as u64 {
         return Err(format!(
             "file '{}' is {size} bytes; pilo-server read limit is {} bytes",
             params.path, MAX_BINARY_PAYLOAD_BYTES
         ));
     }
-    std::fs::read(path).map_err(|error| error.to_string())
+    let mut data = Vec::new();
+    std::fs::File::open(path)
+        .map_err(|error| error.to_string())?
+        .take(MAX_BINARY_PAYLOAD_BYTES as u64 + 1)
+        .read_to_end(&mut data)
+        .map_err(|error| error.to_string())?;
+    if data.len() > MAX_BINARY_PAYLOAD_BYTES {
+        return Err(format!(
+            "file '{}' exceeds the pilo-server read limit of {} bytes",
+            params.path, MAX_BINARY_PAYLOAD_BYTES
+        ));
+    }
+    Ok(data)
 }
 pub(crate) fn fs_write_file(params: FsWriteParams, data: Vec<u8>) -> Result<Value, String> {
     if data.len() > MAX_BINARY_PAYLOAD_BYTES {

@@ -58,6 +58,27 @@ pub async fn read_file(
     Ok(binary.into_iter().next().expect("binary length checked"))
 }
 
+/// Viewer-only absolute reads stay on the project's connection; other FS operations remain scoped.
+pub async fn read_viewer_file(
+    servers: &ServerManager,
+    project: &Project,
+    path: &str,
+) -> Result<Vec<u8>, String> {
+    let path = path.replace('\\', "/");
+    let absolute = path.starts_with('/')
+        || (path.as_bytes().get(1) == Some(&b':') && path.as_bytes().get(2) == Some(&b'/'));
+    if !absolute {
+        return read_file(servers, project, &path).await;
+    }
+    let (parent, name) = path
+        .rsplit_once('/')
+        .ok_or_else(|| "file path has no parent directory".to_owned())?;
+    // Let the server canonicalize and validate the selected parent, including remote paths.
+    let mut scope = project.clone();
+    scope.path = format!("{parent}/");
+    read_file(servers, &scope, name).await
+}
+
 pub(crate) use pilo_protocol::MAX_CHAT_FILE_BYTES;
 
 /// The selected environment's server owns the destination, never WebUI.
