@@ -526,164 +526,171 @@ export function ChatComposer({
 				) : null}
 
 				<div
-					className="flex max-h-[min(24rem,40dvh)] min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-1 overflow-y-auto overscroll-contain px-1"
+					className="relative min-w-0"
 					style={
 						{
 							"--pilo-composer-line-height": `max(1.75rem, ${readingFontSize * 1.6}px)`,
 						} as CSSProperties
 					}
 				>
-					{mentionDraft.references.map((mention) =>
-						mention.kind === "session" ? (
-							<SessionMentionBadge
-								key={`session:${mention.path}`}
-								mention={mention.session}
-								compact
-							/>
-						) : (
-							<FileMentionBadge
-								key={`file:${mention.path}`}
-								path={mention.path}
-								compact
-							/>
-						),
-					)}
-					<Textarea
-						data-chat-composer-input=""
-						ref={textareaRef}
-						enterKeyHint={
-							!newlineOnEnter && sendMessageShortcut === "enter"
-								? "send"
-								: "enter"
-						}
-						value={mentionDraft.text}
-						// oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- A multiline native textarea needs combobox semantics for the shared suggestion list.
-						role="combobox"
-						aria-autocomplete="list"
-						aria-expanded={suggestionMenuOpen}
-						aria-controls={suggestionMenuOpen ? suggestionMenuId : undefined}
-						aria-activedescendant={
-							suggestionMenuOpen &&
-							effectiveHighlightedIndex >= 0 &&
-							filteredSuggestions.length > 0
-								? `${suggestionMenuId}-${effectiveHighlightedIndex}`
-								: undefined
-						}
-						onChange={(event) => {
-							onNextPromptDismiss?.();
-							onFieldChange(
-								event.target.value,
-								event.target.selectionStart ?? event.target.value.length,
-							);
-						}}
-						onSelect={syncCaret}
-						onClick={syncCaret}
-						onKeyUp={syncCaret}
-						onKeyDown={(event) => {
-							if (
-								event.key === "Backspace" &&
-								!event.ctrlKey &&
-								!event.metaKey &&
-								!event.altKey &&
-								!isImeComposingKeyboardEvent(event) &&
-								removeLastMention(event.currentTarget)
-							) {
-								event.preventDefault();
-								return;
-							}
-							if (!suggestionMenuOpen && !isImeComposingKeyboardEvent(event)) {
-								// Esc also invalidates a prediction that has not returned yet.
-								if (event.key === "Escape") onNextPromptDismiss?.();
-							}
-							if (
-								ghostText &&
-								!suggestionMenuOpen &&
-								!isImeComposingKeyboardEvent(event)
-							) {
-								if (
-									event.key === "Tab" &&
-									!event.shiftKey &&
-									!event.ctrlKey &&
-									!event.metaKey &&
-									!event.altKey
-								) {
-									event.preventDefault();
-									adoptNextPrompt();
-									return;
-								}
-								if (event.key === "Escape") {
-									event.preventDefault();
-									return;
-								}
-							}
-							handleKeyDown(event);
-						}}
-						onPaste={(event) => {
-							onNextPromptDismiss?.();
-							handlePaste(event);
-						}}
-						disabled={disabled || sendingNow}
-						rows={2}
-						style={
-							{
-								"--pilo-reading-font-size": `${readingFontSize}px`,
-								fontFamily: `var(--pilo-mobile-font-family, ${getPageFontFamilyStack(readingFontFamily)})`,
-							} as CSSProperties
-						}
-						aria-label={composerPlaceholder}
-						placeholder={
-							ghostText ||
-							(mentionDraft.references.length === 0
-								? composerPlaceholder
-								: undefined)
-						}
-						className={cn(
-							CHAT_COMPOSER_TEXTAREA_CLASS_NAME,
-							"w-auto min-w-0 flex-1 basis-32 px-0",
-							ghostText ? "pr-20" : showFocusHint && "pr-16",
-						)}
-					/>
-				</div>
-
-				{ghostText ? (
-					<Button
-						type="button"
-						variant="ghost"
-						size="sm"
-						onClick={adoptNextPrompt}
-						className="absolute right-2 top-1.5 h-7 px-2 text-xs text-muted-foreground pointer-coarse:min-h-11"
-						aria-label={t("chat.adoptNextPrompt", { text: ghostText })}
-						aria-keyshortcuts="Tab"
-					>
-						<span className="flex items-center gap-1.5 pointer-coarse:hidden">
-							<span aria-hidden="true">→</span>
-							<kbd className="rounded border border-border/70 bg-muted/50 px-1 py-px font-mono text-2xs">
-								Tab
-							</kbd>
-						</span>
-						<span className="hidden pointer-coarse:inline">
-							{t("chat.acceptNextPrompt")}
-						</span>
-					</Button>
-				) : null}
-
-				{showFocusHint && !ghostText ? (
-					<div
-						className="pointer-events-none absolute right-2 top-1.5 z-10 flex items-center gap-0.5 font-mono text-2xs text-muted-foreground opacity-70 transition-opacity group-focus-within:opacity-0"
-						aria-hidden="true"
-					>
-						{formatKeyboardShortcut(keyboardShortcuts["focus-composer"]).map(
-							(label, index) => (
-								<span key={label} className="flex items-center gap-0.5">
-									{index > 0 ? <span>+</span> : null}
-									<kbd className="rounded border border-border/70 bg-muted/50 px-1 py-px">
-										{label}
-									</kbd>
-								</span>
+					<div className="flex max-h-[min(24rem,40dvh)] min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-1 overflow-y-auto overscroll-contain px-1">
+						{mentionDraft.references.map((mention) =>
+							mention.kind === "session" ? (
+								<SessionMentionBadge
+									key={`session:${mention.path}`}
+									mention={mention.session}
+									compact
+								/>
+							) : (
+								<FileMentionBadge
+									key={`file:${mention.path}`}
+									path={mention.path}
+									compact
+								/>
 							),
 						)}
+						<Textarea
+							data-chat-composer-input=""
+							ref={textareaRef}
+							enterKeyHint={
+								!newlineOnEnter && sendMessageShortcut === "enter"
+									? "send"
+									: "enter"
+							}
+							value={mentionDraft.text}
+							// oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- A multiline native textarea needs combobox semantics for the shared suggestion list.
+							role="combobox"
+							aria-autocomplete="list"
+							aria-expanded={suggestionMenuOpen}
+							aria-controls={suggestionMenuOpen ? suggestionMenuId : undefined}
+							aria-activedescendant={
+								suggestionMenuOpen &&
+								effectiveHighlightedIndex >= 0 &&
+								filteredSuggestions.length > 0
+									? `${suggestionMenuId}-${effectiveHighlightedIndex}`
+									: undefined
+							}
+							onChange={(event) => {
+								onNextPromptDismiss?.();
+								onFieldChange(
+									event.target.value,
+									event.target.selectionStart ?? event.target.value.length,
+								);
+							}}
+							onSelect={syncCaret}
+							onClick={syncCaret}
+							onKeyUp={syncCaret}
+							onKeyDown={(event) => {
+								if (
+									event.key === "Backspace" &&
+									!event.ctrlKey &&
+									!event.metaKey &&
+									!event.altKey &&
+									!isImeComposingKeyboardEvent(event) &&
+									removeLastMention(event.currentTarget)
+								) {
+									event.preventDefault();
+									return;
+								}
+								if (
+									!suggestionMenuOpen &&
+									!isImeComposingKeyboardEvent(event)
+								) {
+									// Esc also invalidates a prediction that has not returned yet.
+									if (event.key === "Escape") onNextPromptDismiss?.();
+								}
+								if (
+									ghostText &&
+									!suggestionMenuOpen &&
+									!isImeComposingKeyboardEvent(event)
+								) {
+									if (
+										event.key === "Tab" &&
+										!event.shiftKey &&
+										!event.ctrlKey &&
+										!event.metaKey &&
+										!event.altKey
+									) {
+										event.preventDefault();
+										adoptNextPrompt();
+										return;
+									}
+									if (event.key === "Escape") {
+										event.preventDefault();
+										return;
+									}
+								}
+								handleKeyDown(event);
+							}}
+							onPaste={(event) => {
+								onNextPromptDismiss?.();
+								handlePaste(event);
+							}}
+							disabled={disabled || sendingNow}
+							rows={2}
+							style={
+								{
+									"--pilo-reading-font-size": `${readingFontSize}px`,
+									fontFamily: `var(--pilo-mobile-font-family, ${getPageFontFamilyStack(readingFontFamily)})`,
+								} as CSSProperties
+							}
+							aria-label={composerPlaceholder}
+							placeholder={
+								ghostText ||
+								(mentionDraft.references.length === 0
+									? composerPlaceholder
+									: undefined)
+							}
+							className={cn(
+								CHAT_COMPOSER_TEXTAREA_CLASS_NAME,
+								"w-auto min-w-0 flex-1 basis-32 px-0",
+								ghostText ? "pr-20" : showFocusHint && "pr-16",
+							)}
+						/>
 					</div>
-				) : null}
+
+					<div className="pointer-events-none absolute end-0 top-0 z-10 flex h-(--pilo-composer-line-height) items-center">
+						{ghostText ? (
+							<Button
+								type="button"
+								variant="ghost"
+								size="sm"
+								onClick={adoptNextPrompt}
+								className="pointer-events-auto h-7 px-2 text-xs text-muted-foreground pointer-coarse:min-h-11"
+								aria-label={t("chat.adoptNextPrompt", { text: ghostText })}
+								aria-keyshortcuts="Tab"
+							>
+								<span className="flex items-center gap-1.5 pointer-coarse:hidden">
+									<span aria-hidden="true">→</span>
+									<kbd className="rounded border border-border/70 bg-muted/50 px-1 py-px font-mono text-2xs">
+										Tab
+									</kbd>
+								</span>
+								<span className="hidden pointer-coarse:inline">
+									{t("chat.acceptNextPrompt")}
+								</span>
+							</Button>
+						) : null}
+
+						{showFocusHint && !ghostText ? (
+							<div
+								className="flex items-center gap-0.5 font-mono text-2xs text-muted-foreground opacity-70 transition-opacity group-focus-within:opacity-0"
+								aria-hidden="true"
+							>
+								{formatKeyboardShortcut(
+									keyboardShortcuts["focus-composer"],
+								).map((label, index) => (
+									<span key={label} className="flex items-center gap-0.5">
+										{index > 0 ? <span>+</span> : null}
+										<kbd className="rounded border border-border/70 bg-muted/50 px-1 py-px">
+											{label}
+										</kbd>
+									</span>
+								))}
+							</div>
+						) : null}
+					</div>
+				</div>
 
 				<div
 					data-chat-composer-toolbar=""

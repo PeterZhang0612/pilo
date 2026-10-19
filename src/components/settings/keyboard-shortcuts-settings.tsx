@@ -35,6 +35,21 @@ import {
 	SettingsSection,
 } from "./compact-layout";
 
+// 分组和设置行共享内容列，让最长组合键决定列宽，同时保持左右两端对齐。
+const SHORTCUT_SUBGRID_CLASS = "sm:col-span-full sm:grid sm:grid-cols-subgrid";
+const SHORTCUT_SECTION_CLASS = cn(
+	SHORTCUT_SUBGRID_CLASS,
+	"sm:[&>header]:col-span-full",
+);
+const SHORTCUT_EDITOR_CLASS =
+	"grid w-full min-w-0 grid-cols-[minmax(0,1fr)_max-content] items-center gap-1.5";
+const SHORTCUT_INPUT_CLASS =
+	"flex h-9 w-fit min-w-0 max-w-full items-center justify-start justify-self-start overflow-x-auto overflow-y-hidden whitespace-nowrap rounded-md border px-2.5 py-1.5 text-left font-normal transition-colors outline-none pointer-coarse:min-h-[44px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
+
+// 表头、全局快捷键和普通项共用重置按钮列，不应用文字按钮的边距补偿。
+const SHORTCUT_RESET_BUTTON_CLASS =
+	"size-7 shrink-0 sm:mr-0! pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px]";
+
 function ShortcutKeys({ shortcut }: { shortcut: string }) {
 	const tokens = shortcut.split("+");
 	const keys = formatKeyboardShortcut(shortcut).map((label, index) => ({
@@ -129,12 +144,12 @@ function ShortcutEditor({
 	};
 
 	return (
-		<div className="flex items-center gap-1.5">
+		<div className={SHORTCUT_EDITOR_CLASS}>
 			<button
 				type="button"
 				data-shortcut-recording={recording ? "true" : undefined}
 				className={cn(
-					"min-w-[132px] shrink-0 whitespace-nowrap rounded-md border px-2.5 py-1.5 text-left transition-colors outline-none",
+					SHORTCUT_INPUT_CLASS,
 					recording
 						? "border-ring bg-accent/60 ring-2 ring-ring/20"
 						: "border-border/80 bg-background hover:bg-muted/55 focus-visible:ring-2 focus-visible:ring-ring/30",
@@ -162,7 +177,7 @@ function ShortcutEditor({
 					type="button"
 					variant="ghost"
 					size="icon"
-					className={cn("size-7", !isCustom && "invisible")}
+					className={cn(SHORTCUT_RESET_BUTTON_CLASS, !isCustom && "invisible")}
 					disabled={!isCustom}
 					onClick={resetShortcut}
 					aria-label={t("shortcuts.reset", {
@@ -258,8 +273,16 @@ function DesktopShortcutSettings() {
 	};
 
 	return (
-		<SettingsSection title={t("desktop.globalShortcut")}>
-			<SettingsRow label={t("desktop.show")} helper={t("desktop.shortcutHint")}>
+		<SettingsSection
+			title={t("desktop.globalShortcut")}
+			className={SHORTCUT_SECTION_CLASS}
+			contentClassName={SHORTCUT_SUBGRID_CLASS}
+		>
+			<SettingsRow
+				label={t("desktop.show")}
+				helper={t("desktop.shortcutHint")}
+				className={SHORTCUT_SUBGRID_CLASS}
+			>
 				{loadError ? (
 					<div role="alert" className="flex flex-wrap items-center gap-2">
 						<span className="text-xs text-destructive">
@@ -270,11 +293,11 @@ function DesktopShortcutSettings() {
 						</Button>
 					</div>
 				) : (
-					<div className="flex flex-wrap items-center gap-2">
+					<div className={SHORTCUT_EDITOR_CLASS}>
 						<Button
 							type="button"
 							variant="outline"
-							className="pointer-coarse:min-h-11"
+							className={SHORTCUT_INPUT_CLASS}
 							disabled={!settings || saving}
 							data-shortcut-recording={recording ? "true" : undefined}
 							aria-label={t("shortcuts.change", { label: t("desktop.show") })}
@@ -294,7 +317,7 @@ function DesktopShortcutSettings() {
 							type="button"
 							variant="ghost"
 							size="icon"
-							className="pointer-coarse:min-h-11 pointer-coarse:min-w-11"
+							className={SHORTCUT_RESET_BUTTON_CLASS}
 							disabled={
 								!settings ||
 								saving ||
@@ -308,7 +331,7 @@ function DesktopShortcutSettings() {
 						{settings && !settings.registered ? (
 							<div
 								aria-live="polite"
-								className="flex flex-wrap items-center gap-2"
+								className="col-span-full flex flex-wrap items-center gap-2"
 							>
 								<span className="text-xs text-destructive">
 									{t("desktop.shortcutUnavailable")}
@@ -365,11 +388,18 @@ export function KeyboardShortcutsSettings() {
 	};
 
 	return (
-		<div className={SETTINGS_CONTAINER_CLASS}>
+		<div
+			className={cn(
+				SETTINGS_CONTAINER_CLASS,
+				"sm:grid sm:grid-cols-[minmax(min-content,1fr)_minmax(0,max-content)]",
+			)}
+		>
 			{isDesktopIntegrationAvailable() ? <DesktopShortcutSettings /> : null}
 			{(["app", "session"] as const).map((section, sectionIndex) => (
 				<SettingsSection
 					key={section}
+					className={SHORTCUT_SECTION_CLASS}
+					contentClassName={SHORTCUT_SUBGRID_CLASS}
 					title={t(
 						section === "app"
 							? "settings.shortcutApp"
@@ -386,6 +416,7 @@ export function KeyboardShortcutsSettings() {
 									type="button"
 									variant="ghost"
 									size="icon"
+									className={SHORTCUT_RESET_BUTTON_CLASS}
 									disabled={!hasCustomShortcut}
 									onClick={async () => {
 										if (
@@ -409,7 +440,11 @@ export function KeyboardShortcutsSettings() {
 					{SHORTCUT_COMMANDS.filter(
 						(command) => command.section === section,
 					).map((command) => (
-						<SettingsRow key={command.id} label={t(command.labelKey)}>
+						<SettingsRow
+							key={command.id}
+							label={t(command.labelKey)}
+							className={SHORTCUT_SUBGRID_CLASS}
+						>
 							<ShortcutEditor
 								commandId={command.id}
 								canUseShortcuts={canUseShortcuts}
@@ -422,9 +457,21 @@ export function KeyboardShortcutsSettings() {
 				</SettingsSection>
 			))}
 
-			<SettingsSection title={t("settings.shortcutInput")}>
-				<SettingsRow label={t("settings.newline")}>
-					<ShortcutKeys shortcut={newlineKeys} />
+			<SettingsSection
+				title={t("settings.shortcutInput")}
+				className={SHORTCUT_SECTION_CLASS}
+				contentClassName={SHORTCUT_SUBGRID_CLASS}
+			>
+				<SettingsRow
+					label={t("settings.newline")}
+					className={SHORTCUT_SUBGRID_CLASS}
+				>
+					<div className={SHORTCUT_EDITOR_CLASS}>
+						<div className={cn(SHORTCUT_INPUT_CLASS, "border-transparent")}>
+							<ShortcutKeys shortcut={newlineKeys} />
+						</div>
+						<span aria-hidden="true" className={SHORTCUT_RESET_BUTTON_CLASS} />
+					</div>
 				</SettingsRow>
 			</SettingsSection>
 		</div>

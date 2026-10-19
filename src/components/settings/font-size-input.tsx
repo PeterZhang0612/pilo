@@ -67,7 +67,7 @@ export function FontSizeInput({
 				}}
 			/>
 			<span
-				className="pointer-events-none absolute inset-y-0 end-2 flex items-center text-xs text-muted-foreground"
+				className="pointer-events-none absolute inset-y-0 end-2 flex items-center text-sm text-muted-foreground"
 				aria-hidden="true"
 			>
 				px

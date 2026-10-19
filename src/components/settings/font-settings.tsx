@@ -36,8 +36,7 @@ const FONT_SETTINGS_ROW_CLASS =
 	"sm:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)] " +
 	"[&>div:last-child]:grid [&>div:last-child]:w-full [&>div:last-child]:max-w-[20rem] " +
 	"[&>div:last-child]:grid-cols-[minmax(0,1fr)_5.5rem] " +
-	"sm:[&>div:last-child]:justify-self-end sm:[&>div:last-child]:pl-0 " +
-	"max-sm:[&>div:last-child>button]:ml-0!";
+	"sm:[&>div:last-child]:justify-self-end sm:[&>div:last-child]:pl-0";
 const FONT_SELECT_CLASS = "min-w-0 w-full pointer-coarse:h-11";
 
 export function FontSettings({

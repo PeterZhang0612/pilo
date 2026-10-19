@@ -51,5 +51,6 @@ test("global shortcut settings are desktop-only and have accessible controls", (
 			`aria-label="${i18n.t("shortcuts.reset", { label: i18n.t("desktop.show") })}"`,
 		),
 	);
-	assert.match(desktop, /pointer-coarse:min-h-11/);
+	assert.ok(desktop.includes("pointer-coarse:min-h-[44px]"));
+	assert.ok(desktop.includes("pointer-coarse:min-w-[44px]"));
 });

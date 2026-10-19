@@ -88,7 +88,7 @@ export function FontSelect({
 								<CommandGroup
 									key={group.label}
 									heading={group.label}
-									className="p-(--pilo-ui-menu-padding)"
+									className="p-(--pilo-ui-menu-padding) [&_[cmdk-group-heading]]:px-2.5"
 								>
 									{group.options.map((option) => (
 										<CommandItem

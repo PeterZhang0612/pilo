@@ -254,7 +254,10 @@ export function CommandPalette({
 					viewportClassName="max-h-none h-full"
 				>
 					{projectResults.length > 0 ? (
-						<CommandGroup heading={t("commandPalette.projectGroup")}>
+						<CommandGroup
+							heading={t("commandPalette.projectGroup")}
+							className="[&_[cmdk-group-heading]]:px-3"
+						>
 							{projectResults.map((project) => (
 								<CommandItem
 									key={`project:${project.id}`}
@@ -263,7 +266,7 @@ export function CommandPalette({
 										onSelectProject?.(project.id);
 										onOpenChange(false);
 									}}
-									className="mx-1.5 my-px gap-2.5 py-2"
+									className="mx-0.5 my-px gap-3 py-2"
 								>
 									<Folder className="size-4 shrink-0 text-muted-foreground" />
 									<div className="min-w-0 flex-1">
@@ -287,6 +290,7 @@ export function CommandPalette({
 									? t("commandPalette.sessionGroup")
 									: t("commandPalette.recentSessions")
 							}
+							className="[&_[cmdk-group-heading]]:px-3"
 						>
 							{sessionResults.map((session) => (
 								<CommandItem
@@ -300,7 +304,7 @@ export function CommandPalette({
 											title: session.title,
 										})
 									}
-									className="mx-1.5 my-px gap-2.5 py-2"
+									className="mx-0.5 my-px gap-3 py-2"
 								>
 									<MessagesSquare className="size-4 shrink-0 text-muted-foreground" />
 									<div className="min-w-0 flex-1">
@@ -329,13 +333,16 @@ export function CommandPalette({
 						</CommandGroup>
 					) : null}
 					{contentResults.length > 0 ? (
-						<CommandGroup heading={t("commandPalette.messageGroup")}>
+						<CommandGroup
+							heading={t("commandPalette.messageGroup")}
+							className="[&_[cmdk-group-heading]]:px-3"
+						>
 							{contentResults.map((result) => (
 								<CommandItem
 									key={`content:${result.projectId}:${result.sessionPath}:${result.role}:${result.snippet}`}
 									value={`content:${result.projectId}:${result.sessionPath}:${result.role}:${result.snippet}`}
 									onSelect={() => chooseSession(result)}
-									className="mx-1.5 my-px items-start gap-2.5 py-2"
+									className="mx-0.5 my-px items-start gap-3 py-2"
 								>
 									<MessageSquareText className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
 									<div className="min-w-0 flex-1">
