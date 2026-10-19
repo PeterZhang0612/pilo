@@ -68,11 +68,9 @@ export function PreferencesSettings() {
 						onCheckedChange={setCollapseCompletedActivity}
 					/>
 				</SettingsRow>
-				<SettingsRow
-					label={t("settings.pluginNotifications")}
-					helper={t("settings.pluginNotificationsHint")}
-				>
+				<SettingsRow label={t("settings.pluginNotifications")}>
 					<Switch
+						aria-label={t("settings.pluginNotifications")}
 						checked={showPluginNotifications}
 						onCheckedChange={setShowPluginNotifications}
 					/>
