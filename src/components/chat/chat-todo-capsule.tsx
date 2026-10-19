@@ -64,8 +64,8 @@ export function ChatTodoList({
 					<li
 						key={item.id}
 						className="flex items-start gap-2 text-xs leading-snug"
-						title={t(STATUS_LABEL_KEYS[item.status])}
 					>
+						<span className="sr-only">{t(STATUS_LABEL_KEYS[item.status])}</span>
 						<Icon
 							className={cn(
 								"mt-0.5 size-3.5 shrink-0",
@@ -119,20 +119,22 @@ export function ChatTodoCapsule({
 		conversationStore.getSnapshot,
 		conversationStore.getSnapshot,
 	);
-	const progress = useMemo(
-		() =>
-			latestTurnChatTodos([...historyMessages, ...(snapshot?.messages ?? [])]),
-		[historyMessages, snapshot],
-	);
+	const { progress, turnId } = useMemo(() => {
+		const messages = [...historyMessages, ...(snapshot?.messages ?? [])];
+		let userMessageId: string | null = null;
+		for (let index = messages.length - 1; index >= 0; index -= 1) {
+			if (messages[index].role === "user") {
+				userMessageId = messages[index].id;
+				break;
+			}
+		}
+		return { progress: latestTurnChatTodos(messages), turnId: userMessageId };
+	}, [historyMessages, snapshot]);
 	const fingerprint = useMemo(
-		() =>
-			progress?.items
-				.map((item) => `${item.id}:${item.status}:${item.text}`)
-				.join("|") ?? "",
-		[progress],
+		() => JSON.stringify([turnId, progress?.items]),
+		[turnId, progress],
 	);
-	// 关闭状态绑定在"清单指纹"上：清单变了（新任务/进度推进）自然重新出现，
-	// 因此不需要额外 effect 去重置，也不会在渲染期同步 setState。
+	// 关闭状态绑定到当前用户轮次和清单内容，新一轮的相同清单仍会显示。
 	const [dismissedFingerprint, setDismissedFingerprint] = useState<
 		string | null
 	>(null);
@@ -221,7 +223,7 @@ export function ChatTodoCapsule({
 				</Button>
 			</div>
 			{expanded ? (
-				<div className="border-t border-border/60 px-3 py-2">
+				<div className="scrollbar-pro max-h-[min(240px,calc(var(--remote-viewport-height,100dvh)/4))] overflow-y-auto border-t border-border/60 px-3 py-2">
 					<ChatTodoList items={progress.items} />
 				</div>
 			) : null}

@@ -615,6 +615,7 @@ function ChatPageImpl(props: ChatPageProps) {
 											status={cacheKeepAlive.status}
 										/>
 										<ChatTodoCapsule
+											key={client.sessionKey}
 											conversationStore={conversationStore}
 											historyMessages={baseMessages}
 											running={running}

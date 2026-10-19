@@ -128,6 +128,7 @@ function todoListFromUnknown(payload: unknown): ChatTodoItem[] | null {
 				? record.items
 				: null;
 	if (!list) return null;
+	if (list.length === 0) return [];
 	const items = list
 		.map((row, index) => todoFromUnknown(row, index))
 		.filter((item): item is ChatTodoItem => item !== null);
@@ -206,16 +207,19 @@ export function latestTurnChatTodos(
 		const content = message.content ?? [];
 		for (let itemIndex = content.length - 1; itemIndex >= 0; itemIndex -= 1) {
 			const item = content[itemIndex];
-			// 失败的调用（参数校验失败、扩展抛错）里 args 仍可能带完整清单，
-			// 但那份清单并未生效，不能当作当前状态，继续向前找上一份成功的快照。
+			// 未完成或失败的调用不能代表已生效的清单，继续找上一份成功快照。
 			if (
 				item.type !== "tool" ||
+				item.status !== "complete" ||
 				item.isError ||
 				!isChatTodoTool(item.toolName)
 			)
 				continue;
 			const items = parseChatTodos(item.args, item.result);
-			if (items) return buildChatTodoProgress(items);
+			// 空清单是有效的清空操作，不能继续回溯到旧清单。
+			if (items !== null) {
+				return items.length > 0 ? buildChatTodoProgress(items) : null;
+			}
 		}
 	}
 	return null;

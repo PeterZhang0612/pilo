@@ -528,6 +528,7 @@ function RemoteWorkspace() {
 											status={cacheKeepAliveStatus}
 										/>
 										<ChatTodoCapsule
+											key={chat.activeSessionKey}
 											conversationStore={chat.conversationStore}
 											historyMessages={chat.historyPrefix}
 											running={active && !chat.readOnly}
