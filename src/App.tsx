@@ -273,8 +273,14 @@ function App() {
 		[activeProject],
 	);
 
+	const canOpenViewerFile = useCallback(
+		(candidate: string) =>
+			Boolean(activeProject && projectRelativePath(activeProject, candidate)),
+		[activeProject],
+	);
+
 	// 工具行里的文件路径点击后落到右侧查看器。
-	useChatFileOpener(openViewerFile);
+	useChatFileOpener(openViewerFile, canOpenViewerFile);
 
 	useKeyboardShortcut(keyboardShortcuts["new-chat"], () => startNewChat());
 	useKeyboardShortcut(keyboardShortcuts["toggle-sidebar"], () => {

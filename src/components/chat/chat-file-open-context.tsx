@@ -9,8 +9,12 @@ import { useEffect, useSyncExternalStore } from "react";
  * WebUI 没有查看器，也就没有注册者，读到 null 时工具行退回不可点的纯文本。
  */
 type ChatFileOpenHandler = (path: string) => void;
+type ChatFileOpener = {
+	openFile: ChatFileOpenHandler;
+	canOpenFile: (path: string) => boolean;
+};
 
-let opener: ChatFileOpenHandler | null = null;
+let opener: ChatFileOpener | null = null;
 const listeners = new Set<() => void>();
 
 function emit() {
@@ -24,18 +28,22 @@ function subscribe(listener: () => void) {
 	};
 }
 
-export function useChatFileOpener(onOpenFile: ChatFileOpenHandler | undefined) {
+export function useChatFileOpener(
+	onOpenFile: ChatFileOpenHandler | undefined,
+	canOpenFile: ChatFileOpener["canOpenFile"],
+) {
 	useEffect(() => {
 		if (!onOpenFile) return;
-		opener = onOpenFile;
+		const registeredOpener = { openFile: onOpenFile, canOpenFile };
+		opener = registeredOpener;
 		emit();
 		return () => {
-			if (opener === onOpenFile) {
+			if (opener === registeredOpener) {
 				opener = null;
 				emit();
 			}
 		};
-	}, [onOpenFile]);
+	}, [onOpenFile, canOpenFile]);
 }
 
 /** 当前可用的打开动作；没有注册者时为 null。 */

@@ -49,6 +49,24 @@ re-styling them.
   (e.g. `chat-composer.tsx`, `chat-composer-frame.tsx`, `chat-composer-actions.tsx`).
 - Heavy features are lazy-loaded with `React.lazy` + `Suspense` in `src/App.tsx`
   (`ChatPage`, `ProjectViewer`, `RightSidebar`, `TerminalDock`).
+- File-opening links in tool activity rows are limited to built-in `read`,
+  `write` and `edit`. Other tools (commands and MCP tools), unsupported paths and
+  WebUI retain the original full-row disclosure button and preview tooltip.
+  Preserve the original icon/name/preview layout; do not impose a fixed 50%
+  name width or split every tool row to support a file-opening feature.
+- Only rows with an openable `read`/`write`/`edit` path use a relative wrapper
+  with an absolute full-row disclosure button and a file button above it.
+  Share the original row content between both variants. Keep buttons separate
+  (never nested), keyboard activation and visible focus rings. Blank space
+  expands details; file clicks only open the viewer. When verification is
+  authorized, cover long commands/MCP names, read/write/edit file clicks,
+  unsupported paths and status icons on desktop and 320px WebUI.
+- `useChatFileOpener(openFile, canOpenFile)` publishes the viewer capability with
+  its action. `canOpenFile` reuses `projectRelativePath` from the same active
+  project as `openFile`; render project-external absolute paths as plain text,
+  not buttons that silently return. WebUI registers no opener. When verification
+  is authorized, cover project-relative/absolute paths, external Skill paths,
+  project switches, preview/blank-space clicks and independent file activation.
 
 ## Large Content
 

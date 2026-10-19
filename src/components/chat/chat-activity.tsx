@@ -315,19 +315,25 @@ function ToolCallActivityView({
 	const { t } = useTranslation();
 	// 详情默认收起（含运行中），点击行切换；key 含 status，完成后 remount 自动收起
 	const [open, setOpen] = useChatExpansionState(expansionKey, false);
-	const openFile = useChatFileOpen();
+	const fileOpener = useChatFileOpen();
 	const preview = toolPreview(activity);
 	const filePath = toolFilePath(activity);
-	// 能打开时才把路径做成可点入口；没有注册者（WebUI）或没有路径则退回纯文本。
-	const openablePath = openFile && filePath ? filePath : null;
+	const toolName = activity.toolName.toLowerCase();
+	const openablePath =
+		(toolName === "read" || toolName === "write" || toolName === "edit") &&
+		filePath &&
+		fileOpener?.canOpenFile(filePath)
+			? filePath
+			: null;
 	const skillName =
-		activity.toolName.toLowerCase() === "read"
+		toolName === "read"
 			? filePath?.replace(/\\/g, "/").match(/(?:^|\/)([^/]+)\/SKILL\.md$/)?.[1]
 			: null;
 	const previewLabel =
 		skillName ?? (filePath ? fileBasename(filePath) : preview);
+	const label = skillName ? t("chat.skill") : toolLabel(t, activity.toolName);
 	const writeContent =
-		activity.toolName.toLowerCase() === "write" &&
+		toolName === "write" &&
 		isRecord(activity.args) &&
 		typeof activity.args.content === "string"
 			? activity.args.content
@@ -339,50 +345,36 @@ function ToolCallActivityView({
 			preview === null) ||
 		(activity.result !== undefined && activity.result !== null);
 
-	return (
-		<div className="w-full" data-chat-expansion-root>
-			{/* 一行里有两个独立可点区域（展开详情、打开文件），
-			    所以外层是 div，而不是把整行做成 button。 */}
-			<div
+	const toggleDetails = (trigger: HTMLElement) => {
+		if (!hasDetails) return;
+		toggleChatExpansionWithAnchor(trigger, () => setOpen((value) => !value));
+	};
+	const rowClassName = cn(
+		"group/tool -mx-1 flex min-h-6 w-[calc(100%+0.5rem)] items-center gap-1.5 rounded-md px-1 py-0.5 text-left transition-colors motion-reduce:transition-none",
+		PROCESS_TEXT_CLASS,
+		hasDetails ? "hover:bg-hover hover:text-foreground" : "cursor-default",
+		open && "bg-hover text-foreground",
+		activity.isError && "text-destructive",
+	);
+	const rowContent = (
+		<>
+			<ToolIcon
+				toolName={activity.toolName}
+				isSkill={Boolean(skillName)}
 				className={cn(
-					"group/tool -mx-1 flex min-h-6 w-[calc(100%+0.5rem)] items-center gap-1.5 rounded-md px-1 py-0.5 transition-colors motion-reduce:transition-none",
-					PROCESS_TEXT_CLASS,
-					hasDetails && "hover:bg-hover hover:text-foreground",
-					open && "bg-hover text-foreground",
+					PROCESS_ICON_CLASS,
 					activity.isError && "text-destructive",
 				)}
-			>
-				<button
-					type="button"
-					className="flex min-w-0 shrink items-center gap-1.5 rounded-sm text-left disabled:cursor-default focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
-					disabled={!hasDetails}
-					onClick={(event) =>
-						hasDetails &&
-						toggleChatExpansionWithAnchor(event.currentTarget, () =>
-							setOpen((value) => !value),
-						)
-					}
-					aria-expanded={hasDetails ? open : undefined}
-				>
-					<ToolIcon
-						toolName={activity.toolName}
-						isSkill={Boolean(skillName)}
-						className={cn(
-							PROCESS_ICON_CLASS,
-							activity.isError && "text-destructive",
-						)}
-					/>
-					<span className="min-w-0 truncate">
-						{skillName ? t("chat.skill") : toolLabel(t, activity.toolName)}
-					</span>
-				</button>
+			/>
+			<span className="flex min-w-0 flex-1 items-center gap-1.5">
+				<span className="max-w-full shrink-0 truncate">{label}</span>
 				{previewLabel && openablePath ? (
 					<Hint label={openablePath}>
 						<button
 							type="button"
-							className="min-w-0 shrink truncate rounded-sm font-mono text-[length:var(--pilo-code-font-size)] font-normal text-muted-foreground underline decoration-dotted underline-offset-2 transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+							className="relative z-10 min-w-0 shrink truncate rounded-sm font-mono text-[length:var(--pilo-code-font-size)] font-normal text-muted-foreground underline decoration-dotted underline-offset-2 transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
 							aria-label={t("chat.openFile", { path: openablePath })}
-							onClick={() => openFile?.(openablePath)}
+							onClick={() => fileOpener?.openFile(openablePath)}
 						>
 							{previewLabel}
 						</button>
@@ -394,13 +386,43 @@ function ToolCallActivityView({
 						</span>
 					</Hint>
 				) : null}
-				<span className="min-w-0 flex-1" aria-hidden="true" />
-				{activity.isError ? (
-					<CircleAlert className="size-3.5 shrink-0" />
-				) : running ? (
-					<Spinner className="size-3.5 shrink-0" />
-				) : null}
-			</div>
+			</span>
+			{activity.isError ? (
+				<CircleAlert className="size-3.5 shrink-0" />
+			) : running ? (
+				<Spinner className="size-3.5 shrink-0" />
+			) : null}
+		</>
+	);
+
+	return (
+		<div className="w-full" data-chat-expansion-root>
+			{openablePath ? (
+				<div className={cn(rowClassName, "relative")}>
+					{/* Only file-opening rows need separate disclosure and file buttons. */}
+					<button
+						type="button"
+						className="absolute inset-0 rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default"
+						disabled={!hasDetails}
+						onClick={(event) => toggleDetails(event.currentTarget)}
+						aria-label={`${label} ${previewLabel}`}
+						aria-expanded={hasDetails ? open : undefined}
+					/>
+					{rowContent}
+				</div>
+			) : (
+				<button
+					type="button"
+					className={cn(
+						rowClassName,
+						"focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
+					)}
+					onClick={(event) => toggleDetails(event.currentTarget)}
+					aria-expanded={hasDetails ? open : undefined}
+				>
+					{rowContent}
+				</button>
+			)}
 			{hasDetails && open ? (
 				<ToolDetail activity={activity} writeContent={writeContent} />
 			) : null}
