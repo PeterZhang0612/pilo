@@ -495,6 +495,7 @@ const enUS = {
 		acceptNextPrompt: "Use suggestion",
 		adoptNextPrompt: "Use suggestion: {{text}}",
 		composerPlaceholder: "Message Pi, @ to mention files",
+		openFile: "Open file {{path}}",
 		todos: "Tasks",
 		todoProgress: "{{done}}/{{total}} done",
 		todoAllCompleted: "All tasks completed",

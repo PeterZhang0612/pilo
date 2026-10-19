@@ -477,6 +477,7 @@ const zhCN = {
 		acceptNextPrompt: "采用建议",
 		adoptNextPrompt: "采用建议：{{text}}",
 		composerPlaceholder: "给 Pi 发消息，@ 提及文件",
+		openFile: "打开文件 {{path}}",
 		todos: "待办",
 		todoProgress: "{{done}}/{{total}} 已完成",
 		todoAllCompleted: "全部完成",
