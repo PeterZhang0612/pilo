@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import type { PiloRuntimeEvent } from "../../src/lib/api/pi-runtime-types.ts";
+import { toConversationAction } from "../../src/lib/chat/conversation-runtime-adapter.ts";
+
 import {
 	createConversationState,
 	reduceConversation,
@@ -553,10 +556,7 @@ test("compaction marker closes the running turn and inserts a compaction message
 	assert.equal(compaction.tokensBefore, 217_975);
 });
 
-
-
-
-test("streaming thinking start and end record distinct context timestamps", () => {
+test("thinking without event timestamps does not use the processing clock", () => {
 	let currentTime = 1000;
 	const customCtx = {
 		...context(),
@@ -564,7 +564,12 @@ test("streaming thinking start and end record distinct context timestamps", () =
 	};
 	let state = reduceConversation(
 		createConversationState(),
-		{ type: "local_user_submit", clientMessageId: "u1", text: "hi" },
+		{
+			type: "local_user_submit",
+			clientMessageId: "u1",
+			text: "hi",
+			timestampMs: currentTime,
+		},
 		customCtx,
 	);
 	state = reduceConversation(
@@ -589,6 +594,102 @@ test("streaming thinking start and end record distinct context timestamps", () =
 	if (assistant?.role !== "assistant") throw new Error("expected assistant");
 	const thinking = assistant.content?.find((item) => item.type === "thinking");
 	assert.ok(thinking);
-	assert.equal(thinking?.startedAtMs, 1500);
-	assert.equal(thinking?.endedAtMs, 5500);
+	assert.equal(thinking.status, "complete");
+	assert.equal(thinking.startedAtMs, undefined);
+	assert.equal(thinking.endedAtMs, undefined);
+});
+
+test("buffered runtime thinking events keep their Host timestamps through the adapter", () => {
+	const events: PiloRuntimeEvent[] = [
+		{ type: "assistant_thinking_start", generation: 1, timestampMs: 1_000 },
+		{
+			type: "assistant_thinking_delta",
+			generation: 1,
+			delta: "thinking",
+			timestampMs: 2_000,
+		},
+		{ type: "assistant_thinking_end", generation: 1, timestampMs: 31_000 },
+	];
+	const actions = events.map((event) => {
+		const action = toConversationAction(event);
+		assert.ok(action);
+		return action;
+	});
+	const state = reduceConversationActions(
+		createConversationState(),
+		coalesceConversationActions(actions),
+		{ ...context(), now: () => 90_000 },
+	);
+	const assistant = state.messages[0];
+	assert.equal(assistant.role, "assistant");
+	if (assistant.role !== "assistant") throw new Error("expected assistant");
+	const thinking = assistant.content?.find((item) => item.type === "thinking");
+	assert.ok(thinking);
+	assert.equal(thinking.startedAtMs, 1_000);
+	assert.equal(thinking.endedAtMs, 31_000);
+	assert.equal(thinking.endedAtMs - thinking.startedAtMs, 30_000);
+});
+
+test("coalesced thinking deltas preserve the first timestamp without a start event", () => {
+	for (const timestampMs of [1_000, undefined]) {
+		const actions: ConversationAction[] = [
+			{ type: "assistant_thinking_delta", delta: "a", timestampMs },
+			{ type: "assistant_thinking_delta", delta: "b", timestampMs: 4_000 },
+			{ type: "assistant_thinking_end", timestampMs: 5_000 },
+		];
+		const sequential = reduce(actions);
+		const coalesced = reduceConversationActions(
+			createConversationState(),
+			coalesceConversationActions(actions),
+			context(),
+		);
+		const assistant = coalesced.messages[0];
+		if (assistant?.role !== "assistant") throw new Error("expected assistant");
+		const thinking = assistant.content?.find(
+			(item) => item.type === "thinking",
+		);
+		assert.ok(thinking);
+		const sequentialAssistant = sequential.messages[0];
+		if (sequentialAssistant?.role !== "assistant")
+			throw new Error("expected assistant");
+		assert.deepEqual(thinking, sequentialAssistant.content?.[0]);
+		assert.equal(thinking.text, "ab");
+		assert.equal(thinking.status, "complete");
+		assert.equal(thinking.startedAtMs, timestampMs);
+		assert.equal(thinking.endedAtMs, 5_000);
+		if (timestampMs !== undefined) {
+			assert.ok(thinking.startedAtMs !== undefined);
+			assert.ok(thinking.endedAtMs !== undefined);
+			assert.equal(thinking.endedAtMs - thinking.startedAtMs, 4_000);
+		}
+	}
+});
+
+test("thinking with missing boundaries never mixes Host and processing clocks", () => {
+	const cases: ConversationAction[][] = [
+		[
+			{ type: "assistant_thinking_start", timestampMs: 1_000 },
+			{ type: "assistant_thinking_end" },
+		],
+		[
+			{ type: "assistant_thinking_start" },
+			{ type: "assistant_thinking_end", timestampMs: 31_000 },
+		],
+		[
+			{ type: "assistant_thinking_delta", delta: "legacy" },
+			{ type: "assistant_thinking_end", timestampMs: 31_000 },
+		],
+	];
+	for (const actions of cases) {
+		const state = reduce(actions);
+		const assistant = state.messages[0];
+		if (assistant.role !== "assistant") throw new Error("expected assistant");
+		const thinking = assistant.content?.find(
+			(item) => item.type === "thinking",
+		);
+		assert.ok(thinking);
+		assert.ok(
+			thinking.startedAtMs === undefined || thinking.endedAtMs === undefined,
+		);
+	}
 });

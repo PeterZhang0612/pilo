@@ -5,6 +5,7 @@ use std::{
         Arc, Mutex as StdMutex,
         atomic::{AtomicU64, Ordering},
     },
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use serde::Serialize;
@@ -215,7 +216,21 @@ impl RuntimeEventBus {
         )
     }
 
-    pub fn send(&self, event: RuntimeEventEnvelope) {
+    pub fn send(&self, mut event: RuntimeEventEnvelope) {
+        // Stamp before buffering so live delivery and reconnect replay share the same clock.
+        if event.timestamp_ms.is_none()
+            && matches!(
+                &event.event,
+                RuntimeEvent::AssistantThinkingStart { .. }
+                    | RuntimeEvent::AssistantThinkingDelta { .. }
+                    | RuntimeEvent::AssistantThinkingEnd { .. }
+            )
+        {
+            event.timestamp_ms = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .ok()
+                .and_then(|duration| i64::try_from(duration.as_millis()).ok());
+        }
         let trace = traceable_runtime_event(&event.event);
         let session_key = event.session_key.clone();
         let (sequence, payload_bytes) = {
@@ -470,6 +485,55 @@ mod tests {
         assert_eq!(replay.len(), 1);
         assert_eq!(replay[0].sequence, 1);
         assert_eq!(bus.latest_sequence(), 1);
+    }
+
+    #[tokio::test]
+    async fn thinking_timestamps_are_shared_by_live_delivery_and_replay() {
+        let bus = RuntimeEventBus::default();
+        let mut receiver = bus.subscribe_web();
+
+        bus.send(RuntimeEventEnvelope::session(
+            "chat-1".to_owned(),
+            "project-1".to_owned(),
+            RuntimeEvent::AssistantThinkingStart { generation: 1 },
+        ));
+        let start = receiver.recv().await.unwrap();
+        let started_at_ms = start.event.timestamp_ms.unwrap();
+        assert!(started_at_ms > 0);
+
+        bus.send(RuntimeEventEnvelope::session(
+            "chat-1".to_owned(),
+            "project-1".to_owned(),
+            RuntimeEvent::AssistantThinkingEnd { generation: 1 },
+        ));
+        let end = receiver.recv().await.unwrap();
+        assert!(end.event.timestamp_ms.is_some());
+
+        let replay = bus.replay_after(0).unwrap();
+        assert_eq!(replay[0].event, start.event);
+        assert_eq!(replay[1].event, end.event);
+        assert_eq!(
+            serde_json::to_value(&replay[0]).unwrap()["timestampMs"],
+            serde_json::json!(started_at_ms)
+        );
+    }
+
+    #[test]
+    fn thinking_publication_preserves_existing_timestamps() {
+        let bus = RuntimeEventBus::default();
+        let mut event = RuntimeEventEnvelope::session(
+            "chat-1".to_owned(),
+            "project-1".to_owned(),
+            RuntimeEvent::AssistantThinkingDelta {
+                generation: 1,
+                delta: "thinking".to_owned(),
+            },
+        );
+        event.timestamp_ms = Some(1_000);
+        bus.send(event);
+
+        let replay = bus.replay_after(0).unwrap();
+        assert_eq!(replay[0].event.timestamp_ms, Some(1_000));
     }
 
     #[test]

@@ -515,7 +515,7 @@ function reduceConversationAction(
 						action.sourceEntryId
 							? `${action.sourceEntryId}:content:${action.sourceContentIndex ?? 0}`
 							: context.createContentId("thinking"),
-					action.timestampMs ?? context.now(),
+					action.timestampMs,
 				),
 				streaming: true,
 			}));
@@ -526,7 +526,7 @@ function reduceConversationAction(
 					message.content,
 					action.delta,
 					() => context.createContentId("thinking"),
-					action.timestampMs ?? context.now(),
+					action.timestampMs,
 				),
 				streaming: true,
 			}));
@@ -535,7 +535,7 @@ function reduceConversationAction(
 				...message,
 				content: finishAssistantThinkingContent(
 					message.content,
-					action.timestampMs ?? context.now(),
+					action.timestampMs,
 				),
 			}));
 		case "tool_execution_start":

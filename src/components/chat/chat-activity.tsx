@@ -174,7 +174,6 @@ function ThinkingActivityView({
 	// 思考默认收成单行（与工具调用一致），展开状态按条目记忆，
 	// 因此状态从 running 变为 complete 不会把用户展开的内容重新收起。
 	const [open, setOpen] = useChatExpansionState(expansionKey, false);
-	const hasDetails = activity.text.trim().length > 0;
 	const durationMs =
 		activity.startedAtMs !== undefined && activity.endedAtMs !== undefined
 			? Math.max(0, activity.endedAtMs - activity.startedAtMs)
@@ -197,65 +196,74 @@ function ThinkingActivityView({
 			? t("chat.thoughtDuration", { duration: durationLabel })
 			: t("chat.thought");
 
-	// 提取思考正文的末尾有效行作为单行折叠时的摘要（类似 tool call 的 preview）
+	// Scan from the end so streaming updates do not split the entire thinking body.
 	const previewText = useMemo(() => {
-		if (!activity.text) return "";
-		const lines = activity.text
-			.split("\n")
-			.map((line) => line.trim())
-			.filter(Boolean);
-		return lines[lines.length - 1] ?? "";
+		let end = activity.text.length;
+		while (end > 0) {
+			const start = activity.text.lastIndexOf("\n", end - 1) + 1;
+			const line = activity.text.slice(start, end).trim();
+			if (line) return line;
+			end = start - 1;
+		}
+		return "";
 	}, [activity.text]);
+	const hasDetails = previewText.length > 0;
+
+	const details = (
+		<ChatMarkdown
+			text={activity.text}
+			isStreaming={running}
+			className={cn(
+				"!leading-[1.5] !text-muted-foreground",
+				"[&_p]:!mb-1 [&_li:not(:first-child)]:!mt-0.5",
+				"[&_:is(h1,h2,h3,h4,h5,h6)]:!my-1 [&_:is(h1,h2,h3,h4,h5,h6)]:!text-[1em] [&_:is(h1,h2,h3,h4,h5,h6)]:!font-medium",
+				"[&_[data-streamdown='code-block']]:!my-2",
+			)}
+		/>
+	);
+	const trigger = (
+		<button
+			type="button"
+			className={cn(
+				"group/thinking -mx-1 flex min-h-6 w-[calc(100%+0.5rem)] items-center gap-1.5 rounded-md px-1 py-0.5 text-left transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none",
+				PROCESS_TEXT_CLASS,
+				hasDetails ? "hover:bg-hover hover:text-foreground" : "cursor-default",
+				open && "bg-hover text-foreground",
+			)}
+			onClick={(event) => {
+				if (!hasDetails) return;
+				toggleChatExpansionWithAnchor(event.currentTarget, () =>
+					setOpen((value) => !value),
+				);
+			}}
+			aria-expanded={hasDetails ? open : undefined}
+		>
+			<Sparkles
+				className={cn(
+					PROCESS_ICON_CLASS,
+					running && "motion-safe:animate-pulse",
+				)}
+			/>
+			<span className="shrink-0 truncate">{label}</span>
+			{previewText && !open ? (
+				<span className="min-w-0 flex-1 truncate font-normal text-muted-foreground/75">
+					{previewText}
+				</span>
+			) : (
+				<span className="min-w-0 flex-1" aria-hidden="true" />
+			)}
+		</button>
+	);
 
 	return (
 		<div className="w-full" data-chat-expansion-root>
-			<button
-				type="button"
-				className={cn(
-					"group/thinking -mx-1 flex min-h-6 w-[calc(100%+0.5rem)] items-center gap-1.5 rounded-md px-1 py-0.5 text-left transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none",
-					PROCESS_TEXT_CLASS,
-					hasDetails
-						? "hover:bg-hover hover:text-foreground"
-						: "cursor-default",
-					open && "bg-hover text-foreground",
-				)}
-				onClick={(event) =>
-					hasDetails &&
-					toggleChatExpansionWithAnchor(event.currentTarget, () =>
-						setOpen((value) => !value),
-					)
-				}
-				aria-expanded={hasDetails ? open : undefined}
+			<Hint
+				label={hasDetails && !open ? activity.text : undefined}
+				className="scrollbar-pro max-h-[min(24rem,var(--radix-tooltip-content-available-height))] max-w-[min(20rem,calc(100vw-2rem))] overflow-y-auto overscroll-contain whitespace-pre-wrap"
 			>
-				<Sparkles
-					className={cn(
-						PROCESS_ICON_CLASS,
-						running && "motion-safe:animate-pulse",
-					)}
-				/>
-				<span className="shrink-0 truncate">{label}</span>
-				{previewText && !open ? (
-					<span className="min-w-0 flex-1 truncate font-normal text-muted-foreground/75">
-						{previewText}
-					</span>
-				) : (
-					<span className="min-w-0 flex-1" aria-hidden="true" />
-				)}
-			</button>
-			{hasDetails && open ? (
-				<div className="pt-0.5">
-					<ChatMarkdown
-						text={activity.text}
-						isStreaming={running}
-						className={cn(
-							"!leading-[1.5] !text-muted-foreground",
-							"[&_p]:!mb-1 [&_li:not(:first-child)]:!mt-0.5",
-							"[&_:is(h1,h2,h3,h4,h5,h6)]:!my-1 [&_:is(h1,h2,h3,h4,h5,h6)]:!text-[1em] [&_:is(h1,h2,h3,h4,h5,h6)]:!font-medium",
-							"[&_[data-streamdown='code-block']]:!my-2",
-						)}
-					/>
-				</div>
-			) : null}
+				{trigger}
+			</Hint>
+			{hasDetails && open ? <div className="pt-0.5">{details}</div> : null}
 		</div>
 	);
 }
