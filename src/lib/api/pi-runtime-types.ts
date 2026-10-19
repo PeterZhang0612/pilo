@@ -161,6 +161,8 @@ export type WslDistribution = {
 export type PiloRuntimeEvent = {
 	sessionKey?: string;
 	projectId?: string;
+	/** Host publication time, preserved across reconnect replay. */
+	timestampMs?: number;
 } & (
 	| { type: "theme_settings_changed"; settings: ThemeSettings }
 	| { type: "project_model_scope_changed"; scope: ProjectModelScope }

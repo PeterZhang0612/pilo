@@ -40,6 +40,7 @@ pub(crate) async fn save(
     events.send(RuntimeEventEnvelope {
         session_key: None,
         project_id: None,
+        timestamp_ms: None,
         event: RuntimeEvent::CacheKeepAliveSettingsChanged {
             settings: settings.clone(),
         },

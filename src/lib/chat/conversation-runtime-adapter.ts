@@ -8,12 +8,18 @@ export function toConversationAction(
 		case "user_message_start":
 			return { type: event.type, text: event.text };
 		case "assistant_message_start":
+			return { type: event.type };
 		case "assistant_thinking_start":
 		case "assistant_thinking_end":
-			return { type: event.type };
+			return { type: event.type, timestampMs: event.timestampMs };
 		case "assistant_text_delta":
-		case "assistant_thinking_delta":
 			return { type: event.type, delta: event.delta };
+		case "assistant_thinking_delta":
+			return {
+				type: event.type,
+				delta: event.delta,
+				timestampMs: event.timestampMs,
+			};
 		case "assistant_text_snapshot":
 			return { type: event.type, text: event.text };
 		case "assistant_usage_update":

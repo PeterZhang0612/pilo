@@ -14,10 +14,16 @@ use super::transport::{
     PendingRequest, PendingRequests, ServerEvent, ServerEventHub, mark_disconnected,
 };
 use super::{SERVER_DISCONNECTED_EVENT, manager::retryable_read_method};
+use crate::domain::{Connection, ConnectionKind};
+use crate::runtime::server_client::manager::ServerManager;
 use crate::runtime::server_deploy::{
     ServerArch, ServerPlatform, ServerTarget, installed_server_candidates, parse_target_probe,
     server_binary,
 };
+
+#[cfg(unix)]
+#[path = "tests/shutdown.rs"]
+mod shutdown;
 
 const LINUX_X86_64: ServerTarget = ServerTarget {
     platform: ServerPlatform::Linux,
@@ -29,30 +35,17 @@ const LINUX_AARCH64: ServerTarget = ServerTarget {
 };
 
 #[cfg(unix)]
-#[tokio::test]
-async fn stop_closes_stdin_and_allows_server_child_cleanup_before_exit() {
+pub(super) fn spawn_test_client(script: &str, marker: &Path) -> Arc<super::ServerClient> {
     use super::{
         ServerClient,
         transport::{ServerProcess, reader_loop, writer_loop},
     };
-    use std::{
-        process::Stdio,
-        time::{SystemTime, UNIX_EPOCH},
-    };
+    use std::process::Stdio;
     use tokio::{io::BufReader, process::Command};
 
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../target/shutdown-tests");
-    std::fs::create_dir_all(&dir).unwrap();
-    let marker = dir.join(format!(
-        "cleanup-{}",
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
     let mut child = Command::new("/bin/sh")
-        .args(["-c", "cat >/dev/null; printf cleaned > \"$1\"", "sh"])
-        .arg(&marker)
+        .args(["-c", script, "sh"])
+        .arg(marker)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .kill_on_drop(true)
@@ -77,7 +70,7 @@ async fn stop_closes_stdin_and_allows_server_child_cleanup_before_exit() {
         Arc::clone(&events),
         Arc::clone(&closed),
     ));
-    let client = ServerClient {
+    Arc::new(ServerClient {
         request_id: Default::default(),
         writer,
         pending,
@@ -88,7 +81,24 @@ async fn stop_closes_stdin_and_allows_server_child_cleanup_before_exit() {
             reader_task,
         })),
         closed,
-    };
+    })
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn stop_closes_stdin_and_allows_server_child_cleanup_before_exit() {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../target/shutdown-tests");
+    std::fs::create_dir_all(&dir).unwrap();
+    let marker = dir.join(format!(
+        "cleanup-{}",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let client = spawn_test_client("cat >/dev/null; printf cleaned > \"$1\"", &marker);
     client.stop().await;
     assert_eq!(std::fs::read_to_string(&marker).unwrap(), "cleaned");
     std::fs::remove_file(marker).unwrap();
@@ -351,6 +361,27 @@ async fn resubscribing_stream_closes_the_stale_receiver() {
     let event = current.recv().await.unwrap();
     assert_eq!(event.event, "pi.rpc");
     assert_eq!(event.data, json!({ "type": "agent_settled" }));
+}
+
+#[tokio::test]
+async fn shutdown_gate_rejects_new_server_connections() {
+    let manager = ServerManager::default();
+    let connection = Connection {
+        id: "local".to_owned(),
+        name: "Local".to_owned(),
+        pi_executable: None,
+        pi_runtime: Default::default(),
+        kind: ConnectionKind::Local,
+        shown_in_home: true,
+    };
+
+    manager.stop_all().await;
+
+    let error = manager
+        .request(&connection, "fs.read_file", Value::Null)
+        .await
+        .unwrap_err();
+    assert_eq!(error, "pilo-server manager is shutting down");
 }
 
 #[test]

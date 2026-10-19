@@ -242,6 +242,8 @@ pub struct RuntimeEventEnvelope {
     pub session_key: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub project_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timestamp_ms: Option<i64>,
     #[serde(flatten)]
     pub event: RuntimeEvent,
 }
@@ -251,6 +253,7 @@ impl RuntimeEventEnvelope {
         Self {
             session_key: None,
             project_id: None,
+            timestamp_ms: None,
             event,
         }
     }
@@ -259,6 +262,7 @@ impl RuntimeEventEnvelope {
         Self {
             session_key: Some(session_key),
             project_id: Some(project_id),
+            timestamp_ms: None,
             event,
         }
     }
