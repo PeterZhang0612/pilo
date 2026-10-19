@@ -41,9 +41,16 @@ export const SHORTCUT_COMMANDS = [
 		labelKey: "shortcuts.focusComposer",
 		defaultShortcut: "mod+l",
 	},
+	{
+		id: "queue-message",
+		section: "session",
+		labelKey: "shortcuts.queueMessage",
+		defaultShortcut: "alt+enter",
+	},
 ] as const;
 
 export type ShortcutCommandId = (typeof SHORTCUT_COMMANDS)[number]["id"];
+// An empty string means the command has no shortcut assigned.
 export type KeyboardShortcutMap = Record<ShortcutCommandId, string>;
 
 const MODIFIERS = new Set(["mod", "ctrl", "meta", "alt", "shift"]);
@@ -141,15 +148,26 @@ export function normalizeKeyboardShortcutMap(
 
 	const source = value as Record<string, unknown>;
 	const next = { ...defaults };
+	const assigned = new Set<string>();
+	// Reserve saved bindings before filling defaults for newly added commands.
 	for (const command of SHORTCUT_COMMANDS) {
 		const normalized = normalizeKeyboardShortcut(source[command.id]);
+		next[command.id] = "";
 		if (normalized && isSafeGlobalShortcut(normalized)) {
+			if (assigned.has(normalized)) return defaults;
 			next[command.id] = normalized;
+			assigned.add(normalized);
 		}
 	}
 
-	const shortcuts = Object.values(next);
-	if (new Set(shortcuts).size !== shortcuts.length) return defaults;
+	for (const command of SHORTCUT_COMMANDS) {
+		if (next[command.id] || source[command.id] === "") continue;
+		const shortcut = defaults[command.id];
+		if (!assigned.has(shortcut)) {
+			next[command.id] = shortcut;
+			assigned.add(shortcut);
+		}
+	}
 	return next;
 }
 

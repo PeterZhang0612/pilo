@@ -36,6 +36,7 @@ export function coalesceConversationActions(
 		) {
 			result[result.length - 1] = {
 				...action,
+				timestampMs: previous.timestampMs,
 				delta: previous.delta + action.delta,
 			};
 			continue;

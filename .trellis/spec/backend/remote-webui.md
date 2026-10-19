@@ -257,6 +257,13 @@ remote_devices(id, name, pair_ip, token_hash, created_at_ms, last_seen_at_ms, ex
 - **Attachments**: images (`png/jpeg/webp/gif`) reuse the inline chat image contract,
   ≤ 10 MB each, ≤ 20 MB total, ≤ `MAX_CHAT_IMAGES`. Other files use the scoped
   server-runtime upload/cleanup described in "External Files in the Composer".
+- **Envelope timestamp**: `RuntimeEventEnvelope` carries an optional `timestampMs`
+  (epoch ms). `RuntimeEventBus::send` stamps it once, before the event enters both
+  the live queue and the replay buffer, for `assistant_thinking_start/delta/end`;
+  a value already set by the producer is preserved. Clients therefore read the
+  same value live and after reconnect replay, so a duration derived from it never
+  mixes the Host clock with client processing time. Other event kinds stay
+  unstamped: an absent timestamp means "unknown", never "now".
 - **Replay gap semantics**: `replay_after(seq)` returns `None` (gap → client must
   resync from snapshot) **iff** the oldest buffered sequence is greater than
   `seq + 1`. `seq == 0` always replays the whole buffer.

@@ -33,6 +33,7 @@ pub(crate) fn save_model_scope(
     events.send(RuntimeEventEnvelope {
         session_key: None,
         project_id: Some(project_id.to_owned()),
+        timestamp_ms: None,
         event: RuntimeEvent::ProjectModelScopeChanged {
             scope: scope.clone(),
         },
