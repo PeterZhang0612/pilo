@@ -149,8 +149,12 @@ function ShortcutEditor({
 					<span className="text-xs text-muted-foreground">
 						{t("settings.pressNewShortcut")}
 					</span>
-				) : (
+				) : shortcut ? (
 					<ShortcutKeys shortcut={shortcut} />
+				) : (
+					<span className="text-xs text-muted-foreground">
+						{t("shortcuts.unassigned")}
+					</span>
 				)}
 			</button>
 			<Hint label={isCustom ? t("settings.resetDefault") : undefined}>

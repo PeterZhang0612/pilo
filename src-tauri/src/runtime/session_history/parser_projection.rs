@@ -1,5 +1,6 @@
 use serde_json::Value;
 
+use super::super::token_usage::TokenUsage;
 use super::parser_fields::{
     entry_id, entry_timestamp_ms, fallback_text, normalize_thinking, tool_result_payload,
     user_images, user_text,
@@ -11,6 +12,7 @@ struct TurnMeta {
     has_assistant: bool,
     stop_reason: Option<String>,
     error_message: Option<String>,
+    usage: Option<TokenUsage>,
     updated_at_ms: Option<i64>,
 }
 
@@ -101,7 +103,16 @@ fn project_message(
 ) {
     let timestamp_ms = entry_timestamp_ms(entry, Some(message));
     let source_entry_id = entry_id(entry);
-    match message.get("role").and_then(Value::as_str) {
+    let role = message.get("role").and_then(Value::as_str);
+    if matches!(role, Some("assistant" | "toolResult"))
+        && let Some(usage) = TokenUsage::from_json(message.get("usage"))
+    {
+        match &mut turn.usage {
+            Some(current) => current.accumulate(usage),
+            None => turn.usage = Some(usage),
+        }
+    }
+    match role {
         // Pi persists structured system-prompt/tool-loadout updates in the session
         // transcript. They affect replay context but are not conversational UI messages.
         Some("system") => {}
@@ -349,6 +360,7 @@ fn finish_turn(events: &mut Vec<ConversationEventDto>, turn: &mut TurnMeta, eof:
         error_message: turn.error_message.take(),
         completion,
         timestamp_ms: turn.updated_at_ms,
+        usage: turn.usage.take(),
     });
     *turn = TurnMeta::default();
 }

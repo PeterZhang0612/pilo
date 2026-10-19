@@ -28,6 +28,7 @@ import { ChatInterruptedTurnNotice } from "@/components/chat/chat-interrupted-tu
 import { PiExtensionNotifications } from "@/components/chat/pi-extension-notifications";
 import { PiExtensionUiDialog } from "@/components/chat/pi-extension-ui-dialog";
 import { ChatPendingQueue } from "@/components/chat/chat-pending-queue";
+import { ChatTodoCapsule } from "@/components/chat/chat-todo-capsule";
 import { useScrollbarGutterWidth } from "@/components/chat/use-scrollbar-gutter";
 import { DraftProjectPicker } from "@/components/chat/draft-project-picker";
 import { BootShellRemover } from "@/components/boot-shell-remover";
@@ -539,6 +540,12 @@ function RemoteWorkspace() {
 											<CacheKeepAliveNotice
 												key={chat.activeSessionKey}
 												status={cacheKeepAliveStatus}
+											/>
+											<ChatTodoCapsule
+												key={chat.activeSessionKey}
+												conversationStore={chat.conversationStore}
+												historyMessages={chat.historyPrefix}
+												running={active && !chat.readOnly}
 											/>
 											<ChatComposer
 												nextPrompt={nextPrompt.text}

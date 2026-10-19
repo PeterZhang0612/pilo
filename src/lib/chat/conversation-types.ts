@@ -1,3 +1,4 @@
+import type { TokenUsage } from "@/lib/api/token-usage";
 import type { AssistantActivity } from "@/components/chat/chat-activity";
 import type { AssistantContentItem } from "@/lib/chat/chat-activity-state";
 import type { ChatConversationImage } from "@/lib/chat/chat-submission";
@@ -27,6 +28,8 @@ export type ChatMessage =
 			replyRunwayPx?: number;
 			stopReason?: string;
 			errorMessage?: string;
+			/** 当前回复段累计的模型用量（含工具嵌套调用、缓存与费用）。 */
+			usage?: TokenUsage;
 			completion?: "complete" | "interrupted" | "continued";
 			historyPlaceholder?: boolean;
 			historyEstimatedChars?: number;
@@ -57,6 +60,7 @@ export type ConversationEvent = ConversationEventMeta &
 		  }
 		| { type: "compaction_marker"; summary: string; tokensBefore?: number }
 		| { type: "assistant_message_start" }
+		| { type: "assistant_usage_update"; usage: TokenUsage }
 		| { type: "assistant_text_delta"; delta: string }
 		| { type: "assistant_text_snapshot"; text: string }
 		| { type: "assistant_thinking_start" }
@@ -87,6 +91,8 @@ export type ConversationEvent = ConversationEventMeta &
 				stopReason?: string | null;
 				errorMessage?: string | null;
 				completion?: "complete" | "interrupted";
+				/** 当前回复段累计的模型用量；未上报时可为空或省略。 */
+				usage?: TokenUsage | null;
 		  }
 	);
 

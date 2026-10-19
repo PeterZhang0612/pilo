@@ -92,6 +92,8 @@ dev 构建默认使用一个 Cargo job，并关闭调试符号，降低 WSL 内�
 
 Release 打包流程仍自动准备完整运行时集合。手动准备正式资源时，Windows 使用 `pnpm server:build:win`，macOS/Linux 使用 `bash scripts/build-pilo-server.sh`。
 
+正式版二进制必须用 `pnpm tauri build` 构建（只需可执行文件时加 `--no-bundle`，产物为 `target/release/pilo.exe`）。它会打开 `tauri/custom-protocol` 特性并把 `dist/` 内嵌进二进制；直接执行 `cargo build --release` 得到的是 dev 形态二进制，离开 `pnpm tauri dev` 后会加载 `devUrl` 并显示「拒绝连接」，因此 build script 会直接拒绝这种构建。本地 release 构建只要求当前编译目标的运行时；发布流水线通过 `PILO_REQUIRE_FULL_SERVER_BUNDLE=1` 强制校验完整集合。
+
 支持的服务端运行时目标为 Linux x64/arm64、Windows x64/arm64 和 macOS x64/arm64。也可以显式构建指定目标：
 
 ```bash

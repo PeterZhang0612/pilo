@@ -92,6 +92,8 @@ Development binaries stay in Cargo’s standard output directory, for example `t
 
 Release packaging stages the complete runtime set automatically. To stage a release runtime manually, use `pnpm server:build:win` on Windows or `bash scripts/build-pilo-server.sh` on macOS/Linux.
 
+Always build release binaries with `pnpm tauri build` (add `--no-bundle` to get only `target/release/pilo.exe`). It enables the `tauri/custom-protocol` feature that embeds `dist/`; a plain `cargo build --release` produces a dev binary that loads `devUrl` and shows “connection refused” outside `pnpm tauri dev`, so the build script rejects it. A local release build only requires the runtime for the host target; the release workflow sets `PILO_REQUIRE_FULL_SERVER_BUNDLE=1` to enforce the complete set.
+
 Supported server runtime targets are Linux x64/arm64, Windows x64/arm64, and macOS x64/arm64. An explicit runtime can be built with:
 
 ```bash

@@ -35,6 +35,7 @@ function isAutonomousTurnEvent(event: PiloRuntimeEvent) {
 		case "assistant_message_start":
 		case "assistant_text_delta":
 		case "assistant_text_snapshot":
+		case "assistant_usage_update":
 		case "assistant_thinking_start":
 		case "assistant_thinking_delta":
 		case "assistant_thinking_end":
@@ -440,6 +441,7 @@ export function useChatRuntimeEvents({
 					acknowledgeQueuedMessage(turn, event.text);
 					break;
 				case "assistant_text_snapshot":
+				case "assistant_usage_update":
 					break;
 				case "queue_update":
 					setPendingQueueCounts(event.followUp.length);

@@ -1,6 +1,6 @@
-import { memo, type ReactNode } from "react";
+import { Fragment, memo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { GitFork } from "lucide-react";
+import { Coins, GitFork } from "lucide-react";
 
 import { ChatAgentActivityIndicator } from "@/components/chat/chat-agent-activity";
 import {
@@ -11,6 +11,8 @@ import {
 import { ChatCopyButton } from "@/components/chat/chat-copy-button";
 import { ChatEmptyHero } from "@/components/chat/chat-empty-hero";
 import { ConversationColumn } from "@/components/chat/chat-conversation-column";
+import { useIsTouchDevice } from "@/components/chat/chat-composer-run-config";
+import { hasTokenUsage, type TokenUsage } from "@/lib/api/token-usage";
 import {
 	getAssistantActivities,
 	getAssistantStreamingState,
@@ -20,10 +22,117 @@ import {
 import type { ChatMessage } from "@/lib/chat/conversation-types";
 import { recordChatMessageRender } from "@/lib/chat/chat-performance";
 import { formatWorkDuration } from "@/lib/format-duration";
+import { formatCompactTokens, formatCost } from "@/lib/format-numbers";
 import { getPageFontFamilyStack } from "@/lib/font-settings";
 import { usePreferences } from "@/lib/preferences-provider";
 import { Button, Spinner, Tooltip, TooltipContent, TooltipTrigger } from "@/ui";
+import {
+	HoverCard,
+	HoverCardContent,
+	HoverCardTrigger,
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+} from "@/ui";
 
+/**
+ * 单轮 token 用量：折叠在消息脚注里只显示合计，展开后给出输入/输出/缓存与费用。
+ *
+ * 触发元素是可聚焦的 button，并沿用 composer 上下文用量的做法：桌面用
+ * HoverCard（额外补上 focus-visible 打开、失焦关闭），触屏没有 hover 改用
+ * Popover 点按切换，这样键盘和触屏都能拿到明细。
+ */
+function TurnTokenChip({ usage }: { usage: TokenUsage }) {
+	const { t } = useTranslation();
+	const isTouch = useIsTouchDevice();
+	const [open, setOpen] = useState(false);
+	const breakdown: Array<[string, number]> = [
+		[t("chat.input"), usage.input],
+		[t("chat.output"), usage.output],
+		[t("chat.cacheRead"), usage.cacheRead],
+		[t("chat.cacheWrite"), usage.cacheWrite],
+	];
+	const summary = `${t("chat.turnTokens")}: ${formatCompactTokens(usage.total)}`;
+
+	const details = (
+		<div className="grid grid-cols-[auto_auto] gap-x-3 gap-y-0.5 text-2xs">
+			<span className="col-span-2 pb-0.5 font-semibold uppercase tracking-[0.6px] text-muted-foreground">
+				{t("chat.turnTokens")}
+			</span>
+			{breakdown.map(([label, value]) => (
+				<Fragment key={label}>
+					<span className="text-muted-foreground">{label}</span>
+					<span className="text-right font-mono tabular-nums">
+						{formatCompactTokens(value)}
+					</span>
+				</Fragment>
+			))}
+			<span className="border-t border-border/60 pt-0.5 text-muted-foreground">
+				{t("chat.tokensTotal")}
+			</span>
+			<span className="border-t border-border/60 pt-0.5 text-right font-mono tabular-nums">
+				{formatCompactTokens(usage.total)}
+			</span>
+			{usage.cost !== undefined && usage.cost > 0 ? (
+				<Fragment>
+					<span className="text-muted-foreground">{t("chat.turnCost")}</span>
+					<span className="text-right font-mono tabular-nums">
+						{formatCost(usage.cost)}
+					</span>
+				</Fragment>
+			) : null}
+		</div>
+	);
+
+	const trigger = (
+		<button
+			type="button"
+			className="inline-flex items-center gap-1 rounded-sm font-mono tabular-nums focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+			aria-label={summary}
+			aria-expanded={open}
+			onFocus={(event) => {
+				if (isTouch) return;
+				if (event.currentTarget.matches(":focus-visible")) setOpen(true);
+			}}
+			onBlur={() => {
+				if (!isTouch) setOpen(false);
+			}}
+		>
+			<Coins className="size-3 shrink-0 opacity-70" aria-hidden="true" />
+			{formatCompactTokens(usage.total)}
+		</button>
+	);
+
+	if (isTouch) {
+		return (
+			<Popover open={open} onOpenChange={setOpen}>
+				<PopoverTrigger asChild>{trigger}</PopoverTrigger>
+				<PopoverContent
+					side="top"
+					sideOffset={8}
+					collisionPadding={8}
+					className="w-auto p-2"
+				>
+					{details}
+				</PopoverContent>
+			</Popover>
+		);
+	}
+
+	return (
+		<HoverCard
+			open={open}
+			onOpenChange={setOpen}
+			openDelay={0}
+			closeDelay={150}
+		>
+			<HoverCardTrigger asChild>{trigger}</HoverCardTrigger>
+			<HoverCardContent side="top" sideOffset={8} className="w-auto p-2">
+				{details}
+			</HoverCardContent>
+		</HoverCard>
+	);
+}
 function MessageAction({
 	label,
 	children,
@@ -117,6 +226,7 @@ export const AssistantMessage = memo(function AssistantMessage({
 					second: t("common.second"),
 				})
 			: "";
+	const turnUsage = hasTokenUsage(message.usage) ? message.usage : null;
 	const visibleErrorMessage =
 		suppressInterruptedError && message.completion === "interrupted"
 			? undefined
@@ -196,11 +306,12 @@ export const AssistantMessage = memo(function AssistantMessage({
 								<span className="text-2xs">{t("chat.stopped")}</span>
 							)}
 						</div>
-					) : !visibleErrorMessage &&
-					  !message.streaming &&
+					) : // 错误回合同样要能看到已上报的用量：不再排除 visibleErrorMessage。
+					!message.streaming &&
 					  (visibleAssistantText ||
 							message.time ||
 							footerDuration ||
+							turnUsage ||
 							canFork) ? (
 						<div className="mt-0.5 flex min-h-7 flex-wrap items-center gap-2 text-2xs text-muted-foreground touch-reveal opacity-0 transition-opacity duration-150 group-hover:opacity-100 has-[:focus-visible]:opacity-100">
 							{visibleAssistantText ? (
@@ -228,6 +339,10 @@ export const AssistantMessage = memo(function AssistantMessage({
 							{footerDuration ? (
 								<span className="font-mono tabular-nums">{footerDuration}</span>
 							) : null}
+							{turnUsage && (message.time || footerDuration) ? (
+								<span aria-hidden="true">·</span>
+							) : null}
+							{turnUsage ? <TurnTokenChip usage={turnUsage} /> : null}
 						</div>
 					) : null}
 				</div>

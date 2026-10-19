@@ -54,7 +54,10 @@ The setter updates the projection before publishing the store snapshot.
 
 Web event frames coalesce adjacent deltas and use `reduceConversationActions`.
 Flush at user/non-assistant boundaries and after `assistant_turn_end` before
-deciding whether the next action must adopt an external live turn. Fork actions
+deciding whether the next action must adopt an external live turn. A value the
+reducer derives from event timing (for example a thinking block duration) comes
+from the Host event timestamp carried by the action; when it is absent, leave the
+value undefined instead of substituting the client clock. Fork actions
 obtain the latest messages on click, before their first await, rather than
 subscribing shell callbacks to every streaming message change.
 
@@ -66,6 +69,51 @@ subscribing shell callbacks to every streaming message change.
 - Virtualization/scroll state uses dedicated stores/hooks
   (`@tanstack/react-virtual`, `chat-history-window-store`) — keep it out of
   React state to avoid re-render storms.
+
+## Reply-Segment Usage
+
+### 1. Scope / Trigger
+
+Steering can insert a user message before `agent_settled`. Desktop and WebUI
+must preserve the preceding reply segment's usage without ending the agent run.
+
+### 2. Signatures
+
+`assistant_usage_update { generation, usage: TokenUsage }` maps to
+`ConversationEvent { type: "assistant_usage_update", usage }`.
+
+### 3. Contracts
+
+- `PiEventAdapter` emits the cumulative usage update before `user_message_start`,
+  then resets its accumulator. Only `agent_settled` ends the agent run.
+- The shared reducer replaces the active assistant's usage without changing
+  streaming/completion. Pending submissions route it to `previousTurn`, just
+  like text; it must not create a message or adopt a new running turn.
+- Live `message_end` and historical projection both accumulate `assistant` and
+  `toolResult` usage once. Never add the same usage again from `agent_end`.
+
+### 4. Validation / Error Matrix
+
+Missing usage emits no update; an update without an active assistant is ignored.
+Stop/discard handling and the stopped-message footer remain unchanged.
+
+### 5. Good / Base / Bad Cases
+
+Good: steer preserves A's usage before B starts. Base: an unsteered reply receives
+usage at settle. Bad: clearing A's usage, or emitting a false turn completion.
+
+### 6. Tests Required
+
+Regression coverage lives in `runtime/pi_events/tests.rs`,
+`runtime/session_history/tests.rs` and `tests/unit/conversation-reducer.test.ts`:
+steer ordering, repeated steer, pending previous-turn routing, no-active updates
+and live/history tool-result usage parity. The history stats fixture includes
+`t1` in its turn assertions: 97 tokens / $0.032, matching live accumulation.
+
+### 7. Wrong vs Correct
+
+Wrong: send `assistant_message_end` at steer and release runtime ownership.
+Correct: send usage-only metadata, then let the user echo split the conversation.
 
 ## Shared Theme Preferences
 

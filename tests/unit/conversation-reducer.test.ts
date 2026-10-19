@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import type { PiloRuntimeEvent } from "../../src/lib/api/pi-runtime-types.ts";
+
 import {
 	createConversationState,
 	reduceConversation,
@@ -11,6 +13,7 @@ import {
 	replayConversationEvents,
 	replayConversationEventsBatched,
 } from "../../src/lib/chat/conversation-replay.ts";
+import { toConversationAction } from "../../src/lib/chat/conversation-runtime-adapter.ts";
 import type {
 	ConversationAction,
 	ConversationEvent,
@@ -474,6 +477,38 @@ test("frame coalescing merges only compatible high-frequency actions", () => {
 	);
 });
 
+test("thinking actions keep the start and end timestamps of their block", () => {
+	const state = reduce([
+		{
+			type: "local_user_submit",
+			clientMessageId: "u1",
+			text: "run",
+			timestampMs: 1,
+		},
+		{ type: "local_assistant_pending", timestampMs: 1 },
+		{ type: "user_message_start", text: "run", timestampMs: 2 },
+		{ type: "assistant_message_start", timestampMs: 3 },
+		{ type: "assistant_thinking_start", timestampMs: 4 },
+		{ type: "assistant_thinking_delta", delta: "想", timestampMs: 5 },
+		{ type: "assistant_thinking_end", timestampMs: 40 },
+	]);
+	const thinking = state.messages
+		.flatMap((message) => message.content ?? [])
+		.find((item) => item.type === "thinking");
+
+	assert.deepEqual(
+		thinking?.type === "thinking"
+			? {
+					text: thinking.text,
+					status: thinking.status,
+					startedAtMs: thinking.startedAtMs,
+					endedAtMs: thinking.endedAtMs,
+				}
+			: null,
+		{ text: "想", status: "complete", startedAtMs: 4, endedAtMs: 40 },
+	);
+});
+
 test("compaction marker closes the running turn and inserts a compaction message", () => {
 	const state = replayConversationEvents(
 		[
@@ -519,4 +554,361 @@ test("compaction marker closes the running turn and inserts a compaction message
 	if (compaction?.role !== "compaction") throw new Error("expected compaction");
 	assert.equal(compaction.text, "summary text");
 	assert.equal(compaction.tokensBefore, 217_975);
+});
+
+test("history replay keeps the turn token usage on the assistant message", () => {
+	const state = replayConversationEvents(
+		[
+			{
+				type: "user_message_start",
+				text: "run",
+				timestampMs: 1,
+				sourceEntryId: "u1",
+			},
+			{ type: "assistant_message_start", timestampMs: 2, sourceEntryId: "a1" },
+			{
+				type: "assistant_text_delta",
+				delta: "done",
+				timestampMs: 3,
+				sourceEntryId: "a1",
+				sourceContentIndex: 0,
+			},
+			{
+				type: "assistant_turn_end",
+				stopReason: "stop",
+				completion: "complete",
+				timestampMs: 4,
+				usage: {
+					input: 10,
+					output: 5,
+					cacheRead: 20,
+					cacheWrite: 2,
+					total: 37,
+					cost: 0.01,
+				},
+			},
+		] satisfies ConversationEvent[],
+		context(),
+	);
+
+	const assistant = state.messages[1];
+	if (assistant?.role !== "assistant") throw new Error("expected assistant");
+	assert.deepEqual(assistant.usage, {
+		input: 10,
+		output: 5,
+		cacheRead: 20,
+		cacheWrite: 2,
+		total: 37,
+		cost: 0.01,
+	});
+});
+
+test("turns without reported usage keep the field empty", () => {
+	const state = replayConversationEvents(
+		[
+			{
+				type: "user_message_start",
+				text: "run",
+				timestampMs: 1,
+				sourceEntryId: "u1",
+			},
+			{ type: "assistant_message_start", timestampMs: 2, sourceEntryId: "a1" },
+			{
+				type: "assistant_text_delta",
+				delta: "done",
+				timestampMs: 3,
+				sourceEntryId: "a1",
+				sourceContentIndex: 0,
+			},
+			{ type: "assistant_turn_end", stopReason: "stop", timestampMs: 4 },
+		] satisfies ConversationEvent[],
+		context(),
+	);
+
+	const assistant = state.messages[1];
+	if (assistant?.role !== "assistant") throw new Error("expected assistant");
+	assert.equal(assistant.usage, undefined);
+});
+
+test("usage-only runtime updates do not create an assistant message", () => {
+	const usage = {
+		input: 10,
+		output: 5,
+		cacheRead: 0,
+		cacheWrite: 0,
+		total: 15,
+	};
+	const action = toConversationAction({
+		type: "assistant_usage_update",
+		generation: 1,
+		usage,
+	});
+	assert.deepEqual(action, { type: "assistant_usage_update", usage });
+	if (!action) throw new Error("expected usage update");
+	const state = createConversationState();
+	assert.equal(reduceConversation(state, action, context()), state);
+});
+
+test("steering preserves prior usage without ending the run early", () => {
+	const usage = {
+		input: 10,
+		output: 5,
+		cacheRead: 0,
+		cacheWrite: 0,
+		total: 15,
+	};
+	const actions: ConversationAction[] = [
+		{ type: "user_message_start", text: "go", timestampMs: 1 },
+		{ type: "assistant_text_delta", delta: "first", timestampMs: 2 },
+		{
+			type: "local_user_queue",
+			clientMessageId: "steer-1",
+			text: "change direction",
+			queueKind: "steer",
+			timestampMs: 3,
+		},
+	];
+	const ctx = context();
+	const running = reduceConversationActions(
+		createConversationState(),
+		actions,
+		ctx,
+	);
+	const updated = reduceConversation(
+		running,
+		{ type: "assistant_usage_update", usage },
+		ctx,
+	);
+	assert.deepEqual(updated.active, running.active);
+	assert.equal(updated.messages.length, running.messages.length);
+	const first = updated.messages[1];
+	if (first?.role !== "assistant") throw new Error("expected assistant");
+	assert.deepEqual(first.usage, usage);
+	assert.equal(first.streaming, true);
+	assert.equal(first.completion, undefined);
+
+	const remainder: ConversationAction[] = [
+		{ type: "user_message_start", text: "change direction", timestampMs: 4 },
+		{ type: "assistant_text_delta", delta: "second", timestampMs: 5 },
+		{
+			type: "assistant_turn_end",
+			stopReason: "stop",
+			timestampMs: 6,
+			usage: { ...usage, input: 100, output: 50, total: 150 },
+		},
+	];
+	const completed = reduceConversationActions(updated, remainder, ctx);
+	const assistants = completed.messages.filter(
+		(message) => message.role === "assistant",
+	);
+	assert.deepEqual(
+		assistants.map((message) => message.usage?.total),
+		[15, 150],
+	);
+	assert.deepEqual(
+		assistants.map((message) => message.completion),
+		["continued", "complete"],
+	);
+	assert.equal(completed.active, null);
+	assert.deepEqual(
+		reduceConversationActions(
+			createConversationState(),
+			[...actions, { type: "assistant_usage_update", usage }, ...remainder],
+			context(),
+		),
+		completed,
+	);
+});
+
+test("usage before a pending user echo belongs to the previous assistant", () => {
+	const usage = {
+		input: 10,
+		output: 5,
+		cacheRead: 0,
+		cacheWrite: 0,
+		total: 15,
+	};
+	const ctx = context();
+	const pending = reduceConversationActions(
+		createConversationState(),
+		[
+			{ type: "user_message_start", text: "go", timestampMs: 1 },
+			{ type: "assistant_text_delta", delta: "first", timestampMs: 2 },
+			{
+				type: "local_user_submit",
+				clientMessageId: "next-user",
+				text: "next",
+				timestampMs: 3,
+			},
+			{ type: "local_assistant_pending", timestampMs: 3 },
+		],
+		ctx,
+	);
+	const updated = reduceConversationActions(
+		pending,
+		[{ type: "assistant_usage_update", usage }],
+		ctx,
+	);
+	assert.equal(updated.active, pending.active);
+	assert.equal(updated.messages.length, pending.messages.length);
+	const previous = updated.messages[1];
+	const next = updated.messages[3];
+	if (previous?.role !== "assistant" || next?.role !== "assistant")
+		throw new Error("expected previous and pending assistants");
+	assert.deepEqual(previous.usage, usage);
+	assert.equal(next.usage, undefined);
+	assert.equal(next.streaming, true);
+});
+
+test("live assistant_message_end carries usage into the turn end action", () => {
+	const action = toConversationAction({
+		type: "assistant_message_end",
+		generation: 1,
+		stopReason: "stop",
+		errorMessage: null,
+		usage: { input: 3, output: 7, cacheRead: 40, cacheWrite: 0, total: 50 },
+	});
+
+	if (action?.type !== "assistant_turn_end")
+		throw new Error("expected turn end");
+	assert.equal(action.usage?.total, 50);
+	assert.equal(action.usage?.cacheRead, 40);
+});
+
+test("thinking without event timestamps does not use the processing clock", () => {
+	let currentTime = 1000;
+	const customCtx = {
+		...context(),
+		now: () => currentTime,
+	};
+	let state = reduceConversation(
+		createConversationState(),
+		{
+			type: "local_user_submit",
+			clientMessageId: "u1",
+			text: "hi",
+			timestampMs: currentTime,
+		},
+		customCtx,
+	);
+	state = reduceConversation(
+		state,
+		{ type: "user_message_start", text: "hi" },
+		customCtx,
+	);
+	currentTime = 1500;
+	state = reduceConversation(
+		state,
+		{ type: "assistant_thinking_start" },
+		customCtx,
+	);
+	currentTime = 5500;
+	state = reduceConversation(
+		state,
+		{ type: "assistant_thinking_end" },
+		customCtx,
+	);
+
+	const assistant = state.messages[1];
+	if (assistant?.role !== "assistant") throw new Error("expected assistant");
+	const thinking = assistant.content?.find((item) => item.type === "thinking");
+	assert.ok(thinking);
+	assert.equal(thinking.status, "complete");
+	assert.equal(thinking.startedAtMs, undefined);
+	assert.equal(thinking.endedAtMs, undefined);
+});
+
+test("buffered runtime thinking events keep their Host timestamps through the adapter", () => {
+	const events: PiloRuntimeEvent[] = [
+		{ type: "assistant_thinking_start", generation: 1, timestampMs: 1_000 },
+		{
+			type: "assistant_thinking_delta",
+			generation: 1,
+			delta: "thinking",
+			timestampMs: 2_000,
+		},
+		{ type: "assistant_thinking_end", generation: 1, timestampMs: 31_000 },
+	];
+	const actions = events.map((event) => {
+		const action = toConversationAction(event);
+		assert.ok(action);
+		return action;
+	});
+	const state = reduceConversationActions(
+		createConversationState(),
+		coalesceConversationActions(actions),
+		{ ...context(), now: () => 90_000 },
+	);
+	const assistant = state.messages[0];
+	assert.equal(assistant.role, "assistant");
+	if (assistant.role !== "assistant") throw new Error("expected assistant");
+	const thinking = assistant.content?.find((item) => item.type === "thinking");
+	assert.ok(thinking);
+	assert.equal(thinking.startedAtMs, 1_000);
+	assert.equal(thinking.endedAtMs, 31_000);
+	assert.equal(thinking.endedAtMs - thinking.startedAtMs, 30_000);
+});
+
+test("coalesced thinking deltas preserve the first timestamp without a start event", () => {
+	for (const timestampMs of [1_000, undefined]) {
+		const actions: ConversationAction[] = [
+			{ type: "assistant_thinking_delta", delta: "a", timestampMs },
+			{ type: "assistant_thinking_delta", delta: "b", timestampMs: 4_000 },
+			{ type: "assistant_thinking_end", timestampMs: 5_000 },
+		];
+		const sequential = reduce(actions);
+		const coalesced = reduceConversationActions(
+			createConversationState(),
+			coalesceConversationActions(actions),
+			context(),
+		);
+		const assistant = coalesced.messages[0];
+		if (assistant?.role !== "assistant") throw new Error("expected assistant");
+		const thinking = assistant.content?.find(
+			(item) => item.type === "thinking",
+		);
+		assert.ok(thinking);
+		const sequentialAssistant = sequential.messages[0];
+		if (sequentialAssistant?.role !== "assistant")
+			throw new Error("expected assistant");
+		assert.deepEqual(thinking, sequentialAssistant.content?.[0]);
+		assert.equal(thinking.text, "ab");
+		assert.equal(thinking.status, "complete");
+		assert.equal(thinking.startedAtMs, timestampMs);
+		assert.equal(thinking.endedAtMs, 5_000);
+		if (timestampMs !== undefined) {
+			assert.ok(thinking.startedAtMs !== undefined);
+			assert.ok(thinking.endedAtMs !== undefined);
+			assert.equal(thinking.endedAtMs - thinking.startedAtMs, 4_000);
+		}
+	}
+});
+
+test("thinking with missing boundaries never mixes Host and processing clocks", () => {
+	const cases: ConversationAction[][] = [
+		[
+			{ type: "assistant_thinking_start", timestampMs: 1_000 },
+			{ type: "assistant_thinking_end" },
+		],
+		[
+			{ type: "assistant_thinking_start" },
+			{ type: "assistant_thinking_end", timestampMs: 31_000 },
+		],
+		[
+			{ type: "assistant_thinking_delta", delta: "legacy" },
+			{ type: "assistant_thinking_end", timestampMs: 31_000 },
+		],
+	];
+	for (const actions of cases) {
+		const state = reduce(actions);
+		const assistant = state.messages[0];
+		if (assistant.role !== "assistant") throw new Error("expected assistant");
+		const thinking = assistant.content?.find(
+			(item) => item.type === "thinking",
+		);
+		assert.ok(thinking);
+		assert.ok(
+			thinking.startedAtMs === undefined || thinking.endedAtMs === undefined,
+		);
+	}
 });

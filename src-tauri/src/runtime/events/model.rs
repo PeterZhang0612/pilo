@@ -1,6 +1,8 @@
 use serde::Serialize;
 use serde_json::Value;
 
+use super::super::token_usage::TokenUsage;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PiProcessState {
@@ -102,6 +104,10 @@ pub enum RuntimeEvent {
     AssistantMessageStart {
         generation: u64,
     },
+    AssistantUsageUpdate {
+        generation: u64,
+        usage: TokenUsage,
+    },
     AssistantTextDelta {
         generation: u64,
         delta: String,
@@ -154,6 +160,8 @@ pub enum RuntimeEvent {
         stop_reason: Option<String>,
         #[serde(rename = "errorMessage")]
         error_message: Option<String>,
+        /// 当前回复段累计的模型用量，包含工具结果上报的嵌套调用。
+        usage: Option<TokenUsage>,
     },
     QueueUpdate {
         generation: u64,
@@ -234,6 +242,8 @@ pub struct RuntimeEventEnvelope {
     pub session_key: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub project_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timestamp_ms: Option<i64>,
     #[serde(flatten)]
     pub event: RuntimeEvent,
 }
@@ -243,6 +253,7 @@ impl RuntimeEventEnvelope {
         Self {
             session_key: None,
             project_id: None,
+            timestamp_ms: None,
             event,
         }
     }
@@ -251,6 +262,7 @@ impl RuntimeEventEnvelope {
         Self {
             session_key: Some(session_key),
             project_id: Some(project_id),
+            timestamp_ms: None,
             event,
         }
     }

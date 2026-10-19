@@ -32,6 +32,7 @@ import { ChatMarkdownImageScopeProvider } from "@/components/chat/chat-markdown-
 import { ChatMarkdownLinkScope } from "@/components/chat/chat-markdown-link";
 import { ChatPendingQueue } from "@/components/chat/chat-pending-queue";
 import { ChatRuntimeRecoveryNotice } from "@/components/chat/chat-runtime-recovery-notice";
+import { ChatTodoCapsule } from "@/components/chat/chat-todo-capsule";
 import { ChatInterruptedTurnNotice } from "@/components/chat/chat-interrupted-turn-notice";
 import { piSessionSuggestions } from "@/components/chat/chat-composer-suggestions";
 import { PiExtensionNotifications } from "@/components/chat/pi-extension-notifications";
@@ -630,6 +631,12 @@ function ChatPageImpl(props: ChatPageProps) {
 										<CacheKeepAliveNotice
 											key={client.sessionKey}
 											status={cacheKeepAlive.status}
+										/>
+										<ChatTodoCapsule
+											key={client.sessionKey}
+											conversationStore={conversationStore}
+											historyMessages={baseMessages}
+											running={running}
 										/>
 										<ChatComposer
 											nextPrompt={nextPrompt.text}
