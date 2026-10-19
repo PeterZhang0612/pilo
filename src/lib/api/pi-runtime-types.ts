@@ -202,6 +202,11 @@ export type PiloRuntimeEvent = {
 			generation: number;
 	  }
 	| {
+			type: "assistant_usage_update";
+			generation: number;
+			usage: TokenUsage;
+	  }
+	| {
 			type: "assistant_text_delta";
 			generation: number;
 			delta: string;
@@ -252,7 +257,7 @@ export type PiloRuntimeEvent = {
 			generation: number;
 			stopReason: string | null;
 			errorMessage: string | null;
-			/** 该轮最后一次模型调用的用量；Pi 未上报时为 null。 */
+			/** 当前回复段累计的模型用量；Pi 未上报时为 null。 */
 			usage: TokenUsage | null;
 	  }
 	| {

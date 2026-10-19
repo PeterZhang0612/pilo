@@ -16,6 +16,8 @@ export function toConversationAction(
 			return { type: event.type, delta: event.delta };
 		case "assistant_text_snapshot":
 			return { type: event.type, text: event.text };
+		case "assistant_usage_update":
+			return { type: event.type, usage: event.usage };
 		case "tool_execution_start":
 			return {
 				type: event.type,

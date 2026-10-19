@@ -103,7 +103,16 @@ fn project_message(
 ) {
     let timestamp_ms = entry_timestamp_ms(entry, Some(message));
     let source_entry_id = entry_id(entry);
-    match message.get("role").and_then(Value::as_str) {
+    let role = message.get("role").and_then(Value::as_str);
+    if matches!(role, Some("assistant" | "toolResult"))
+        && let Some(usage) = TokenUsage::from_json(message.get("usage"))
+    {
+        match &mut turn.usage {
+            Some(current) => current.accumulate(usage),
+            None => turn.usage = Some(usage),
+        }
+    }
+    match role {
         // Pi persists structured system-prompt/tool-loadout updates in the session
         // transcript. They affect replay context but are not conversational UI messages.
         Some("system") => {}
@@ -136,13 +145,6 @@ fn project_message(
                 .get("errorMessage")
                 .and_then(Value::as_str)
                 .map(str::to_owned);
-            // 累加该轮次所有 assistant 步骤的 token 与费用用量
-            if let Some(usage) = TokenUsage::from_json(message.get("usage")) {
-                match &mut turn.usage {
-                    Some(current) => current.accumulate(usage),
-                    None => turn.usage = Some(usage),
-                }
-            }
             turn.updated_at_ms = timestamp_ms.or(turn.updated_at_ms);
         }
         Some("toolResult") => {

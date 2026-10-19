@@ -171,6 +171,7 @@ export function isAssistantBatchAction(action: ConversationAction) {
 		action.type === "assistant_message_start" ||
 		action.type === "assistant_text_delta" ||
 		action.type === "assistant_text_snapshot" ||
+		action.type === "assistant_usage_update" ||
 		action.type === "assistant_thinking_start" ||
 		action.type === "assistant_thinking_delta" ||
 		action.type === "assistant_thinking_end" ||
@@ -510,6 +511,12 @@ function reduceConversationAction(
 				);
 				return { ...message, content, text: action.text, streaming: true };
 			});
+		case "assistant_usage_update":
+			if (!state.active?.assistantMessageId) return state;
+			return withAssistant(state, context, action.timestampMs, (message) => ({
+				...message,
+				usage: action.usage,
+			}));
 		case "assistant_thinking_start":
 			return withAssistant(state, context, action.timestampMs, (message) => ({
 				...message,

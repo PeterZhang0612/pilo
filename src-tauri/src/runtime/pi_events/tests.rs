@@ -388,6 +388,139 @@ fn usage_accumulates_across_auto_retries() {
 }
 
 #[test]
+fn steering_preserves_each_segment_usage_without_ending_the_run() {
+    let mut adapter = PiEventAdapter::default();
+    for (input, output) in [(10, 5), (100, 50)] {
+        adapter.adapt(
+            5,
+            &serde_json::json!({
+                "type": "message_end",
+                "message": {
+                    "role": "assistant",
+                    "content": [],
+                    "stopReason": "toolUse",
+                    "usage": { "input": input, "output": output }
+                }
+            }),
+        );
+        assert_eq!(
+            adapter.adapt(
+                5,
+                &serde_json::json!({
+                    "type": "message_start",
+                    "message": { "role": "user", "content": "steer" }
+                })
+            ),
+            [
+                RuntimeEvent::AssistantUsageUpdate {
+                    generation: 5,
+                    usage: TokenUsage {
+                        input,
+                        output,
+                        cache_read: 0,
+                        cache_write: 0,
+                        total: input + output,
+                        cost: None,
+                    },
+                },
+                RuntimeEvent::UserMessageStart {
+                    generation: 5,
+                    text: "steer".to_owned(),
+                },
+            ]
+        );
+    }
+    adapter.adapt(
+        5,
+        &serde_json::json!({
+            "type": "message_end",
+            "message": {
+                "role": "assistant",
+                "content": [],
+                "stopReason": "stop",
+                "usage": { "input": 3, "output": 7 }
+            }
+        }),
+    );
+    assert_eq!(
+        adapter.adapt(5, &serde_json::json!({ "type": "agent_settled" })),
+        [RuntimeEvent::AssistantMessageEnd {
+            generation: 5,
+            stop_reason: Some("stop".to_owned()),
+            error_message: None,
+            usage: Some(TokenUsage {
+                input: 3,
+                output: 7,
+                cache_read: 0,
+                cache_write: 0,
+                total: 10,
+                cost: None,
+            }),
+        }]
+    );
+}
+
+#[test]
+fn usage_includes_tool_results_without_counting_agent_end_twice() {
+    let mut adapter = PiEventAdapter::default();
+    let messages = serde_json::json!([
+        {
+            "role": "assistant", "content": [],
+            "usage": {
+                "input": 10, "output": 5, "cacheRead": 20, "cacheWrite": 2,
+                "totalTokens": 37, "cost": { "total": 0.01 }
+            }
+        },
+        {
+            "role": "toolResult", "content": [],
+            "usage": {
+                "input": 1, "output": 2, "cacheRead": 3, "cacheWrite": 4,
+                "totalTokens": 10, "cost": { "total": 0.002 }
+            }
+        },
+        {
+            "role": "assistant", "content": [], "stopReason": "stop",
+            "usage": {
+                "input": 3, "output": 7, "cacheRead": 40, "cacheWrite": 0,
+                "totalTokens": 50, "cost": { "total": 0.02 }
+            }
+        }
+    ]);
+    for message in messages.as_array().unwrap() {
+        let events = adapter.adapt(
+            5,
+            &serde_json::json!({ "type": "message_end", "message": message }),
+        );
+        if message["role"] == "toolResult" {
+            assert!(events.is_empty());
+        }
+    }
+    assert!(
+        adapter
+            .adapt(
+                5,
+                &serde_json::json!({ "type": "agent_end", "messages": messages })
+            )
+            .is_empty()
+    );
+    let events = adapter.adapt(5, &serde_json::json!({ "type": "agent_settled" }));
+    let [
+        RuntimeEvent::AssistantMessageEnd {
+            usage: Some(usage), ..
+        },
+    ] = events.as_slice()
+    else {
+        panic!("expected settled usage");
+    };
+    assert_eq!(usage.input, 14);
+    assert_eq!(usage.output, 14);
+    assert_eq!(usage.cache_read, 63);
+    assert_eq!(usage.cache_write, 6);
+    assert_eq!(usage.total, 97);
+    assert!((usage.cost.unwrap() - 0.032).abs() < f64::EPSILON);
+}
+
+#[test]
 fn settled_uses_latest_error_metadata_and_resets_state() {
     let mut adapter = PiEventAdapter::default();
     assert!(

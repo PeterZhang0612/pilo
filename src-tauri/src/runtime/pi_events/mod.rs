@@ -76,13 +76,15 @@ impl PiEventAdapter {
                 self.finalized_text.clear();
                 self.stop_reason = None;
                 self.error_message = None;
-                // 上一轮若没等到 agent_settled（例如中途被杀）用量会残留在这里。
-                self.usage = None;
-                message_text(message)
-                    .filter(|text| !text.is_empty())
-                    .map(|text| RuntimeEvent::UserMessageStart { generation, text })
-                    .into_iter()
-                    .collect()
+                // steer 会在 agent_settled 前切分回复；先保存上一段用量，不结束运行。
+                let mut events = Vec::new();
+                if let Some(usage) = self.usage.take() {
+                    events.push(RuntimeEvent::AssistantUsageUpdate { generation, usage });
+                }
+                if let Some(text) = message_text(message).filter(|text| !text.is_empty()) {
+                    events.push(RuntimeEvent::UserMessageStart { generation, text });
+                }
+                events
             }
             _ => Vec::new(),
         }
@@ -92,7 +94,17 @@ impl PiEventAdapter {
         let Some(message) = event.get("message") else {
             return Vec::new();
         };
-        if message.get("role").and_then(Value::as_str) != Some("assistant") {
+        let role = message.get("role").and_then(Value::as_str);
+        if !matches!(role, Some("assistant" | "toolResult")) {
+            return Vec::new();
+        }
+        if let Some(usage) = TokenUsage::from_json(message.get("usage")) {
+            match &mut self.usage {
+                Some(current) => current.accumulate(usage),
+                None => self.usage = Some(usage),
+            }
+        }
+        if role != Some("assistant") {
             return Vec::new();
         }
 
@@ -114,12 +126,6 @@ impl PiEventAdapter {
         }
         if let Some(error_message) = message.get("errorMessage").and_then(Value::as_str) {
             self.error_message = Some(error_message.to_owned());
-        }
-        if let Some(usage) = TokenUsage::from_json(message.get("usage")) {
-            match &mut self.usage {
-                Some(current) => current.accumulate(usage),
-                None => self.usage = Some(usage),
-            }
         }
     }
 
@@ -143,7 +149,7 @@ impl PiEventAdapter {
                 .and_then(Value::as_str)
                 .map(str::to_owned);
         }
-        // 用量只由 message_end 单一累加：每条 assistant 消息各计一次，
+        // 用量只由 message_end 单一累加：assistant 与 toolResult 各计一次，
         // 天然覆盖多步工具链与自动重试（重试会在 agent_settled 前产生多次
         // agent_end，而 agent_end.messages 与已处理的 message_end 是同一批消息）。
         // 这里若再按 agent_end 求和，既会重复计入，也会把前一次重试的用量冲掉。

@@ -104,6 +104,10 @@ pub enum RuntimeEvent {
     AssistantMessageStart {
         generation: u64,
     },
+    AssistantUsageUpdate {
+        generation: u64,
+        usage: TokenUsage,
+    },
     AssistantTextDelta {
         generation: u64,
         delta: String,
@@ -156,7 +160,7 @@ pub enum RuntimeEvent {
         stop_reason: Option<String>,
         #[serde(rename = "errorMessage")]
         error_message: Option<String>,
-        /// 该轮最后一次模型调用的用量；Pi 的 assistant 消息总是带 usage。
+        /// 当前回复段累计的模型用量，包含工具结果上报的嵌套调用。
         usage: Option<TokenUsage>,
     },
     QueueUpdate {

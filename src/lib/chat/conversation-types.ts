@@ -28,7 +28,7 @@ export type ChatMessage =
 			replyRunwayPx?: number;
 			stopReason?: string;
 			errorMessage?: string;
-			/** 该轮最后一次模型调用的用量（含缓存与费用）。 */
+			/** 当前回复段累计的模型用量（含工具嵌套调用、缓存与费用）。 */
 			usage?: TokenUsage;
 			completion?: "complete" | "interrupted" | "continued";
 			historyPlaceholder?: boolean;
@@ -60,6 +60,7 @@ export type ConversationEvent = ConversationEventMeta &
 		  }
 		| { type: "compaction_marker"; summary: string; tokensBefore?: number }
 		| { type: "assistant_message_start" }
+		| { type: "assistant_usage_update"; usage: TokenUsage }
 		| { type: "assistant_text_delta"; delta: string }
 		| { type: "assistant_text_snapshot"; text: string }
 		| { type: "assistant_thinking_start" }
@@ -90,7 +91,7 @@ export type ConversationEvent = ConversationEventMeta &
 				stopReason?: string | null;
 				errorMessage?: string | null;
 				completion?: "complete" | "interrupted";
-				/** 实时路径为 null/missing，历史上的 assistant_turn_end 可能省略该字段。 */
+				/** 当前回复段累计的模型用量；未上报时可为空或省略。 */
 				usage?: TokenUsage | null;
 		  }
 	);

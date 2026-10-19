@@ -160,7 +160,7 @@ pub enum ConversationEventDto {
         stop_reason: Option<String>,
         #[serde(rename = "errorMessage", skip_serializing_if = "Option::is_none")]
         error_message: Option<String>,
-        /// 该轮最后一次模型调用的用量。
+        /// 当前回复段累计的模型用量，包含工具结果上报的嵌套调用。
         #[serde(skip_serializing_if = "Option::is_none")]
         usage: Option<TokenUsage>,
         completion: TurnCompletion,
