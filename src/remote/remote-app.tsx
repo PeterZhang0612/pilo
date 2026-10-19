@@ -538,11 +538,11 @@ function RemoteWorkspace() {
 												/>
 											) : null}
 											<CacheKeepAliveNotice
-												key={chat.activeSessionKey}
+												key={`cache-keep-alive:${chat.activeSessionKey}`}
 												status={cacheKeepAliveStatus}
 											/>
 											<ChatTodoCapsule
-												key={chat.activeSessionKey}
+												key={`chat-todo:${chat.activeSessionKey}`}
 												conversationStore={chat.conversationStore}
 												historyMessages={chat.historyPrefix}
 												running={active && !chat.readOnly}

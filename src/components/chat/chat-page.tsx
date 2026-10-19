@@ -629,11 +629,11 @@ function ChatPageImpl(props: ChatPageProps) {
 											/>
 										) : null}
 										<CacheKeepAliveNotice
-											key={client.sessionKey}
+											key={`cache-keep-alive:${client.sessionKey}`}
 											status={cacheKeepAlive.status}
 										/>
 										<ChatTodoCapsule
-											key={client.sessionKey}
+											key={`chat-todo:${client.sessionKey}`}
 											conversationStore={conversationStore}
 											historyMessages={baseMessages}
 											running={running}

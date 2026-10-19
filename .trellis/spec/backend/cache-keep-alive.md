@@ -79,6 +79,9 @@ chat status notices. Owners: `runtime/cache_keep_alive.rs`,
   auto-dismiss timer. Closing only hides it for the mounted session view;
   status refreshes never reopen it and background warming continues unchanged.
   Both entry points key the notice by runtime session key to isolate dismissal.
+  Prefix sibling keys by component (`cache-keep-alive:${sessionKey}` versus
+  `chat-todo:${sessionKey}`); using the bare session key for both can leave
+  orphaned notice DOM accumulating across session switches.
 - Costs are estimates from provider usage. Missing usage or an interrupted request
   makes the cumulative estimate unknown rather than claiming a zero-cost call.
 
