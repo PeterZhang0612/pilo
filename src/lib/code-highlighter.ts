@@ -1,12 +1,6 @@
-import { createCssVariablesTheme } from "shiki/core";
 import type { BundledLanguage } from "shiki";
 
 const CODE_THEME_NAME = "pilo-css-vars";
-
-const piloShikiTheme = createCssVariablesTheme({
-	name: CODE_THEME_NAME,
-	variablePrefix: "--pilo-shiki-",
-});
 
 const LANGUAGE_BY_EXTENSION: Record<string, BundledLanguage> = {
 	ts: "typescript",
@@ -44,7 +38,7 @@ export function languageForPath(path: string): BundledLanguage | null {
 
 async function createHighlighter() {
 	const [
-		{ createHighlighterCore },
+		{ createCssVariablesTheme, createHighlighterCore },
 		{ createJavaScriptRegexEngine },
 		typescript,
 		tsx,
@@ -97,7 +91,12 @@ async function createHighlighter() {
 			...html.default,
 			...css.default,
 		],
-		themes: [piloShikiTheme],
+		themes: [
+			createCssVariablesTheme({
+				name: CODE_THEME_NAME,
+				variablePrefix: "--pilo-shiki-",
+			}),
+		],
 	});
 }
 
