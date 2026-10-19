@@ -83,7 +83,7 @@ fn check_server_runtimes() {
         );
     }
     panic!(
-        "release build for {target} is missing pilo-server runtime: {}. Build it with pnpm server:build (or scripts/build-pilo-server.sh) before packaging",
+        "release build for {target} is missing pilo-server runtime: {}. Before packaging, build the release runtime with pnpm server:build:win on Windows or bash scripts/build-pilo-server.sh on macOS/Linux (pass an explicit server target when cross-compiling)",
         missing.join(", ")
     );
 }
