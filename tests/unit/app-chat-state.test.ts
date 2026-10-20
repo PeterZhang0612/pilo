@@ -588,20 +588,14 @@ test("fallback submissions for new sessions can go directly to runtime", () => {
 		false,
 	);
 });
+
 test("a new session only pins the run configuration the user picked", () => {
-	const sampleProject = {
-		id: "proj-1",
-		name: "Project 1",
-		path: "/test",
-		connection: { id: "local", name: "Local", kind: "local" as const },
-	};
 	const sessionWithNullModel = resolveChatSession({
-		sessions: [],
-		openedChats: [],
-		activeProject: sampleProject,
-		selectedSessionId: null,
+		selectedOpenedChat: null,
+		selectedOpenedChatBusy: false,
+		activeProject: project,
 		selectedIndexedSession: null,
-		selectedProject: sampleProject,
+		selectedProject: project,
 		draftSessionStarted: true,
 		draftTemporary: false,
 		draftSessionId: "draft-1",
@@ -621,12 +615,11 @@ test("a new session only pins the run configuration the user picked", () => {
 		reasoning: false,
 	};
 	const sessionWithCustomModel = resolveChatSession({
-		sessions: [],
-		openedChats: [],
-		activeProject: sampleProject,
-		selectedSessionId: null,
+		selectedOpenedChat: null,
+		selectedOpenedChatBusy: false,
+		activeProject: project,
 		selectedIndexedSession: null,
-		selectedProject: sampleProject,
+		selectedProject: project,
 		draftSessionStarted: true,
 		draftTemporary: false,
 		draftSessionId: "draft-1",

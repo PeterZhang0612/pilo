@@ -122,24 +122,6 @@ export function isProjectPiModelsIncomplete(
 	);
 }
 
-/** 后台重探的最小间隔：完整目录不会过期，但也不必每次进入新会话都起一个探测进程。 */
-const SILENT_MODEL_REFRESH_MIN_INTERVAL_MS = 5 * 60_000;
-
-/**
- * 完整目录不会因为时间而失效，启动时的批量刷新也只处理不完整的目录，所以新会话页
- * 是唯一能在重启之外发现「Pi 默认模型被改动」的时机。最小间隔避免来回切换会话时
- * 反复拉起探测进程。
- */
-export function shouldRefreshProjectPiModelsSilently(
-	snapshot: ProjectPiModels,
-	nowMs: number = Date.now(),
-): boolean {
-	return (
-		!isProjectPiModelsIncomplete(snapshot) &&
-		nowMs - snapshot.refreshedAtMs >= SILENT_MODEL_REFRESH_MIN_INTERVAL_MS
-	);
-}
-
 export function subscribeProjectPiModels(
 	projectId: string,
 	listener: ProjectPiModelsListener,

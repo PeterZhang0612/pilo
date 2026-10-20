@@ -5,7 +5,6 @@ import {
 	getCachedProjectPiModels,
 	isProjectPiModelsIncomplete,
 	refreshProjectPiModels,
-	shouldRefreshProjectPiModelsSilently,
 	type PiModelProbeClient,
 	type ProjectPiModels,
 } from "../../src/lib/api/pi-models.ts";
@@ -166,27 +165,4 @@ test("failed discovery disposes the probe and allows another request", async (t)
 	});
 	assert.deepEqual(result.commands, []);
 	assert.equal(isProjectPiModelsIncomplete(result), false);
-});
-test("a complete catalog only re-probes after the silent interval", () => {
-	const fresh = { ...catalog(), refreshedAtMs: 1_000 };
-	assert.equal(
-		shouldRefreshProjectPiModelsSilently(fresh, 1_000 + 60_000),
-		false,
-	);
-	assert.equal(
-		shouldRefreshProjectPiModelsSilently(fresh, 1_000 + 5 * 60_000),
-		true,
-	);
-	assert.equal(
-		shouldRefreshProjectPiModelsSilently(fresh, 1_000 + 60 * 60_000),
-		true,
-	);
-});
-
-test("an incomplete catalog re-probes loudly instead of silently", () => {
-	const incomplete = { ...catalog(), refreshedAtMs: 0, commands: null };
-	assert.equal(
-		shouldRefreshProjectPiModelsSilently(incomplete, 60 * 60_000),
-		false,
-	);
 });
